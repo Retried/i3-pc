@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <string>
 #include "common/debug.h"
+#include "common/elf_info.h"
 #include "video_core/thread_sampler.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
@@ -371,7 +372,9 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     // SOTC_OCCLUDERS=1 renders them again.
     // ponytail: recognised by shape (36 indices, depth only); match the occluder depth target
     // instead if another depth-only box pass ever turns up.
-    static const bool skip_occluders = std::getenv("SOTC_OCCLUDERS") == nullptr;
+    static const bool skip_occluders =
+        std::getenv("SOTC_OCCLUDERS") == nullptr &&
+        Common::ElfInfo::Instance().GameSerial() == "CUSA08809";
     if (skip_occluders && regs.num_indices == 36 && pipeline->GetGraphicsKey().mrt_mask == 0) {
         ++g_stats.filtered;
         return;

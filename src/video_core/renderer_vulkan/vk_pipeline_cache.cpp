@@ -3,6 +3,7 @@
 
 #include <ranges>
 
+#include "common/elf_info.h"
 #include "common/hash.h"
 #include "common/io_file.h"
 #include "common/path_util.h"
@@ -305,7 +306,10 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
         .support_fp64_signed_zero_inf_nan_preserve =
             bool(vk12_props.shaderSignedZeroInfNanPreserveFloat64),
         .supports_image_load_store_lod = instance_.IsImageLoadStoreLodSupported(),
-        .supports_maximal_reconvergence = instance_.IsMaximalReconvergenceSupported(),
+        // Only the title that needs it: the AMD driver crashes compiling one of inFAMOUS
+        // Second Son's compute shaders (0xce1675e0, tiled light culling) with this mode.
+        .supports_maximal_reconvergence = instance_.IsMaximalReconvergenceSupported() &&
+                                          Common::ElfInfo::Instance().GameSerial() == "CUSA08809",
         .supports_native_cube_calc = instance_.IsAmdGcnShaderSupported(),
         .supports_trinary_minmax = instance_.IsAmdShaderTrinaryMinMaxSupported(),
         .supports_buffer_fp32_atomic_min_max =

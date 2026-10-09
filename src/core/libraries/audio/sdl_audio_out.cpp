@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <filesystem>
+#include <cstdio>
+#include "common/path_util.h"
+#include "common/recording.h"
 #include <cmath>
 #include <string>
 #include <fmt/format.h>
@@ -141,6 +145,21 @@ public:
             ManageAudioQueue();
         }
 
+        if (Common::g_recording.load(std::memory_order_relaxed)) {
+            // Recording (see common/recording.h): the stereo output, before muting.
+            static std::FILE* file = nullptr;
+            if (internal_buffer_size / sizeof(float) / buffer_frames == 2) {
+                if (file == nullptr) {
+                    const auto dir =
+                        Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "capture";
+                    std::filesystem::create_directories(dir);
+                    file = std::fopen((dir / "audio.f32").string().c_str(), "wb");
+                }
+                if (file != nullptr) {
+                    std::fwrite(internal_buffer, 1, internal_buffer_size, file);
+                }
+            }
+        }
         static const bool metering = std::getenv("I3_AUDIO_METER") != nullptr;
         if (metering) {
             MeterBuffer(current_time);

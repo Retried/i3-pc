@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/recording.h"
 #include <fstream>
 #include <cstdlib>
 #include <sstream>
@@ -283,6 +284,8 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
             } else {
                 LOG_ERROR(Input, "virtual pad: unknown button {}", name);
             }
+        } else if (action == "rec=on" || action == "rec=off") {
+            Common::g_recording.store(action == "rec=on", std::memory_order_relaxed);
         } else if (action.starts_with("aim=")) {
             // "aim=0.2,-0.1": yaw and pitch (radians) of the sideways motion gesture.
             const auto comma = action.find(',');

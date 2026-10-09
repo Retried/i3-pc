@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdio>
+#include "common/recording.h"
 #include "common/debug.h"
 #include "common/elf_info.h"
 #include "common/io_file.h"
@@ -410,6 +412,53 @@ static bool WritePng(const std::filesystem::path& path, const std::span<const u8
     return stbi_write_png_to_func(callback, &file, width, height, 4, rgba.data(), 0);
 }
 
+// Recording (see common/recording.h): one frame, halved in both directions, written as RGB24
+// as many times as 1/30 s slots have passed since the previous one, so the file plays back at
+// a constant 30 frames per second whatever the frame rate of the game is.
+static void SaveRecordedFrame(const ScreenshotReadback& readback) {
+    static std::FILE* file = nullptr;
+    static u64 frames_written = 0;
+    static std::chrono::steady_clock::time_point start;
+    std::vector<u8> rgba;
+    if (!ConvertReadbackToRgba8(readback, rgba)) {
+        return;
+    }
+    if (file == nullptr) {
+        const auto dir = Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "capture";
+        std::filesystem::create_directories(dir);
+        file = std::fopen((dir / "frames.rgb").string().c_str(), "wb");
+        if (file == nullptr) {
+            return;
+        }
+        if (std::FILE* info = std::fopen((dir / "frames.txt").string().c_str(), "w")) {
+            std::fprintf(info, "%u %u 30", readback.width / 2, readback.height / 2);
+            std::fclose(info);
+        }
+        start = std::chrono::steady_clock::now();
+    }
+    const u32 width = readback.width / 2;
+    const u32 height = readback.height / 2;
+    std::vector<u8> rgb(size_t(width) * height * 3);
+    for (u32 y = 0; y < height; ++y) {
+        const u8* row0 = rgba.data() + size_t(y) * 2 * readback.width * 4;
+        const u8* row1 = row0 + size_t(readback.width) * 4;
+        u8* out = rgb.data() + size_t(y) * width * 3;
+        for (u32 x = 0; x < width; ++x) {
+            for (u32 c = 0; c < 3; ++c) {
+                out[x * 3 + c] = u8((row0[x * 8 + c] + row0[x * 8 + 4 + c] + row1[x * 8 + c] +
+                                     row1[x * 8 + 4 + c] + 2) / 4);
+            }
+        }
+    }
+    const double elapsed =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    const u64 due = u64(elapsed * 30.0) + 1;
+    for (; frames_written < due; ++frames_written) {
+        std::fwrite(rgb.data(), 1, rgb.size(), file);
+    }
+    std::fflush(file);
+}
+
 static void SavePendingScreenshot(const ScreenshotReadback& readback) {
     if (readback.paths.empty()) {
         return;
@@ -709,6 +758,26 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
 
     const u32 capture_game_only_count = VideoCore::ConsumeGameOnlyScreenshotRequests();
     std::optional<ScreenshotReadback> pending_screenshot;
+    std::optional<ScreenshotReadback> recorded_frame;
+    if (Common::g_recording.load(std::memory_order_relaxed)) {
+        // At most 30 captures a second.
+        static std::chrono::steady_clock::time_point last_capture;
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last_capture >= std::chrono::milliseconds(33)) {
+            last_capture = now;
+            auto& readback = recorded_frame.emplace(
+                instance, ScreenshotKind::GameOnly, std::vector<std::filesystem::path>{},
+                image_size.width, image_size.height, view_info.format, false);
+            const vk::BufferImageCopy copy_region = {
+                .imageSubresource{.aspectMask = vk::ImageAspectFlagBits::eColor,
+                                  .mipLevel = 0,
+                                  .baseArrayLayer = 0,
+                                  .layerCount = 1},
+                .imageExtent = {readback.width, readback.height, 1},
+            };
+            runtime.DownloadImage(&image, &readback.buffer, std::span{&copy_region, 1});
+        }
+    }
 
     // Capture the guest output before any host-side scaling (FSR/PP) is applied.
     if (capture_game_only_count > 0) {
@@ -752,6 +821,11 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     DebugState.game_resolution = {image_size.width, image_size.height};
     DebugState.output_resolution = {frame->width, frame->height};
 
+    if (recorded_frame) {
+        draw_scheduler.DeferPriorityOperation([deferred_frame = std::move(recorded_frame)]() {
+            SaveRecordedFrame(deferred_frame.value());
+        });
+    }
     if (pending_screenshot) {
         draw_scheduler.DeferPriorityOperation(
             [deferred_screenshot = std::move(pending_screenshot)]() {

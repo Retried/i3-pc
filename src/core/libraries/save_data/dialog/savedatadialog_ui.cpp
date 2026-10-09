@@ -697,7 +697,10 @@ void SaveDialogUi::DrawUser() {
             }
             SameLine();
             if (Button("No", BUTTON_SIZE)) {
-                if (ElfInfo::Instance().FirmwareVer() < ElfInfo::FW_450) {
+                // inFAMOUS Second Son (SDK 4.00) asks "save before loading?" and only goes on
+                // to its load list when "No" comes back as a button, not as a cancel.
+                if (ElfInfo::Instance().FirmwareVer() < ElfInfo::FW_450 &&
+                    ElfInfo::Instance().GameSerial() != "CUSA00004") {
                     Finish(ButtonId::INVALID, Result::USER_CANCELED);
                 } else {
                     Finish(ButtonId::NO);

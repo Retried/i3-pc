@@ -238,7 +238,7 @@ private:
     };
     struct Chunk {
         static constexpr size_t CommandBytes = 48 * 1024;
-        static constexpr size_t AuxBytes = 160 * 1024;
+        static constexpr size_t AuxBytes = 4 * 1024 * 1024;
         vk::CommandBuffer target{};
         u32 command_used{};
         u32 aux_used{};

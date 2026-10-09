@@ -12,6 +12,10 @@ namespace Common {
 /// and the audio output appends its float samples to <user dir>/capture/audio.f32.
 inline std::atomic<bool> g_recording{false};
 
+/// Set by the PC options of a game build: present on every tick of the frame clock whatever
+/// flip rate the game asked for (the game's own 30 FPS limit is such a request).
+inline std::atomic<bool> g_unlock_flip_rate{false};
+
 /// Benchmark capture (script actions "bench=on" / "bench=off"): while set, the time between
 /// presented frames is appended, in milliseconds, to bench_frametimes.txt.
 inline std::atomic<bool> g_bench{false};

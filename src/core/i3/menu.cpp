@@ -14,6 +14,7 @@
 #include <fmt/format.h>
 #include <imgui.h>
 
+#include "common/recording.h"
 #include "core/i3/first_run.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
@@ -274,6 +275,10 @@ std::array<Effect, 3> effects{{
      "Reflections on wet ground and puddles. Applies at once"},
     {"Light Glow", "glow", 0x6d29fb0f, "Glow around fires and bright lights. Applies at once"},
 }};
+// The game's own Options > Video > Frame Rate ("30fps limit") is stored in each save. On by
+// default here: the limit is lifted whatever the save says.
+bool unlock_frame_rate = true;
+
 constexpr std::array<const char*, 3> PresetNames{"Original", "Sharp", "Minimal"};
 // Which effects each preset keeps on, in the order of `effects`.
 constexpr std::array<std::array<bool, 3>, 3> Presets{{
@@ -293,6 +298,7 @@ void ApplyEffects() {
             VideoCore::PassFilter::Skip(effect.fs_hash);
         }
     }
+    Common::g_unlock_flip_rate = unlock_frame_rate;
 }
 
 void SaveEffects() {
@@ -300,6 +306,7 @@ void SaveEffects() {
     for (const auto& effect : effects) {
         file << effect.key << " = " << (effect.on ? "on" : "off") << "\n";
     }
+    file << "unlock_frame_rate = " << (unlock_frame_rate ? "on" : "off") << "\n";
 }
 
 void LoadEffects() {
@@ -310,6 +317,9 @@ void LoadEffects() {
             if (name == effect.key) {
                 effect.on = value != "off";
             }
+        }
+        if (name == "unlock_frame_rate") {
+            unlock_frame_rate = value != "off";
         }
     }
     ApplyEffects();
@@ -394,6 +404,10 @@ std::vector<Row> BuildRows() {
         for (const auto& effect : effects) {
             rows.push_back({effect.label, effect.on ? "On" : "Off", effect.description, true});
         }
+        rows.push_back({"Game Frame Limit", unlock_frame_rate ? "Unlimited" : "Game Setting",
+                        "Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
+                        "Rate). Applies at once",
+                        true});
         rows.push_back({"BACK", "", "Return to the previous menu"});
     }
     return rows;
@@ -464,6 +478,10 @@ void AdjustGraphics(int row, int step) {
     default:
         if (row >= 8 && row < 8 + static_cast<int>(effects.size())) {
             effects[row - 8].on = !effects[row - 8].on;
+            ApplyEffects();
+            SaveEffects();
+        } else if (row == 8 + static_cast<int>(effects.size())) {
+            unlock_frame_rate = !unlock_frame_rate;
             ApplyEffects();
             SaveEffects();
         }

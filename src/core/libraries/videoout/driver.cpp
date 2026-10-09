@@ -406,7 +406,9 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
 
         // Check if it's time to take a request.
         auto& vblank_status = main_port.vblank_status;
-        if (vblank_status.count % (main_port.flip_rate + 1) == 0) {
+        const u32 flip_rate =
+            Common::g_unlock_flip_rate.load(std::memory_order_relaxed) ? 0 : main_port.flip_rate;
+        if (vblank_status.count % (flip_rate + 1) == 0) {
             const auto request = receive_request();
             if (!request) {
                 if (timer.GetTotalWait().count() < 0) { // Dont draw too fast

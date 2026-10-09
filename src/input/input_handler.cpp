@@ -841,6 +841,16 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
         case MOTION_SIDEWAYS_ALT:
             controller->SetMotionGesture(GameController::MotionSidewaysAlt, new_button_state);
             break;
+        case TOUCH_SWIPE_UP:
+        case TOUCH_SWIPE_DOWN:
+        case TOUCH_SWIPE_LEFT:
+        case TOUCH_SWIPE_RIGHT:
+            if (new_button_state) {
+                controller->StartTouchSwipe(
+                    button == TOUCH_SWIPE_LEFT ? -1.0f : button == TOUCH_SWIPE_RIGHT ? 1.0f : 0.0f,
+                    button == TOUCH_SWIPE_UP ? -1.0f : button == TOUCH_SWIPE_DOWN ? 1.0f : 0.0f);
+            }
+            break;
         default: // is a normal key (hopefully)
             controller->Button(SDLGamepadToOrbisButton(button), new_button_state);
             break;

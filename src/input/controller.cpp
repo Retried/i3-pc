@@ -137,6 +137,20 @@ void GameController::SetTouchpadState(int touch_index, bool touch_down, float x,
 
     std::lock_guard lock{m_state_mutex};
     const u64 timestamp = Libraries::Kernel::sceKernelGetProcessTime();
+    SetTouchLocked(touch_index, touch_down, x, y, timestamp);
+    PushStateLocked(timestamp);
+}
+
+void GameController::StartTouchSwipe(float dx, float dy) {
+    std::lock_guard lock{m_state_mutex};
+    m_swipe_dx = dx;
+    m_swipe_dy = dy;
+    m_swipe_start = Libraries::Kernel::sceKernelGetProcessTime();
+    PushStateLocked(m_swipe_start);
+}
+
+void GameController::SetTouchLocked(int touch_index, bool touch_down, float x, float y,
+                                    u64 timestamp) {
     const bool was_pressed = m_state.touchpad[0].state || m_state.touchpad[1].state;
     auto& touch = m_state.touchpad[touch_index];
     if (touch_down && !touch.state) {
@@ -150,7 +164,6 @@ void GameController::SetTouchpadState(int touch_index, bool touch_down, float x,
     } else if (was_pressed && !is_pressed) {
         m_touch_down_timestamp = 0;
     }
-    PushStateLocked(timestamp);
 }
 
 void GameController::ConnectController(SDL_Gamepad* pad) {
@@ -305,6 +318,18 @@ void GameController::ApplyMotionGesturesLocked(u64 timestamp) {
 void GameController::PushStateLocked(u64 timestamp) {
     if (timestamp == 0) {
         timestamp = Libraries::Kernel::sceKernelGetProcessTime();
+    }
+    if (m_swipe_start != 0) {
+        // A finger crossing most of the touchpad in a quarter of a second.
+        constexpr float duration_us = 250'000.f;
+        constexpr float travel = 0.7f;
+        const float t = std::min(float(timestamp - m_swipe_start) / duration_us, 1.0f);
+        const float x = 0.5f + m_swipe_dx * travel * (t - 0.5f);
+        const float y = 0.5f + m_swipe_dy * travel * (t - 0.5f);
+        SetTouchLocked(0, t < 1.0f, x, y, timestamp);
+        if (t >= 1.0f) {
+            m_swipe_start = 0;
+        }
     }
     m_state.UpdateAxisSmoothing(timestamp);
     m_state.OnGyro(gyro_buf);

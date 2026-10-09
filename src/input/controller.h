@@ -114,6 +114,8 @@ public:
         MotionSidewaysAlt = 4,  ///< pad rolled 90 degrees the other way
     };
     void SetMotionGesture(u32 gesture, bool on);
+    /// Plays a quick one-finger swipe across the touchpad; (dx, dy) is its direction.
+    void StartTouchSwipe(float dx, float dy);
     /// Test hook: sets the aim angles (radians) the sideways gesture reports.
     void SetGestureAim(float yaw, float pitch);
 
@@ -126,6 +128,10 @@ private:
     void PushStateLocked(u64 timestamp = 0);
     void UpdateOrientationLocked(u64 timestamp);
     void ApplyMotionGesturesLocked(u64 timestamp);
+    void SetTouchLocked(int touch_index, bool touch_down, float x, float y, u64 timestamp);
+
+    u64 m_swipe_start{};
+    float m_swipe_dx{}, m_swipe_dy{};
 
     u32 m_motion_gestures{};
     float m_gesture_yaw{}, m_gesture_pitch{};

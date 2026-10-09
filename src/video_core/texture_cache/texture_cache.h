@@ -328,6 +328,23 @@ private:
     void ApplyTexturePack(Image& image);
     /// Guest ranges of images the texture pack replaces in some prompt style.
     std::vector<std::pair<VAddr, u64>> pack_ranges;
+
+    /// Remembered results of FindImage for requests that matched a cached image exactly.
+    /// A heavy frame looks the same few hundred textures up thousands of times; the walk
+    /// over the page table and the comparisons are skipped while the set of registered
+    /// images has not changed (every register and unregister bumps the generation).
+    struct FoundImage {
+        u64 generation = 0;
+        VAddr guest_address = 0;
+        u32 guest_size = 0;
+        Extent3D size{};
+        vk::Format pixel_format{};
+        AmdGpu::ImageType type{};
+        bool exact_fmt = false;
+        ImageId image_id{};
+    };
+    std::array<FoundImage, 2048> found_images{};
+    u64 image_set_generation = 1;
     PromptSet pack_applied_set{PromptSet::PlayStation};
 
     /// Register image in the page table

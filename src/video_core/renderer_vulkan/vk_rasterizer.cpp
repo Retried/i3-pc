@@ -768,7 +768,10 @@ void Rasterizer::DispatchDirect() {
             return;
         }
     }
-    {
+    // The compute bookkeeping below (histograms, mirroring of small outputs into guest memory)
+    // exists for SotC, whose CPU reads compute results; other titles skip its cost.
+    static const bool is_sotc = Common::ElfInfo::Instance().GameSerial() == "CUSA08809";
+    if (is_sotc) {
         // Temporary: which compute shaders dominate, with their dispatch sizes.
         static std::unordered_map<u64, std::pair<u32, u64>> histogram;
         static auto last = std::chrono::steady_clock::now();
@@ -848,10 +851,14 @@ void Rasterizer::DispatchDirect() {
     const bool urgent = flush_always || g_mirror_everything || cs.pgm_hash == 0x4defcf7f ||
                         cs.pgm_hash == 0x2e0f474b;
     static std::unordered_map<u64, std::pair<u32, u64>> mirror_histogram;
-    if (!g_bisect.active && std::ranges::find(g_bisect.hashes, u64(cs.pgm_hash)) == g_bisect.hashes.end()) {
+    if (is_sotc && !g_bisect.active &&
+        std::ranges::find(g_bisect.hashes, u64(cs.pgm_hash)) == g_bisect.hashes.end()) {
         g_bisect.hashes.push_back(cs.pgm_hash);
     }
+    // I3_NO_MIRROR=1 leaves compute outputs on the GPU only (test switch).
+    static const bool mirror_outputs = is_sotc || std::getenv("I3_NO_MIRROR") == nullptr;
     const bool skip_mirror =
+        !mirror_outputs ||
         g_bisect.Skipped() == cs.pgm_hash ||
         std::ranges::find(mirror_skip, u64(cs.pgm_hash)) != mirror_skip.end() ||
         (!mirror_only.empty() && !g_mirror_everything &&
@@ -870,7 +877,7 @@ void Rasterizer::DispatchDirect() {
         }
     }
     ResetBindings(true);
-    {
+    if (is_sotc) {
         auto& entry = mirror_histogram[cs.pgm_hash];
         for (const auto& [address, size] : mirrors) {
             ++entry.first;

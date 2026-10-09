@@ -146,6 +146,20 @@ public:
         UniqueImage image;
         State state;
         std::vector<State> subresource_states;
+        /// Requests known to need no barrier in the current state. Draws repeat the same few
+        /// transitions on the same images, and walking every mip and layer of a partially
+        /// transitioned image each time is costly.
+        struct SettledRequest {
+            u64 generation = ~0ULL;
+            vk::ImageLayout layout;
+            vk::AccessFlags2 access_mask;
+            vk::PipelineStageFlags2 pl_stage;
+            bool has_range;
+            SubresourceRange range;
+        };
+        std::array<SettledRequest, 4> settled_requests{};
+        u32 next_settled_request = 0;
+        u64 state_generation = 0;
         SmallVector<ImageViewInfo, 2> image_view_infos;
         SmallVector<ImageViewId, 2> image_view_ids;
         u32 num_samples;

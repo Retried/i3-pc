@@ -57,15 +57,20 @@ inline void StartThreadSampler() {
             CONTEXT ctx{};
             ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             Key key{};
+            // Nothing that can take a lock (heap, logging) may run while the target is
+            // suspended: it may be holding that lock. Only gather here, count after resuming.
+            bool sampled = false;
+            bool leaf_inside = false;
             if (GetThreadContext(target, &ctx)) {
+                sampled = true;
                 u32 found = 0;
-                bool leaf_inside = ctx.Rip >= base && ctx.Rip < end;
+                leaf_inside = ctx.Rip >= base && ctx.Rip < end;
                 if (leaf_inside) {
                     key[found++] = ctx.Rip;
                 }
                 // Scan the stack for return addresses into this image instead of unwinding:
                 // RtlVirtualUnwind faults on frames of guest code, which has no unwind data.
-                std::array<u64, 8192> stack;
+                static std::array<u64, 8192> stack;
                 SIZE_T got{};
                 ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(ctx.Rsp),
                                   stack.data(), sizeof(stack), &got);
@@ -74,6 +79,9 @@ inline void StartThreadSampler() {
                         key[found++] = stack[i];
                     }
                 }
+            }
+            ResumeThread(target);
+            if (sampled) {
                 ++total;
                 outside += !leaf_inside;
                 if (!leaf_inside) {
@@ -83,7 +91,6 @@ inline void StartThreadSampler() {
                 }
                 ++counts[key];
             }
-            ResumeThread(target);
 
             if (GetTickCount64() - last >= 10000) {
                 last = GetTickCount64();

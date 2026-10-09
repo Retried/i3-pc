@@ -7,6 +7,7 @@
 #include <vector>
 #include <cstdlib>
 #include <string>
+#include "video_core/pass_filter.h"
 #include "common/debug.h"
 #include "common/elf_info.h"
 #include "video_core/op_trace.h"
@@ -376,6 +377,36 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     if (DrawHasNoEffect(pipeline, regs)) {
         ++g_stats.filtered;
         return;
+    }
+    {
+        const u64 fs_hash = pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash;
+        if (VideoCore::PassFilter::skipped_count.load(std::memory_order_relaxed) != 0 &&
+            VideoCore::PassFilter::IsSkipped(fs_hash)) {
+            ++g_stats.filtered;
+            return;
+        }
+        // Test aid: script action "listfs" collects the fullscreen passes (3 or 4 vertices)
+        // for a while and writes them, in first-use order, to fs_list.txt.
+        if (VideoCore::PassFilter::listing_frames.load(std::memory_order_relaxed) > 0 &&
+            regs.num_indices <= 4) {
+            static std::vector<std::pair<u64, u32>> seen;
+            auto it = std::ranges::find(seen, fs_hash, &std::pair<u64, u32>::first);
+            if (it == seen.end()) {
+                seen.emplace_back(fs_hash, 1);
+            } else {
+                ++it->second;
+            }
+            if (VideoCore::PassFilter::listing_frames.fetch_sub(1) == 1) {
+                if (std::FILE* file = std::fopen("fs_list.txt", "w")) {
+                    for (const auto& [hash, count] : seen) {
+                        std::fprintf(file, "%llx %u\n", static_cast<unsigned long long>(hash),
+                                     count);
+                    }
+                    std::fclose(file);
+                }
+                seen.clear();
+            }
+        }
     }
     VideoCore::OpTrace::Add('D', pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                             pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,

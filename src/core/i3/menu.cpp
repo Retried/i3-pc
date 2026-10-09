@@ -18,7 +18,9 @@
 #include "common/logging/log.h"
 #include "core/emulator_settings.h"
 #include "core/i3/menu.h"
+#include "common/path_util.h"
 #include "input/input_handler.h"
+#include "video_core/pass_filter.h"
 #include "video_core/texture_cache/texture_cache.h"
 
 #ifdef _WIN32
@@ -255,6 +257,77 @@ SDL_Window* Window() {
 
 // ---- Graphics options ----
 
+// Effects the engine has no switch for: each is one fullscreen pass of the renderer, found by
+// skipping passes one at a time in a frozen scene, and is turned off by not issuing its draws.
+struct Effect {
+    const char* label;
+    const char* key; // name in the settings file
+    u64 fs_hash;     // fragment shader of the pass
+    const char* description;
+    bool on = true;
+};
+std::array<Effect, 3> effects{{
+    {"Anti-Aliasing", "antialiasing", 0x961c93ba,
+     "Edge smoothing pass. Off gives a sharper picture with visible stair-steps. Applies at once"},
+    {"Wet Surface Reflections", "reflections", 0x9215a6e8,
+     "Reflections on wet ground and puddles. Applies at once"},
+    {"Light Glow", "glow", 0x6d29fb0f, "Glow around fires and bright lights. Applies at once"},
+}};
+constexpr std::array<const char*, 3> PresetNames{"Original", "Sharp", "Minimal"};
+// Which effects each preset keeps on, in the order of `effects`.
+constexpr std::array<std::array<bool, 3>, 3> Presets{{
+    {true, true, true},
+    {false, true, true},
+    {false, false, false},
+}};
+
+std::filesystem::path EffectsFile() {
+    return Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "i3_graphics.txt";
+}
+
+void ApplyEffects() {
+    VideoCore::PassFilter::Clear();
+    for (const auto& effect : effects) {
+        if (!effect.on) {
+            VideoCore::PassFilter::Skip(effect.fs_hash);
+        }
+    }
+}
+
+void SaveEffects() {
+    std::ofstream file{EffectsFile(), std::ios::trunc};
+    for (const auto& effect : effects) {
+        file << effect.key << " = " << (effect.on ? "on" : "off") << "\n";
+    }
+}
+
+void LoadEffects() {
+    std::ifstream file{EffectsFile()};
+    for (std::string line; std::getline(file, line);) {
+        const auto [name, value] = SplitLine(line);
+        for (auto& effect : effects) {
+            if (name == effect.key) {
+                effect.on = value != "off";
+            }
+        }
+    }
+    ApplyEffects();
+}
+
+/// Index of the preset matching the current switches, or -1 for a custom mix.
+int CurrentPreset() {
+    for (size_t p = 0; p < Presets.size(); p++) {
+        bool same = true;
+        for (size_t e = 0; e < effects.size(); e++) {
+            same &= effects[e].on == Presets[p][e];
+        }
+        if (same) {
+            return static_cast<int>(p);
+        }
+    }
+    return -1;
+}
+
 constexpr std::array<u32, 6> FrameCaps{30, 60, 90, 120, 144, 1000};
 constexpr std::array<std::pair<u32, u32>, 4> WindowSizes{
     {{1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160}}};
@@ -313,6 +386,13 @@ std::vector<Row> BuildRows() {
         rows.push_back({"Sharpening", SharpenNames[SharpenIndex()],
                         "Sharpening pass of the upscaler. Applies at once", true});
         rows.push_back({"Frame Rate Counter", fps_shown ? "On" : "Off", "Applies at once", true});
+        const int preset = CurrentPreset();
+        rows.push_back({"Effects Preset", preset < 0 ? "Custom" : PresetNames[preset],
+                        "Original keeps every effect; Sharp drops anti-aliasing; Minimal drops all",
+                        true});
+        for (const auto& effect : effects) {
+            rows.push_back({effect.label, effect.on ? "On" : "Off", effect.description, true});
+        }
         rows.push_back({"BACK", "", "Return to the previous menu"});
     }
     return rows;
@@ -370,7 +450,22 @@ void AdjustGraphics(int row, int step) {
         fps_shown = !fps_shown;
         Overlay::ToggleSimpleFps();
         return;
+    case 7: {
+        const int count = static_cast<int>(Presets.size());
+        const int preset = (std::max(CurrentPreset(), 0) + step + count) % count;
+        for (size_t e = 0; e < effects.size(); e++) {
+            effects[e].on = Presets[preset][e];
+        }
+        ApplyEffects();
+        SaveEffects();
+        return;
+    }
     default:
+        if (row >= 8 && row < 8 + static_cast<int>(effects.size())) {
+            effects[row - 8].on = !effects[row - 8].on;
+            ApplyEffects();
+            SaveEffects();
+        }
         return;
     }
     EmulatorSettings.Save();
@@ -508,6 +603,7 @@ void Draw() {
     if (!enabled) {
         return;
     }
+    static const bool effects_loaded = (LoadEffects(), true);
     const bool pad_combo =
         (IsKeyDown(ImGuiKey_GamepadL3) && IsKeyPressed(ImGuiKey_GamepadR3, false)) ||
         (IsKeyDown(ImGuiKey_GamepadR3) && IsKeyPressed(ImGuiKey_GamepadL3, false));

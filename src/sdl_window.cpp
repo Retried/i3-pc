@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "video_core/pass_filter.h"
 #include "core/i3/menu.h"
 #include "common/recording.h"
 #include <fstream>
@@ -285,6 +286,18 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
             } else {
                 LOG_ERROR(Input, "virtual pad: unknown button {}", name);
             }
+        } else if (action.starts_with("skipfs=")) {
+            // "skipfs=<hex hash>" stops draws with that fragment shader, "skipfs=clear" resumes
+            // them all; "listfs" (below) names the candidates.
+            const auto value = action.substr(7);
+            if (value == "clear") {
+                VideoCore::PassFilter::Clear();
+            } else {
+                VideoCore::PassFilter::Skip(std::strtoull(value.c_str(), nullptr, 16));
+            }
+        } else if (action == "listfs") {
+            // Counts draws, not frames: about three seconds of fullscreen passes.
+            VideoCore::PassFilter::listing_frames = 4000;
         } else if (action == "rec=on" || action == "rec=off") {
             Common::g_recording.store(action == "rec=on", std::memory_order_relaxed);
         } else if (action.starts_with("aim=")) {

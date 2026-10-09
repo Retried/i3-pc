@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "core/i3/menu.h"
 #include "common/recording.h"
 #include <fstream>
 #include <cstdlib>
@@ -466,6 +467,10 @@ void WindowSDL::WaitEvent() {
     if (ImGui::Core::ProcessEvent(&event)) {
         return;
     }
+    // The PC options overlay takes input ahead of the game while it is open.
+    if (I3::Menu::OnEvent(event)) {
+        return;
+    }
 
     switch (event.type) {
     case SDL_EVENT_WINDOW_RESIZED:
@@ -551,7 +556,12 @@ void WindowSDL::WaitEvent() {
         Overlay::ToggleSimpleFps();
         break;
     case SDL_EVENT_TOGGLE_FRIENDS:
-        ImGui::Friends::Toggle();
+        // The friends hotkey (F2 by default) opens the PC options in the inFAMOUS build.
+        if (Common::ElfInfo::Instance().GameSerial() == "CUSA00004") {
+            I3::Menu::Toggle();
+        } else {
+            ImGui::Friends::Toggle();
+        }
         break;
     case SDL_EVENT_RELOAD_INPUTS:
         Input::ParseInputConfig(std::string(Common::ElfInfo::Instance().GameSerial()));

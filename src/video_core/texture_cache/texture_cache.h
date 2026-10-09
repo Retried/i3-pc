@@ -34,6 +34,9 @@ class PageManager;
 /// Button prompt style, following the input device the player last used.
 enum class PromptSet : u32 { PlayStation, Keyboard, Xbox };
 extern std::atomic<PromptSet> g_prompt_set;
+/// Set after the replacement files changed on disk: they are read again and the images
+/// they replace are uploaded again.
+extern std::atomic<bool> g_pack_reload;
 PromptSet ActivePromptSet();
 
 class TextureCache {

@@ -824,7 +824,10 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
             }
             break;
         case HOTKEY_TOGGLE_FRIENDS:
-            PushSDLEvent(SDL_EVENT_TOGGLE_FRIENDS);
+            // On the press only: the release would toggle it straight back.
+            if (new_button_state) {
+                PushSDLEvent(SDL_EVENT_TOGGLE_FRIENDS);
+            }
             break;
         case KEY_TOGGLE:
             // noop

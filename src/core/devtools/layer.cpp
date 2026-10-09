@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "core/i3/menu.h"
 #include "layer.h"
 
 #include <SDL3/SDL_events.h>
@@ -509,6 +510,8 @@ void L::Draw() {
             End();
         }
     }
+
+    I3::Menu::Draw();
 
     PopID();
 }

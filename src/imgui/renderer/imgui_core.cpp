@@ -8,6 +8,8 @@
 #include <SDL3/SDL_events.h>
 #include <imgui.h>
 
+#include <filesystem>
+#include "core/i3/menu.h"
 #include "common/path_util.h"
 #include "core/debug_state.h"
 #include "core/devtools/layer.h"
@@ -99,6 +101,19 @@ void Initialize(const ::Vulkan::Instance& instance, const Frontend::WindowSDL& w
 
     // Avoid exploding atlas size on Metal/MoltenVK when CJK fallback is enabled.
     FontStack::AddPrimaryUiFont(io.Fonts, 128.0f, console_language, font_cfg, false);
+
+    // Condensed face for the PC options overlay of the inFAMOUS build (a Windows system
+    // font; the default UI font is used when it is missing).
+    for (const char* path :
+         {"C:/Windows/Fonts/bahnschrift.ttf", "C:/Windows/Fonts/arialnb.ttf"}) {
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec)) {
+            ImFontConfig overlay_cfg{};
+            overlay_cfg.OversampleH = 2;
+            I3::Menu::SetFont(io.Fonts->AddFontFromFileTTF(path, 72.0f, &overlay_cfg));
+            break;
+        }
+    }
 
     // Big Picture
     FontStack::AddPrimaryUiFont(ImGui::GetIO().Fonts, 64.0f, EmulatorSettings.GetConsoleLanguage(),

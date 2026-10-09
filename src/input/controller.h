@@ -106,6 +106,17 @@ public:
     bool SetVibration(u8 smallMotor, u8 largeMotor);
     void SetTouchpadState(int touchIndex, bool touchDown, float x, float y);
 
+    /// Motion gestures for input devices without sensors (keyboard, pads without gyro): while a
+    /// gesture is on, the reported acceleration, angular velocity and orientation are replaced.
+    enum MotionGesture : u32 {
+        MotionSideways = 1,     ///< pad rolled 90 degrees, left end down
+        MotionShake = 2,        ///< pad shaken along the axis gravity currently acts on
+        MotionSidewaysAlt = 4,  ///< pad rolled 90 degrees the other way
+    };
+    void SetMotionGesture(u32 gesture, bool on);
+    /// Test hook: sets the aim angles (radians) the sideways gesture reports.
+    void SetGestureAim(float yaw, float pitch);
+
     float gyro_buf[3] = {0.0f, 0.0f, 0.0f}, accel_buf[3] = {0.0f, 9.81f, 0.0f};
     s32 user_id = Libraries::UserService::ORBIS_USER_SERVICE_USER_ID_INVALID;
     SDL_Gamepad* m_sdl_gamepad = nullptr;
@@ -114,6 +125,11 @@ private:
     // m_state_mutex must be held by the caller.
     void PushStateLocked(u64 timestamp = 0);
     void UpdateOrientationLocked(u64 timestamp);
+    void ApplyMotionGesturesLocked(u64 timestamp);
+
+    u32 m_motion_gestures{};
+    float m_gesture_yaw{}, m_gesture_pitch{};
+    u64 m_last_gesture_update{};
 
     u8 m_next_touch_id{1};
     u64 m_touch_down_timestamp{};

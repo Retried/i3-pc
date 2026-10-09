@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <unordered_set>
@@ -201,6 +202,106 @@ void GameController::UpdateOrientationLocked(u64 timestamp) {
     m_last_orientation_update = timestamp;
 }
 
+void GameController::SetMotionGesture(u32 gesture, bool on) {
+    std::lock_guard lock{m_state_mutex};
+    const u32 previous = m_motion_gestures;
+    m_motion_gestures = on ? (m_motion_gestures | gesture) : (m_motion_gestures & ~gesture);
+    if (previous != 0 && m_motion_gestures == 0) {
+        m_gesture_yaw = m_gesture_pitch = 0.0f;
+        m_last_gesture_update = 0;
+        // Back to the neutral pose the real sensors (or their defaults) describe.
+        m_state.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
+        m_last_orientation_update = 0;
+    }
+    PushStateLocked();
+}
+
+void GameController::SetGestureAim(float yaw, float pitch) {
+    std::lock_guard lock{m_state_mutex};
+    m_gesture_yaw = yaw;
+    m_gesture_pitch = pitch + 0.1f; // absolute pitch: undo the neutral-pose bias
+    PushStateLocked();
+}
+
+void GameController::ApplyMotionGesturesLocked(u64 timestamp) {
+    constexpr float gravity = 9.81f;
+    constexpr float half_sqrt2 = 0.70710678f;
+    auto& accel = m_state.acceleration;
+    auto& gyro = m_state.angularVelocity;
+    float* gravity_axis = &accel.y;
+    const float delta_time = m_last_gesture_update == 0 || timestamp <= m_last_gesture_update
+                                 ? 0.0f
+                                 : std::min(float(timestamp - m_last_gesture_update) / 1e6f, 0.1f);
+    m_last_gesture_update = timestamp;
+    if (m_motion_gestures & (MotionSideways | MotionSidewaysAlt)) {
+        const float sign = (m_motion_gestures & MotionSideways) ? 1.0f : -1.0f;
+        // While the pad is "held sideways" the sticks (and the mouse, through its stick
+        // mapping) point it: games aim with the pad itself in this pose.
+        // Tunables while the mapping is being worked out (read once, never per frame).
+        static const auto env = [](const char* name, float fallback) {
+            const char* v = std::getenv(name);
+            return v ? std::strtof(v, nullptr) : fallback;
+        };
+        static const float max_rate = env("I3_AIM_RATE", 0.35f); // rad/s at full deflection
+        static const float max_angle = env("I3_AIM_MAX", 0.45f);
+        // inFAMOUS Second Son takes the pitch as absolute and puts its spray stencils a
+        // little below level, so the neutral pose points slightly down.
+        constexpr float pitch_bias = -0.1f;
+        static const int aim_mode = int(env("I3_AIM_MODE", 3)); // 1 gyro, 2 orientation, 3 both
+        const auto stick = [&](Input::Axis axis_a, Input::Axis axis_b) {
+            const float a = float(m_state.axes[std::to_underlying(axis_a)] - 128) / 127.f;
+            const float b = float(m_state.axes[std::to_underlying(axis_b)] - 128) / 127.f;
+            const float v = std::abs(a) > std::abs(b) ? a : b;
+            return std::abs(v) < 0.1f ? 0.0f : v;
+        };
+        float yaw_rate = -max_rate * stick(Input::Axis::LeftX, Input::Axis::RightX);
+        float pitch_rate = -max_rate * stick(Input::Axis::LeftY, Input::Axis::RightY);
+        const float yaw = std::clamp(m_gesture_yaw + yaw_rate * delta_time, -max_angle, max_angle);
+        const float pitch =
+            std::clamp(m_gesture_pitch + pitch_rate * delta_time, -max_angle, max_angle);
+        if (delta_time > 0.0f) {
+            yaw_rate = (yaw - m_gesture_yaw) / delta_time;
+            pitch_rate = (pitch - m_gesture_pitch) / delta_time;
+        }
+        m_gesture_yaw = yaw;
+        m_gesture_pitch = pitch;
+
+        accel = {sign * gravity, 0.0f, 0.0f};
+        // The world's vertical is the pad's X axis and the world's left-right axis its Y axis.
+        gyro = {sign * yaw_rate, sign * pitch_rate, 0.0f};
+        if (!(aim_mode & 1)) {
+            gyro = {0.0f, 0.0f, 0.0f};
+        }
+        // orientation = yaw (about world Y) * pitch (about world X) * roll of 90 degrees.
+        const auto mul = [](const Libraries::Pad::OrbisFQuaternion& l,
+                            const Libraries::Pad::OrbisFQuaternion& r) {
+            return Libraries::Pad::OrbisFQuaternion{
+                l.w * r.x + l.x * r.w + l.y * r.z - l.z * r.y,
+                l.w * r.y - l.x * r.z + l.y * r.w + l.z * r.x,
+                l.w * r.z + l.x * r.y - l.y * r.x + l.z * r.w,
+                l.w * r.w - l.x * r.x - l.y * r.y - l.z * r.z,
+            };
+        };
+        const Libraries::Pad::OrbisFQuaternion q_yaw{0.0f, std::sin(yaw / 2), 0.0f,
+                                                     std::cos(yaw / 2)};
+        const float biased_pitch = pitch + pitch_bias;
+        const Libraries::Pad::OrbisFQuaternion q_pitch{std::sin(biased_pitch / 2), 0.0f, 0.0f,
+                                                       std::cos(biased_pitch / 2)};
+        const Libraries::Pad::OrbisFQuaternion q_roll{0.0f, 0.0f, sign * half_sqrt2, half_sqrt2};
+        m_state.orientation = (aim_mode & 2) ? mul(mul(q_yaw, q_pitch), q_roll) : q_roll;
+        gravity_axis = &accel.x;
+    } else {
+        m_gesture_yaw = m_gesture_pitch = 0.0f;
+    }
+    if (m_motion_gestures & MotionShake) {
+        // About 6 strokes a second, a few g each, like shaking a spray can.
+        const float phase =
+            static_cast<float>(timestamp % 1'000'000) / 1'000'000.f * 6.2831853f * 6.f;
+        *gravity_axis += 30.0f * std::sin(phase);
+        gyro.z = 4.0f * std::cos(phase);
+    }
+}
+
 void GameController::PushStateLocked(u64 timestamp) {
     if (timestamp == 0) {
         timestamp = Libraries::Kernel::sceKernelGetProcessTime();
@@ -209,6 +310,9 @@ void GameController::PushStateLocked(u64 timestamp) {
     m_state.OnGyro(gyro_buf);
     m_state.OnAccel(accel_buf);
     UpdateOrientationLocked(timestamp);
+    if (m_motion_gestures != 0) {
+        ApplyMotionGesturesLocked(timestamp);
+    }
     m_state.time = timestamp;
     m_state.touch_time_since_held_down =
         m_touch_down_timestamp == 0 ? 0 : timestamp - m_touch_down_timestamp;

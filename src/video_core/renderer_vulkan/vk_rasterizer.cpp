@@ -9,6 +9,7 @@
 #include <string>
 #include "common/debug.h"
 #include "common/elf_info.h"
+#include "video_core/op_trace.h"
 #include "video_core/thread_sampler.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
@@ -355,6 +356,9 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         ++g_stats.filtered;
         return;
     }
+    VideoCore::OpTrace::Add('D', pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
+                            pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
+                            regs.num_indices, regs.num_instances.NumInstances());
     {
         // Debug aid: SOTC_SKIP_VS=<hex hash> drops draws using that vertex shader, to see what
         // it renders.
@@ -448,6 +452,27 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
     RENDERER_TRACE;
     ++g_stats.indirect;
     ++g_bisect.total_draws;
+    VideoCore::OpTrace::Add('I', arg_address, offset, max_count, count_address);
+    {
+        // inFAMOUS Second Son now and then issues an indirect draw whose argument slot holds
+        // unrelated float data (instance count in the billions), which hangs the GPU until the
+        // driver resets the device. No real draw comes near these limits, so drop such draws.
+        // SotC is left alone: its arguments are written on the GPU and its frame is draw-bound.
+        static const bool check_args = Common::ElfInfo::Instance().GameSerial() != "CUSA08809";
+        if (check_args) {
+            u32 args[5]{};
+            memory->CopySparseMemory(arg_address + offset, reinterpret_cast<u8*>(args),
+                                     sizeof(args));
+            constexpr u32 max_elements = 0x4000000;
+            constexpr u32 max_instances = 0x100000;
+            if (args[0] > max_elements || args[1] > max_instances) {
+                LOG_WARNING(Render, "Dropped indirect draw at {:#x}: count {:#x}, instances {:#x}",
+                            arg_address + offset, args[0], args[1]);
+                ++g_stats.filtered;
+                return;
+            }
+        }
+    }
     ScopedNs total_timer{g_stats.ns_draw_total};
 
     scheduler.PopPendingOperations();
@@ -783,6 +808,7 @@ void Rasterizer::DispatchDirect() {
 
     const auto cmdbuf = scheduler.CommandBuffer();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->Handle());
+    VideoCore::OpTrace::Add('C', cs.pgm_hash, cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
     cmdbuf.dispatch(cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
     DebugState.IncDispatch();
 
@@ -910,6 +936,8 @@ void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
 
     const auto cmdbuf = scheduler.CommandBuffer();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->Handle());
+    VideoCore::OpTrace::Add('X', pipeline->GetStage(Shader::SwStage::Compute).pgm_hash,
+                            address + offset);
     cmdbuf.dispatchIndirect(buffer->Handle(), base);
     DebugState.IncDispatch();
 

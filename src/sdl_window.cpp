@@ -282,6 +282,11 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
             } else {
                 LOG_ERROR(Input, "virtual pad: unknown button {}", name);
             }
+        } else if (action.starts_with("aim=")) {
+            // "aim=0.2,-0.1": yaw and pitch (radians) of the sideways motion gesture.
+            const auto comma = action.find(',');
+            controller->SetGestureAim(std::stof(action.substr(4, comma - 4)),
+                                      std::stof(action.substr(comma + 1)));
         } else if (action.starts_with("mouse=")) {
             // "mouse=20*1500": mouse moving right 20 counts per poll for 1500 ms (negative =
             // left), through the same mouse-to-stick conversion as a real mouse.

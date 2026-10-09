@@ -298,6 +298,8 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
         } else if (action == "listfs") {
             // Counts draws, not frames: about three seconds of fullscreen passes.
             VideoCore::PassFilter::listing_frames = 4000;
+        } else if (action == "bench=on" || action == "bench=off") {
+            Common::g_bench.store(action == "bench=on", std::memory_order_relaxed);
         } else if (action == "rec=on" || action == "rec=off") {
             Common::g_recording.store(action == "rec=on", std::memory_order_relaxed);
         } else if (action.starts_with("aim=")) {

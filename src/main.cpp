@@ -13,6 +13,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include "core/i3/first_run.h"
 #include "common/arch.h"
 #include "common/key_manager.h"
 #include "common/logging/log.h"
@@ -185,6 +186,7 @@ int main(int argc, char* argv[]) {
     KeyManager::GetInstance()->LoadFromFile();
 
     // Load configurations
+    I3::FirstRun::NoteExistingSettings();
     EmulatorSettings.Load();
     UserSettings.Load();
 

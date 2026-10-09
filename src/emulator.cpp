@@ -12,6 +12,7 @@
 #include <fmt/xchar.h>
 #include <hwinfo/hwinfo.h>
 
+#include "core/i3/first_run.h"
 #include "common/debug.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
@@ -434,6 +435,10 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
     }
 
     EmulatorSettings.Load(id);
+    if (id == "CUSA00004") {
+        // First start on this PC: settings chosen for its display and hardware.
+        I3::FirstRun::AdjustSettings();
+    }
     // Switch to configured log
     Common::Log::Switch((!id.empty() && EmulatorSettings.IsLogSeparate()) ? id + ".log"
                                                                           : "shad_log.txt",

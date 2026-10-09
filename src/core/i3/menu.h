@@ -18,5 +18,6 @@ void Draw();
 bool OnEvent(const SDL_Event& event);
 /// The condensed face used for the overlay text, loaded once with the other fonts.
 void SetFont(ImFont* font);
+ImFont* Font();
 
 } // namespace I3::Menu

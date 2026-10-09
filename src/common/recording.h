@@ -12,4 +12,8 @@ namespace Common {
 /// and the audio output appends its float samples to <user dir>/capture/audio.f32.
 inline std::atomic<bool> g_recording{false};
 
+/// Benchmark capture (script actions "bench=on" / "bench=off"): while set, the time between
+/// presented frames is appended, in milliseconds, to bench_frametimes.txt.
+inline std::atomic<bool> g_bench{false};
+
 } // namespace Common

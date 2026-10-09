@@ -14,6 +14,7 @@
 #include <fmt/format.h>
 #include <imgui.h>
 
+#include "core/i3/first_run.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "core/emulator_settings.h"
@@ -505,16 +506,16 @@ void Activate(int row, int direction, int count) {
     }
 }
 
-ImFont* Font() {
+ImFont* MenuFont() {
     return menu_font ? menu_font : ImGui::GetFont();
 }
 
 ImVec2 TextSize(float size, const std::string& text) {
-    return Font()->CalcTextSizeA(size, FLT_MAX, 0.0f, text.c_str());
+    return MenuFont()->CalcTextSizeA(size, FLT_MAX, 0.0f, text.c_str());
 }
 
 void Text(ImDrawList* draw, float size, ImVec2 pos, ImU32 color, const std::string& text) {
-    draw->AddText(Font(), size, pos, color, text.c_str());
+    draw->AddText(MenuFont(), size, pos, color, text.c_str());
 }
 
 /// One "[key] LABEL" hint, right aligned at `right_x`. Returns the width used.
@@ -545,6 +546,10 @@ void SetFont(ImFont* font) {
     menu_font = font;
 }
 
+ImFont* Font() {
+    return MenuFont();
+}
+
 void Toggle() {
     if (!open) {
         page = Page::Main;
@@ -559,6 +564,11 @@ bool IsOpen() {
 }
 
 bool OnEvent(const SDL_Event& event) {
+    if (FirstRun::IntroActive()) {
+        // Nothing reaches the game, or this menu, while the opening lines play.
+        return event.type != SDL_EVENT_KEY_UP && event.type != SDL_EVENT_MOUSE_BUTTON_UP &&
+               event.type != SDL_EVENT_GAMEPAD_BUTTON_UP && event.type != SDL_EVENT_QUIT;
+    }
     if (!open) {
         return false;
     }
@@ -604,6 +614,10 @@ void Draw() {
         return;
     }
     static const bool effects_loaded = (LoadEffects(), true);
+    FirstRun::DrawIntro();
+    if (FirstRun::IntroActive()) {
+        return;
+    }
     const bool pad_combo =
         (IsKeyDown(ImGuiKey_GamepadL3) && IsKeyPressed(ImGuiKey_GamepadR3, false)) ||
         (IsKeyDown(ImGuiKey_GamepadR3) && IsKeyPressed(ImGuiKey_GamepadL3, false));

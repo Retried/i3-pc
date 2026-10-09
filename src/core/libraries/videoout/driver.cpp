@@ -4,6 +4,7 @@
 #include <atomic>
 #include <SDL3/SDL_timer.h>
 #include <chrono>
+#include "common/recording.h"
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/thread.h"
@@ -257,6 +258,13 @@ void VideoOutDriver::Flip(const Request& req) {
     const double gap_ms = std::chrono::duration<double, std::milli>(now - previous).count();
     previous = now;
     worst_ms = std::max(worst_ms, gap_ms);
+    if (Common::g_bench.load(std::memory_order_relaxed)) {
+        static std::FILE* bench_file = std::fopen("bench_frametimes.txt", "w");
+        if (bench_file != nullptr) {
+            std::fprintf(bench_file, "%.3f ", gap_ms);
+            std::fflush(bench_file);
+        }
+    }
     hitches += gap_ms > 40.0;
     if (now - last >= std::chrono::seconds(3)) {
         LOG_ERROR(Lib_VideoOut, "fps {:.1f} worst {:.0f} ms hitches {}",

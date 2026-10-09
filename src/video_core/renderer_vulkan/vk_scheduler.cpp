@@ -14,7 +14,8 @@ namespace Vulkan {
 std::mutex Scheduler::submit_mutex;
 
 Scheduler::Scheduler(const Instance& instance)
-    : instance{instance}, work_semaphore{instance}, command_pool{instance, &work_semaphore} {
+    : instance{instance}, work_semaphore{instance}, command_pool{instance, &work_semaphore},
+      upload_pool{instance, &work_semaphore} {
 #if TRACY_GPU_ENABLED
     profiler_scope = reinterpret_cast<tracy::VkCtxScope*>(std::malloc(sizeof(tracy::VkCtxScope)));
 #endif
@@ -81,7 +82,7 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         .pStencilAttachment = db.has_stencil ? &stencil_attachment : nullptr,
     };
 
-    CommandBuffer().beginRendering(rendering_info);
+    Stream().beginRendering(rendering_info);
 }
 
 void Scheduler::EndRendering() {
@@ -89,7 +90,7 @@ void Scheduler::EndRendering() {
         return;
     }
     is_rendering = false;
-    CommandBuffer().endRendering();
+    Stream().endRendering();
 }
 
 vk::CommandBuffer Scheduler::UploadCommandBuffer() {
@@ -100,7 +101,7 @@ vk::CommandBuffer Scheduler::UploadCommandBuffer() {
     const vk::CommandBufferBeginInfo begin_info = {
         .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
     };
-    upload_cmdbuf = command_pool.Commit();
+    upload_cmdbuf = upload_pool.Commit();
     Check(upload_cmdbuf.begin(begin_info));
     return upload_cmdbuf;
 }
@@ -180,6 +181,8 @@ void Scheduler::EndSession() {
     }
 
     EndRendering();
+    // Everything queued belongs to this command buffer and must be in it before it ends.
+    stream.Drain();
     Check(session.primary.end());
 }
 
@@ -277,7 +280,7 @@ void Scheduler::PriorityPendingOpsThread(std::stop_token stoken) {
     }
 }
 
-void DynamicState::Commit(const Instance& instance, const vk::CommandBuffer& cmdbuf) {
+void DynamicState::Commit(const Instance& instance, CommandStream& cmdbuf) {
     if (dirty_state.viewports) {
         dirty_state.viewports = false;
         cmdbuf.setViewportWithCount(viewports);

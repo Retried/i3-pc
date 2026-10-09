@@ -483,7 +483,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     const auto& fetch_shader = pipeline->GetFetchShader();
     const auto [vertex_offset, instance_offset] = GetDrawOffsets(regs, vs_info, fetch_shader);
 
-    const auto cmdbuf = scheduler.CommandBuffer();
+    auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->Handle());
 
     if (is_indexed) {
@@ -547,18 +547,18 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         repeat.is_indexed == is_indexed && repeat.stride == stride &&
         repeat.vertex_sgpr_offset == vertex_sgpr_offset &&
         repeat.instance_sgpr_offset == instance_sgpr_offset && scheduler.IsRendering() &&
-        repeat.cmdbuf == scheduler.CommandBuffer();
+        repeat.cmdbuf == scheduler.RawCommandBuffer();
     repeat.valid = false;
     if (can_repeat) {
         const auto size = stride * max_count;
         const auto [buffer, base] = buffer_cache.ObtainBuffer(arg_address + offset, size, false);
         // Obtaining the arguments may have uploaded data, which ends the render pass.
-        if (scheduler.IsRendering() && repeat.cmdbuf == scheduler.CommandBuffer() &&
+        if (scheduler.IsRendering() && repeat.cmdbuf == scheduler.RawCommandBuffer() &&
             !runtime.IsBufferAccessed(buffer, base, size)) {
             if (is_indexed) {
-                repeat.cmdbuf.drawIndexedIndirect(buffer->Handle(), base, max_count, stride);
+                scheduler.Stream().drawIndexedIndirect(buffer->Handle(), base, max_count, stride);
             } else {
-                repeat.cmdbuf.drawIndirect(buffer->Handle(), base, max_count, stride);
+                scheduler.Stream().drawIndirect(buffer->Handle(), base, max_count, stride);
             }
             DebugState.IncDrawCall();
             ++g_stats.same_inputs;
@@ -765,7 +765,7 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
     }
     ScopedNs tail_timer{g_stats.ns_stage[7]};
 
-    const auto cmdbuf = scheduler.CommandBuffer();
+    auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->Handle());
 
     if (is_indexed) {
@@ -791,7 +791,8 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
     }
 
     ResetBindings(false);
-    repeat = {true, is_indexed, stride, vertex_sgpr_offset, instance_sgpr_offset, cmdbuf};
+    repeat = {true,   is_indexed,          stride,
+              vertex_sgpr_offset, instance_sgpr_offset, scheduler.RawCommandBuffer()};
     liverpool->state_changed_since_draw = false;
 }
 
@@ -861,7 +862,7 @@ void Rasterizer::DispatchDirect() {
     scheduler.EndRendering();
     pipeline->BindResources(set_writes, push_data);
 
-    const auto cmdbuf = scheduler.CommandBuffer();
+    auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->Handle());
     VideoCore::OpTrace::Add('C', cs.pgm_hash, cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
     cmdbuf.dispatch(cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
@@ -994,7 +995,7 @@ void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
     scheduler.EndRendering();
     pipeline->BindResources(set_writes, push_data);
 
-    const auto cmdbuf = scheduler.CommandBuffer();
+    auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->Handle());
     VideoCore::OpTrace::Add('X', pipeline->GetStage(Shader::SwStage::Compute).pgm_hash,
                             address + offset);
@@ -1142,7 +1143,7 @@ void Rasterizer::BindVertexBuffers(const GraphicsPipeline* pipeline) {
 
     if (instance.IsVertexInputDynamicState()) {
         // Update current vertex inputs.
-        const auto cmdbuf = scheduler.CommandBuffer();
+        auto& cmdbuf = scheduler.Stream();
         cmdbuf.setVertexInputEXT(bindings, attributes);
     }
 
@@ -1231,7 +1232,7 @@ void Rasterizer::BindVertexBuffers(const GraphicsPipeline* pipeline) {
         host_strides.push_back(buffer.GetStride());
     }
 
-    const auto cmdbuf = scheduler.CommandBuffer();
+    auto& cmdbuf = scheduler.Stream();
     const auto num_buffers = guest_buffers.size();
     if (instance.IsVertexInputDynamicState()) {
         cmdbuf.bindVertexBuffers(0, num_buffers, host_buffers.data(), host_offsets.data());
@@ -1258,7 +1259,7 @@ void Rasterizer::BindIndexBuffer(u32 index_offset) {
     needs_barrier |= runtime.IsBufferAccessed(buffer, offset, index_buffer_size);
     bound_buffers.emplace_back(buffer, offset, index_buffer_size, vk::AccessFlagBits2::eIndexRead);
 
-    const auto cmdbuf = scheduler.CommandBuffer();
+    auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindIndexBuffer(buffer->Handle(), offset, index_type);
 }
 
@@ -2126,7 +2127,7 @@ void Rasterizer::UpdateDynamicState(const GraphicsPipeline* pipeline, const bool
     UpdateColorBlendingState(pipeline);
 
     auto& dynamic_state = scheduler.GetDynamicState();
-    dynamic_state.Commit(instance, scheduler.CommandBuffer());
+    dynamic_state.Commit(instance, scheduler.Stream());
 }
 
 void Rasterizer::UpdateViewportScissorState() const {

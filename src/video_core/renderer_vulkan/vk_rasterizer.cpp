@@ -220,6 +220,27 @@ struct DrawStats {
             *value = u64(double(*value) * scale);
         }
         last = now;
+#ifdef _WIN32
+        {
+            // CPU time of this (the GPU command) thread and of the whole process over the
+            // interval: tells a saturated render thread from one waiting on the game.
+            static u64 last_thread = 0, last_process = 0;
+            const auto total = [](HANDLE handle, bool thread) {
+                FILETIME creation, exit, kernel, user;
+                (thread ? GetThreadTimes : GetProcessTimes)(handle, &creation, &exit, &kernel, &user);
+                const auto ticks = [](const FILETIME& t) {
+                    return (u64(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+                };
+                return (ticks(kernel) + ticks(user)) / 10000;
+            };
+            const u64 thread_ms = total(GetCurrentThread(), true);
+            const u64 process_ms = total(GetCurrentProcess(), false);
+            LOG_ERROR(Render, "cpu/3s ms: render thread {} process {}", thread_ms - last_thread,
+                      process_ms - last_process);
+            last_thread = thread_ms;
+            last_process = process_ms;
+        }
+#endif
         LOG_ERROR(Render, "stats/3s: drawn {} indirect {} dispatch {} filtered {} no_pipeline {} "
                           "bind_failed {} max_indices {} mirrors {} submits {}",
                   drawn, indirect, dispatch, filtered, no_pipeline, bind_failed, verts_max, mirrors,
@@ -877,7 +898,8 @@ void Rasterizer::DispatchDirect() {
         }
     }
     ResetBindings(true);
-    if (is_sotc) {
+    static const bool log_mirrors = is_sotc || std::getenv("I3_MIRROR_LOG") != nullptr;
+    if (log_mirrors) {
         auto& entry = mirror_histogram[cs.pgm_hash];
         for (const auto& [address, size] : mirrors) {
             ++entry.first;

@@ -595,6 +595,10 @@ void Emulator::Run(std::filesystem::path file, std::vector<std::string> args,
                                        Common::g_scm_branch, Common::g_scm_desc, game_title);
         }
     }
+    if (id == "CUSA00004") {
+        // The inFAMOUS Second Son build shows the game's name only.
+        window_title = title;
+    }
     window = std::make_unique<Frontend::WindowSDL>(EmulatorSettings.GetWindowWidth(),
                                                    EmulatorSettings.GetWindowHeight(), controllers,
                                                    window_title);

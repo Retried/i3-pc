@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -112,6 +113,31 @@ int main(int argc, char* argv[]) {
     app.allow_extras();
 
     // ---- No-args behavior ----
+    // A game build: game_path.txt next to the executable names the game to start, so the
+    // executable (or a shortcut to it) boots straight into the game. Settings and saves live
+    // in the "user" folder beside it, hence the working directory.
+    std::vector<std::string> standalone_args;
+    std::vector<char*> standalone_argv;
+    if (argc == 1) {
+        if (const char* base = SDL_GetBasePath()) {
+            const std::filesystem::path base_dir{base};
+            std::ifstream file{base_dir / "game_path.txt"};
+            std::string game;
+            if (file && std::getline(file, game) && !game.empty()) {
+                while (!game.empty() && (game.back() == '\r' || game.back() == ' ')) {
+                    game.pop_back();
+                }
+                std::error_code ec;
+                std::filesystem::current_path(base_dir, ec);
+                standalone_args = {argv[0], "--game", game};
+                for (auto& arg : standalone_args) {
+                    standalone_argv.push_back(arg.data());
+                }
+                argc = static_cast<int>(standalone_argv.size());
+                argv = standalone_argv.data();
+            }
+        }
+    }
     if (argc == 1) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "shadPS4",
                                  "This is a CLI application. Please use the '-b' flag for Big "

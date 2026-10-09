@@ -88,6 +88,21 @@ static std::optional<std::filesystem::path> GetBundleParentDirectory() {
 static auto UserPaths = [] {
     // Try the portable user directory first.
     auto user_dir = std::filesystem::current_path() / PORTABLE_DIR;
+#ifdef _WIN32
+    {
+        // A game build (game_path.txt beside the executable) keeps its settings and saves
+        // beside the executable too, wherever it is started from. This runs before main().
+        wchar_t module_path[MAX_PATH]{};
+        if (GetModuleFileNameW(nullptr, module_path, MAX_PATH) != 0) {
+            const auto exe_dir = std::filesystem::path(module_path).parent_path();
+            std::error_code ec;
+            if (std::filesystem::exists(exe_dir / "game_path.txt", ec)) {
+                user_dir = exe_dir / PORTABLE_DIR;
+                std::filesystem::create_directories(user_dir, ec);
+            }
+        }
+    }
+#endif
     if (!std::filesystem::exists(user_dir)) {
         // If it doesn't exist, use the standard path for the platform instead.
         // NOTE: On Windows we currently just create the portable directory instead.

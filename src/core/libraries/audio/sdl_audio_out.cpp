@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cmath>
+#include <string>
+#include <fmt/format.h>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
@@ -74,6 +77,52 @@ public:
         Cleanup();
     }
 
+    // Test aid (I3_AUDIO_METER=1): level, clipping, click and late-buffer statistics of what the
+    // game outputs, logged every few seconds, so sound can be checked without listening.
+    struct Meter {
+        float peak{}, last{};
+        double sum_squares{};
+        u64 samples{}, clipped{}, bad{}, clicks{}, late{}, buffers{}, last_time{};
+    } meter;
+
+    void MeterBuffer(u64 current_time) {
+        const float* data = reinterpret_cast<const float*>(internal_buffer);
+        // The buffer holds the stereo fold-down when the device is stereo.
+        const u64 count = internal_buffer_size / sizeof(float);
+        const u64 channels = count / buffer_frames;
+        for (u64 i = 0; i < count; ++i) {
+            const float v = data[i];
+            if (!std::isfinite(v)) {
+                ++meter.bad;
+                continue;
+            }
+            const float mag = std::abs(v);
+            meter.peak = std::max(meter.peak, mag);
+            meter.sum_squares += double(v) * v;
+            meter.clipped += mag > 1.0f;
+            if (i % channels == 0) {
+                // A jump of over half of full scale between neighbouring frames is a click.
+                meter.clicks += std::abs(v - meter.last) > 0.5f;
+                meter.last = v;
+            }
+        }
+        meter.samples += count;
+        ++meter.buffers;
+        meter.late += meter.last_time != 0 && current_time - meter.last_time > 2 * period_us;
+        meter.last_time = current_time;
+        if (meter.samples >= u64(sample_rate) * channels * 3) {
+            LOG_ERROR(Lib_AudioOut,
+                      "meter ch {}: peak {:.3f} rms {:.4f} clipped {} bad {} clicks {} late {} of {}",
+                      channels, meter.peak, std::sqrt(meter.sum_squares / double(meter.samples)),
+                      meter.clipped, meter.bad, meter.clicks, meter.late, meter.buffers);
+            const float last = meter.last;
+            const u64 last_time = meter.last_time;
+            meter = {};
+            meter.last = last;
+            meter.last_time = last_time;
+        }
+    }
+
     void Output(void* ptr) override {
         if (!stream || !internal_buffer || !convert) [[unlikely]] {
             return;
@@ -92,6 +141,10 @@ public:
             ManageAudioQueue();
         }
 
+        static const bool metering = std::getenv("I3_AUDIO_METER") != nullptr;
+        if (metering) {
+            MeterBuffer(current_time);
+        }
         // SOTC_MUTE=1 silences all output (automated test runs).
         static const bool mute = std::getenv("SOTC_MUTE") != nullptr;
         if (mute) {

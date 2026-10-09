@@ -335,7 +335,13 @@ static Uint32 SDLCALL PollControllerLightColour(void* userdata, SDL_TimerID time
 WindowSDL::WindowSDL(s32 width_, s32 height_, Input::GameControllers* controllers_,
                      std::string_view window_title)
     : width{width_}, height{height_}, controllers{*controllers_} {
-    if (!SDL_SetHint(SDL_HINT_APP_NAME, "shadPS4")) {
+    // A game build titles its window with the game's name alone; the same name then shows in
+    // the system's volume mixer and audio session.
+    const std::string app_name =
+        window_title.find("shadPS4") == std::string_view::npos && !window_title.empty()
+            ? std::string(window_title)
+            : std::string("shadPS4");
+    if (!SDL_SetHint(SDL_HINT_APP_NAME, app_name.c_str())) {
         UNREACHABLE_MSG("Failed to set SDL window hint: {}", SDL_GetError());
     }
     if (!SDL_Init(SDL_INIT_VIDEO)) {

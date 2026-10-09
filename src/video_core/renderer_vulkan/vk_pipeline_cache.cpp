@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstring>
 #include <ranges>
 
 #include "common/elf_info.h"
@@ -342,10 +343,20 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 
 PipelineCache::~PipelineCache() = default;
 
+// Previous graphics pipeline lookup (GPU command thread only); cleared when a pipeline is
+// removed.
+static GraphicsPipelineKey last_key{};
+static const GraphicsPipeline* last_pipeline = nullptr;
+
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params) {
     draw_indirect_params = params;
     if (!RefreshGraphicsKey()) {
         return nullptr;
+    }
+    // Runs of draws share one pipeline: comparing with the previous key is cheaper than
+    // hashing the key and probing the table again.
+    if (last_pipeline != nullptr && std::memcmp(&last_key, &graphics_key, sizeof(last_key)) == 0) {
+        return last_pipeline;
     }
     const auto [it, is_new] = graphics_pipelines.try_emplace(graphics_key);
     if (is_new) {
@@ -369,7 +380,9 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
             }
         }
     }
-    return it->second.get();
+    last_key = graphics_key;
+    last_pipeline = it->second.get();
+    return last_pipeline;
 }
 
 const ComputePipeline* PipelineCache::GetComputePipeline() {
@@ -728,6 +741,7 @@ std::optional<vk::ShaderModule> PipelineCache::ReplaceShader(vk::ShaderModule mo
         for (auto& key : pipeline_keys) {
             if (std::holds_alternative<GraphicsPipelineKey>(key)) {
                 auto& graphics_key = std::get<GraphicsPipelineKey>(key);
+                last_pipeline = nullptr;
                 graphics_pipelines.erase(graphics_key);
             } else if (std::holds_alternative<ComputePipelineKey>(key)) {
                 auto& compute_key = std::get<ComputePipelineKey>(key);

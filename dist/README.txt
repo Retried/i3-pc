@@ -27,8 +27,11 @@ Game data: D:\Games\CUSA00004 (read only, never modified; path in game_path.txt)
 Saves:     user\home\1000\savedata\CUSA00004
 Bindings:  user\input_config\CUSA00004.ini  (F8 reloads it while the game runs)
 
-Button icons follow the device in use: key caps while you play on keyboard and mouse,
-the PlayStation icons when you touch a controller.
+Button icons follow the device in use: key caps while you play on keyboard and mouse (also
+the default when no controller is connected), the PlayStation icons when you touch a
+controller. Caps show what the key prints: the Shift arrow, a space-bar mark, a small mouse
+with the pressed button filled. The game's Options screen shows a keyboard-and-mouse diagram
+with your bound keys in place of its controller picture. Both are redrawn when you rebind.
 
 Keyboard and mouse
 ------------------

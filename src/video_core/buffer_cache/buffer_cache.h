@@ -153,6 +153,7 @@ private:
     /// Compute outputs that are newer on the GPU than in guest memory, until MirrorToGuest
     /// copies them back. Uploads must leave them alone.
     RangeSet pending_mirror_ranges;
+    u64 mirror_batch = 0;
 
     std::unique_ptr<FaultManager> fault_manager;
     std::unique_ptr<Buffer> bda_pagetable_buffer;

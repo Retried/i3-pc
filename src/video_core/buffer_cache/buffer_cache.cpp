@@ -10,6 +10,7 @@
 #include <vector>
 #include <unordered_set>
 #include <xxhash.h>
+#include "common/elf_info.h"
 #include "common/alignment.h"
 #include "core/debug_state.h"
 #include "core/memory.h"
@@ -191,6 +192,30 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
         const vk::BufferCopy copy{offset, download.offset + cursor, size};
         runtime.CopyBuffer(buffer, download.buffer, std::span{&copy, 1});
         cursor += Common::AlignUp(size, 64);
+    }
+    // inFAMOUS Second Son does not block on the GPU here: the copy is submitted and written to
+    // guest memory when the GPU has reached it, normally early in the next frame. What its CPU
+    // side needs from these results (an exposure-like block, once per frame) tolerates that,
+    // and the blocking wait cost 1.5 to 2 ms of every frame. I3_SYNC_MIRROR=1 waits again.
+    static const bool async = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                              std::getenv("I3_SYNC_MIRROR") == nullptr;
+    if (async) {
+        const u64 batch = ++mirror_batch;
+        scheduler.DeferOperation(
+            [this, download, total, batch, list = std::vector(ranges.begin(), ranges.end())] {
+                download.buffer->Invalidate(download.offset, total);
+                u64 at = 0;
+                for (const auto& [addr, size] : list) {
+                    memory->TryWriteBacking(std::bit_cast<u8*>(addr), download.mapped + at, size);
+                    at += Common::AlignUp(size, 64);
+                }
+                // Ranges stay protected from re-upload until the newest batch has landed.
+                if (batch == mirror_batch) {
+                    pending_mirror_ranges.Clear();
+                }
+            });
+        scheduler.Flush();
+        return;
     }
     scheduler.Finish();
     download.buffer->Invalidate(download.offset, total);

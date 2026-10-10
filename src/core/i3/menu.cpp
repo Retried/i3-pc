@@ -425,8 +425,7 @@ std::vector<Row> BuildRows() {
                         "Rate). Applies at once",
                         true});
         rows.push_back({"Sun Shadows", ShadowRateNames[shadow_rate[0]],
-                        "How often the sun's shadow map is redrawn: the largest cost of a frame. "
-                        "Every 2nd Frame is faster, shadows may trail while moving. Applies at once",
+                        "How often sun shadows are redrawn: the largest cost of a frame. Applies at once",
                         true});
         rows.push_back({"Light Shadows", ShadowRateNames[shadow_rate[1]],
                         "The same for shadows cast by lamps and fires. Applies at once", true});

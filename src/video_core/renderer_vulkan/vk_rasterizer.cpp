@@ -648,6 +648,24 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     ResetBindings(false);
 }
 
+// Indirect draw arguments read from guest memory and checked (see DrawIndirect); empty when
+// the GPU is to read the argument buffer itself.
+static boost::container::small_vector<std::array<u32, 5>, 4> checked_args;
+
+template <typename Stream>
+static void EmitCheckedDraws(Stream& cmdbuf, bool is_indexed) {
+    for (const auto& args : checked_args) {
+        if (args[0] == 0 || args[1] == 0) {
+            continue;
+        }
+        if (is_indexed) {
+            cmdbuf.drawIndexed(args[0], args[1], args[2], s32(args[3]), args[4]);
+        } else {
+            cmdbuf.draw(args[0], args[1], args[2], args[3]);
+        }
+    }
+}
+
 void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u32 stride,
                               u32 max_count, VAddr count_address, u16 vertex_sgpr_offset,
                               u16 instance_sgpr_offset) {
@@ -660,18 +678,37 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         // unrelated float data (instance count in the billions), which hangs the GPU until the
         // driver resets the device. No real draw comes near these limits, so drop such draws.
         // SotC is left alone: its arguments are written on the GPU and its frame is draw-bound.
+        // Every slot of a multi draw is checked, and when the arguments live in plain guest
+        // memory (nothing on the GPU wrote them) the draws are issued from the checked values
+        // instead of letting the GPU read the slot again: a slot the game fills in late then
+        // cannot differ between the check and the draw. A device loss was still seen with only
+        // the first slot checked and limits of 64M elements and 1M instances.
         static const bool check_args = Common::ElfInfo::Instance().GameSerial() != "CUSA08809";
+        checked_args.clear();
         if (check_args) {
-            u32 args[5]{};
-            memory->CopySparseMemory(arg_address + offset, reinterpret_cast<u8*>(args),
-                                     sizeof(args));
-            constexpr u32 max_elements = 0x4000000;
-            constexpr u32 max_instances = 0x100000;
-            if (args[0] > max_elements || args[1] > max_instances) {
-                LOG_WARNING(Render, "Dropped indirect draw at {:#x}: count {:#x}, instances {:#x}",
-                            arg_address + offset, args[0], args[1]);
-                ++g_stats.filtered;
-                return;
+            constexpr u32 max_elements = 0x400000;
+            constexpr u32 max_instances = 0x10000;
+            constexpr u32 max_slots = 256;
+            const u32 slots = count_address == 0 ? std::min(max_count, max_slots) : 1;
+            const bool direct = count_address == 0 && max_count <= max_slots && stride >= 16 &&
+                                !buffer_cache.IsRegionGpuModified(arg_address + offset,
+                                                                  u64(stride) * max_count);
+            for (u32 slot = 0; slot < slots; ++slot) {
+                std::array<u32, 5> args{};
+                memory->CopySparseMemory(arg_address + offset + u64(slot) * stride,
+                                         reinterpret_cast<u8*>(args.data()),
+                                         std::min<u64>(stride, sizeof(args)));
+                if (args[0] > max_elements || args[1] > max_instances) {
+                    LOG_WARNING(Render,
+                                "Dropped indirect draw at {:#x}: count {:#x}, instances {:#x}",
+                                arg_address + offset + u64(slot) * stride, args[0], args[1]);
+                    ++g_stats.filtered;
+                    checked_args.clear();
+                    return;
+                }
+                if (direct) {
+                    checked_args.push_back(args);
+                }
             }
         }
     }
@@ -706,9 +743,18 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         if (scheduler.IsRendering() && repeat.cmdbuf == scheduler.RawCommandBuffer() &&
             !runtime.IsBufferAccessed(buffer, base, size)) {
             if (is_indexed) {
-                scheduler.Stream().drawIndexedIndirect(buffer->Handle(), base, max_count, stride);
+                if (!checked_args.empty()) {
+                    EmitCheckedDraws(scheduler.Stream(), true);
+                } else {
+                    scheduler.Stream().drawIndexedIndirect(buffer->Handle(), base, max_count,
+                                                           stride);
+                }
             } else {
-                scheduler.Stream().drawIndirect(buffer->Handle(), base, max_count, stride);
+                if (!checked_args.empty()) {
+                    EmitCheckedDraws(scheduler.Stream(), false);
+                } else {
+                    scheduler.Stream().drawIndirect(buffer->Handle(), base, max_count, stride);
+                }
             }
             DebugState.IncDrawCall();
             ++g_stats.same_inputs;
@@ -924,6 +970,8 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         if (count_address != 0) {
             cmdbuf.drawIndexedIndirectCount(buffer->Handle(), base, count_buffer->Handle(),
                                             count_offset, max_count, stride);
+        } else if (!checked_args.empty()) {
+            EmitCheckedDraws(cmdbuf, true);
         } else {
             cmdbuf.drawIndexedIndirect(buffer->Handle(), base, max_count, stride);
         }
@@ -934,6 +982,8 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         if (count_address != 0) {
             cmdbuf.drawIndirectCount(buffer->Handle(), base, count_buffer->Handle(), count_offset,
                                      max_count, stride);
+        } else if (!checked_args.empty()) {
+            EmitCheckedDraws(cmdbuf, false);
         } else {
             cmdbuf.drawIndirect(buffer->Handle(), base, max_count, stride);
         }
@@ -970,11 +1020,16 @@ void Rasterizer::DispatchDirect() {
         if (skip_cs && cs.pgm_hash == skip_cs) {
             return;
         }
+        // Test aid: I3_SKIP_ALL_CS=1 drops every dispatch (cost measurement; breaks the picture).
+        static const bool skip_all = std::getenv("I3_SKIP_ALL_CS") != nullptr;
+        if (skip_all) {
+            return;
+        }
     }
     // The compute bookkeeping below (histograms, mirroring of small outputs into guest memory)
     // exists for SotC, whose CPU reads compute results; other titles skip its cost.
     static const bool is_sotc = Common::ElfInfo::Instance().GameSerial() == "CUSA08809";
-    if (is_sotc) {
+    if (is_sotc || g_pass_stat_on) {
         // Temporary: which compute shaders dominate, with their dispatch sizes.
         static std::unordered_map<u64, std::pair<u32, u64>> histogram;
         static auto last = std::chrono::steady_clock::now();

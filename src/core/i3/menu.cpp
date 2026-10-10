@@ -62,7 +62,7 @@ struct Action {
     const char* pad;   // output name in the binding file
     const char* label; // what the game calls it
 };
-constexpr std::array<Action, 26> Actions{{
+constexpr std::array<Action, 27> Actions{{
     {"r2", "Main Attack"},
     {"l2", "Aim / Zoom"},
     {"r1", "Heavy Attack"},
@@ -89,6 +89,7 @@ constexpr std::array<Action, 26> Actions{{
     {"touchpad_swipe_down", "Touchpad Swipe Down"},
     {"touchpad_swipe_left", "Touchpad Swipe Left"},
     {"touchpad_swipe_right", "Touchpad Swipe Right"},
+    {"touchpad_two_fingers", "Touchpad Both Thumbs (Move Car)"},
 }};
 
 bool IsMouseName(const std::string& name) {

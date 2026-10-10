@@ -57,6 +57,7 @@
 #define TOUCH_SWIPE_DOWN 0x04000001
 #define TOUCH_SWIPE_LEFT 0x04000002
 #define TOUCH_SWIPE_RIGHT 0x04000003
+#define TOUCH_TWO_FINGERS 0x04000004
 
 #define HOTKEY_FULLSCREEN 0xf0000001
 #define HOTKEY_PAUSE 0xf0000002
@@ -165,6 +166,7 @@ const std::map<std::string, u32> string_to_cbutton_map = {
     {"touchpad_swipe_down", TOUCH_SWIPE_DOWN},
     {"touchpad_swipe_left", TOUCH_SWIPE_LEFT},
     {"touchpad_swipe_right", TOUCH_SWIPE_RIGHT},
+    {"touchpad_two_fingers", TOUCH_TWO_FINGERS},
     {"qam", SDL_GAMEPAD_BUTTON_MISC1},
     {"r4", SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1},
     {"l4", SDL_GAMEPAD_BUTTON_LEFT_PADDLE1},
@@ -554,7 +556,7 @@ public:
 
 class ControllerAllOutputs {
 public:
-    static constexpr u64 output_count = 50;
+    static constexpr u64 output_count = 51;
     std::array<ControllerOutput, output_count> data = {
         // Important: these have to be the first, or else they will update in the wrong order
         ControllerOutput(LEFTJOYSTICK_HALFMODE),
@@ -568,6 +570,7 @@ public:
         ControllerOutput(TOUCH_SWIPE_DOWN),
         ControllerOutput(TOUCH_SWIPE_LEFT),
         ControllerOutput(TOUCH_SWIPE_RIGHT),
+        ControllerOutput(TOUCH_TWO_FINGERS),
 
         // Button mappings
         ControllerOutput(SDL_GAMEPAD_BUTTON_NORTH),           // Triangle

@@ -141,6 +141,15 @@ void GameController::SetTouchpadState(int touch_index, bool touch_down, float x,
     PushStateLocked(timestamp);
 }
 
+void GameController::SetTwoFingerTouch(bool down) {
+    std::lock_guard lock{m_state_mutex};
+    const u64 timestamp = Libraries::Kernel::sceKernelGetProcessTime();
+    m_two_fingers = down;
+    SetTouchLocked(0, down, 0.3f, 0.5f, timestamp);
+    SetTouchLocked(1, down, 0.7f, 0.5f, timestamp);
+    PushStateLocked(timestamp);
+}
+
 void GameController::StartTouchSwipe(float dx, float dy) {
     std::lock_guard lock{m_state_mutex};
     m_swipe_dx = dx;
@@ -326,7 +335,13 @@ void GameController::PushStateLocked(u64 timestamp) {
         const float t = std::min(float(timestamp - m_swipe_start) / duration_us, 1.0f);
         const float x = 0.5f + m_swipe_dx * travel * (t - 0.5f);
         const float y = 0.5f + m_swipe_dy * travel * (t - 0.5f);
-        SetTouchLocked(0, t < 1.0f, x, y, timestamp);
+        if (m_two_fingers) {
+            // Both resting fingers travel together and stay down at the end.
+            SetTouchLocked(0, true, x - 0.2f, y, timestamp);
+            SetTouchLocked(1, true, x + 0.2f, y, timestamp);
+        } else {
+            SetTouchLocked(0, t < 1.0f, x, y, timestamp);
+        }
         if (t >= 1.0f) {
             m_swipe_start = 0;
         }

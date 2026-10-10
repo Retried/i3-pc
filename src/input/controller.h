@@ -114,6 +114,9 @@ public:
         MotionSidewaysAlt = 4,  ///< pad rolled 90 degrees the other way
     };
     void SetMotionGesture(u32 gesture, bool on);
+    /// Two fingers resting on the touchpad, left and right of the middle, while held. A swipe
+    /// started meanwhile moves both of them.
+    void SetTwoFingerTouch(bool down);
     /// Plays a quick one-finger swipe across the touchpad; (dx, dy) is its direction.
     void StartTouchSwipe(float dx, float dy);
     /// Test hook: sets the aim angles (radians) the sideways gesture reports.
@@ -131,6 +134,7 @@ private:
     void SetTouchLocked(int touch_index, bool touch_down, float x, float y, u64 timestamp);
 
     u64 m_swipe_start{};
+    bool m_two_fingers{};
     float m_swipe_dx{}, m_swipe_dy{};
 
     u32 m_motion_gestures{};

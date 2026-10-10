@@ -854,6 +854,12 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
                     button == TOUCH_SWIPE_UP ? -1.0f : button == TOUCH_SWIPE_DOWN ? 1.0f : 0.0f);
             }
             break;
+        case TOUCH_TWO_FINGERS:
+            // "Press and hold the Touch Pad Button with both thumbs": two touches plus the click.
+            controller->SetTwoFingerTouch(new_button_state);
+            controller->Button(SDLGamepadToOrbisButton(SDL_GAMEPAD_BUTTON_TOUCHPAD_CENTER),
+                               new_button_state);
+            break;
         default: // is a normal key (hopefully)
             controller->Button(SDLGamepadToOrbisButton(button), new_button_state);
             break;

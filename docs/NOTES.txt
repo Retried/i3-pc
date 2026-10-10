@@ -64,11 +64,14 @@ and the first combat tutorial (chain melee with F breaks both timber barriers). 
 draw hardening; three runs of the same scene on the hardened build survived. The cause is
 not proven, so a rare crash there cannot be ruled out.
 
-Stability, 2026-10-10 06:25 (replaces an earlier note that blamed the test tool's pausing;
-that was wrong): the crashes inside the burning cannery were device losses caused by fire and
-particle draws whose counts are written by a GPU compute step. The GPU's copy of those counts
-can be garbage while the copy in game memory is sane; the old guard checked only the latter
-and still let the GPU read its own. Trusting the GPU copy loses the device within 30 seconds.
-Now every such draw uses the checked copy from game memory. Five unpaused minutes in that
-room on the optimized build: no fault, 55 to 60 FPS, 52 bad draws dropped. That build is the
-shortcut's program since 06:19. Why the GPU copy is wrong is not known.
+Stability, 2026-10-10 16:33 (replaces the earlier notes on this): every crash seen since the
+night build of 01:11 had one cause, a speed-up of mine. Results that GPU compute steps produce
+are copied back into game memory; I had made that copy not wait for the GPU, so it landed a
+frame late, on memory the game had already reused. That gave garbage particle draw counts
+(device losses in burning areas) and, with sustained shooting in the Hank fight, an access
+violation after about two and a half minutes. Proof, three minutes of continuous shooting:
+with the wait 0 garbage draws; without it 31 on the test build, 548 and the crash on the
+optimized build. The copy waits again (about 2 FPS in heavy scenes). On the optimized build
+with the fix: three minutes of shooting and five minutes in the burning room, 0 garbage draws,
+no fault, 60 FPS. That build is the shortcut's program since 16:33. The guards added while
+chasing this (argument checks on indirect draws and dispatches) stay in.

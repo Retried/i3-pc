@@ -298,6 +298,14 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
         } else if (action == "listfs") {
             // Counts draws, not frames: about three seconds of fullscreen passes.
             VideoCore::PassFilter::listing_frames = 4000;
+        } else if (action == "pause" || action == "resume") {
+            // Holds the game between steering steps so timed sections can be driven by a
+            // script that looks at a screenshot before each step.
+            if (action == "pause" && !DebugState.IsGuestThreadsPaused()) {
+                DebugState.PauseGuestThreads();
+            } else if (action == "resume" && DebugState.IsGuestThreadsPaused()) {
+                DebugState.ResumeGuestThreads();
+            }
         } else if (action == "bench=on" || action == "bench=off") {
             Common::g_bench.store(action == "bench=on", std::memory_order_relaxed);
         } else if (action == "rec=on" || action == "rec=off") {

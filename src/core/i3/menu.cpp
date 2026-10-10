@@ -278,6 +278,11 @@ std::array<Effect, 3> effects{{
 // The game's own Options > Video > Frame Rate ("30fps limit") is stored in each save. On by
 // default here: the limit is lifted whatever the save says.
 bool unlock_frame_rate = true;
+// How often the shadow maps are redrawn: [0] the sun's, [1] those of local lights.
+std::array<int, 2> shadow_rate{};
+constexpr std::array<const char*, 2> ShadowKeys{"sun_shadows", "light_shadows"};
+constexpr std::array<const char*, 3> ShadowRateKeys{"full", "half", "off"};
+constexpr std::array<const char*, 3> ShadowRateNames{"Every Frame", "Every 2nd Frame", "Off"};
 
 constexpr std::array<const char*, 3> PresetNames{"Original", "Sharp", "Minimal"};
 // Which effects each preset keeps on, in the order of `effects`.
@@ -299,6 +304,9 @@ void ApplyEffects() {
         }
     }
     Common::g_unlock_flip_rate = unlock_frame_rate;
+    for (size_t kind = 0; kind < shadow_rate.size(); kind++) {
+        Common::g_shadow_rate[kind] = shadow_rate[kind];
+    }
 }
 
 void SaveEffects() {
@@ -307,6 +315,9 @@ void SaveEffects() {
         file << effect.key << " = " << (effect.on ? "on" : "off") << "\n";
     }
     file << "unlock_frame_rate = " << (unlock_frame_rate ? "on" : "off") << "\n";
+    for (size_t kind = 0; kind < shadow_rate.size(); kind++) {
+        file << ShadowKeys[kind] << " = " << ShadowRateKeys[shadow_rate[kind]] << "\n";
+    }
 }
 
 void LoadEffects() {
@@ -320,6 +331,11 @@ void LoadEffects() {
         }
         if (name == "unlock_frame_rate") {
             unlock_frame_rate = value != "off";
+        }
+        for (size_t kind = 0; kind < shadow_rate.size(); kind++) {
+            if (name == ShadowKeys[kind]) {
+                shadow_rate[kind] = value == ShadowRateKeys[2] ? 2 : value == ShadowRateKeys[1];
+            }
         }
     }
     ApplyEffects();
@@ -408,6 +424,12 @@ std::vector<Row> BuildRows() {
                         "Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
                         "Rate). Applies at once",
                         true});
+        rows.push_back({"Sun Shadows", ShadowRateNames[shadow_rate[0]],
+                        "How often the sun's shadow map is redrawn: the largest cost of a frame. "
+                        "Every 2nd Frame is faster, shadows may trail while moving. Applies at once",
+                        true});
+        rows.push_back({"Light Shadows", ShadowRateNames[shadow_rate[1]],
+                        "The same for shadows cast by lamps and fires. Applies at once", true});
         rows.push_back({"BACK", "", "Return to the previous menu"});
     }
     return rows;
@@ -482,6 +504,11 @@ void AdjustGraphics(int row, int step) {
             SaveEffects();
         } else if (row == 8 + static_cast<int>(effects.size())) {
             unlock_frame_rate = !unlock_frame_rate;
+            ApplyEffects();
+            SaveEffects();
+        } else if (const int kind = row - 9 - static_cast<int>(effects.size());
+                   kind >= 0 && kind < static_cast<int>(shadow_rate.size())) {
+            shadow_rate[kind] = (shadow_rate[kind] + step + 3) % 3;
             ApplyEffects();
             SaveEffects();
         }

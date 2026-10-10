@@ -709,10 +709,13 @@ void Runtime::AccessBuffer(const VideoCore::Buffer* handle, u64 offset, u64 size
         vk::AccessFlagBits2::eDepthStencilAttachmentWrite | vk::AccessFlagBits2::eTransferWrite |
         vk::AccessFlagBits2::eMemoryWrite | vk::AccessFlagBits2::eTransformFeedbackWriteEXT;
 
-    if (src_access & WRITE_MASK) {
+    // Draws bind the same vertex and index ranges over and over between two barrier flushes.
+    // A range the list already covers changes nothing; looking it up is a binary search, while
+    // adding it again rewrites the middle of the list.
+    if ((src_access & WRITE_MASK) && !resource->write_ranges.Contains(range.start, range.end)) {
         resource->write_ranges.Add(range);
     }
-    if (src_access & READ_MASK) {
+    if ((src_access & READ_MASK) && !resource->read_ranges.Contains(range.start, range.end)) {
         resource->read_ranges.Add(range);
     }
 

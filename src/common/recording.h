@@ -20,4 +20,13 @@ inline std::atomic<bool> g_unlock_flip_rate{false};
 /// presented frames is appended, in milliseconds, to bench_frametimes.txt.
 inline std::atomic<bool> g_bench{false};
 
+/// Shadow map updates of the inFAMOUS Second Son build, set by its PC options: 0 every frame,
+/// 1 every second frame (the map of the frame before is reused in between), 2 never (no
+/// shadows of that kind). [0] the sun's map, [1] the maps of local lights.
+inline std::atomic<int> g_shadow_rate[2]{};
+
+/// Time the GPU command thread spent blocked on the GPU, in microseconds, by reason
+/// (0 upload stream wrapped, 1 fault buffer, 2 every wait). Logged with the thread CPU time.
+inline std::atomic<unsigned long long> g_wait_us[3]{};
+
 } // namespace Common

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
+#include "common/recording.h"
 #include <numeric>
 
 #include "common/alignment.h"
@@ -273,7 +275,11 @@ bool StreamBuffer::WaitPendingOperations(u64 requested_upper_bound, bool allow_w
         if (!scheduler.IsFree(watch.tick) && !allow_wait) {
             return false;
         }
+        const auto wait_start = std::chrono::steady_clock::now();
         scheduler.Wait(watch.tick);
+        Common::g_wait_us[0] += std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::steady_clock::now() - wait_start)
+                                    .count();
         wait_bound = watch.upper_bound;
         ++wait_cursor;
     }

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
+#include "common/recording.h"
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/thread.h"
@@ -130,7 +132,11 @@ void Scheduler::Wait(u64 tick) {
         SubmitInfo info{};
         Flush(info);
     }
+    const auto wait_start = std::chrono::steady_clock::now();
     work_semaphore.Wait(tick);
+    Common::g_wait_us[2] += std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now() - wait_start)
+                                .count();
 }
 
 void Scheduler::PopPendingOperations() {

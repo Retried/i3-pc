@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
+#include "common/recording.h"
+#include <chrono>
 #include <intrin.h>
 #include <unordered_map>
 #include <vector>
@@ -31,6 +33,86 @@
 #include "video_core/texture_cache/texture_cache.h"
 
 namespace Vulkan {
+
+struct PassStat {
+    u64 color, depth;
+    u32 cw, ch, dw, dh;
+    u32 draws;
+    u64 indices;
+    int vx, vy, vw;
+};
+static std::vector<PassStat> g_pass_stat;
+
+// Shadow map options of the inFAMOUS Second Son build. About 70% of the game's draws go into
+// shadow maps, so how often those are redrawn is the largest single cost the player can trade.
+// Shadow maps are the square depth targets: the sun's is the 2048x2048 one that received the
+// most draws in the frame before (a second 2048x2048 target is left alone: dropping it changes
+// neither the picture nor the cost), the 1024x1024 ones belong to local lights. A map that gets
+// no draws in a frame is not cleared either, so it keeps what the frame before drew into it.
+struct ShadowMaps {
+    bool enabled = false; // known once the game is loaded, see NextFrame
+    u64 frame = 0;
+    u64 sun = 0;
+    struct Count {
+        u64 address;
+        u32 draws;
+    };
+    boost::container::small_vector<Count, 4> large;
+
+    u32 seen[2][2]{};
+    u32 clears = 0;
+    u64 logged_frame = 0;
+    bool Skip(const AmdGpu::DepthBuffer& depth, bool clear) {
+        const u32 size = depth.Pitch();
+        if (size < 1024 || size != depth.Height() || !depth.DepthValid()) {
+            return false;
+        }
+        const u64 address = depth.DepthAddress();
+        int kind = 1;
+        if (size >= 2048) {
+            auto it = std::ranges::find(large, address, &Count::address);
+            if (it == large.end()) {
+                large.push_back({address, 0});
+                it = std::prev(large.end());
+            }
+            ++it->draws;
+            if (address != sun) {
+                return false;
+            }
+            kind = 0;
+        }
+        const int rate = Common::g_shadow_rate[kind].load(std::memory_order_relaxed);
+        // The two kinds take turns, which keeps the cost of consecutive frames even.
+        // Off still lets the game's clear of the map through: an empty map casts no shadow, while
+        // one that is never cleared would keep the shadows of the last frame drawn into it.
+        const bool skip = rate == 2 ? !clear : (rate == 1 && ((frame + kind) & 1) != 0);
+        ++seen[kind][skip];
+        clears += clear;
+        return skip;
+    }
+
+    void NextFrame() {
+        if (frame++ == 0) {
+            enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
+        }
+        if (!large.empty()) {
+            sun = std::ranges::max_element(large, {}, &Count::draws)->address;
+            large.clear();
+        }
+    }
+};
+static ShadowMaps g_shadow_maps;
+static const std::vector<u64> g_skip_depth = [] {
+    std::vector<u64> list;
+    if (const char* env = std::getenv("I3_SKIPDEPTH")) {
+        char* end = nullptr;
+        for (const char* at = env; *at; at = *end ? end + 1 : end) {
+            list.push_back(std::strtoull(at, &end, 16));
+        }
+    }
+    return list;
+}();
+static const bool g_pass_stat_on = std::getenv("I3_PASSSTAT") != nullptr;
 
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
@@ -238,6 +320,27 @@ struct DrawStats {
             const u64 process_ms = total(GetCurrentProcess(), false);
             LOG_ERROR(Render, "cpu/3s ms: render thread {} process {}", thread_ms - last_thread,
                       process_ms - last_process);
+            LOG_ERROR(Render, "wait/3s ms: stream {} fault {} all {}",
+                      Common::g_wait_us[0].exchange(0) / 1000,
+                      Common::g_wait_us[1].exchange(0) / 1000,
+                      Common::g_wait_us[2].exchange(0) / 1000);
+            LOG_ERROR(Render, "shadow/3s: frames {} sun drawn {} skipped {} local drawn {} skipped {} clears {}",
+                      g_shadow_maps.frame - g_shadow_maps.logged_frame, g_shadow_maps.seen[0][0],
+                      g_shadow_maps.seen[0][1], g_shadow_maps.seen[1][0], g_shadow_maps.seen[1][1],
+                      g_shadow_maps.clears);
+            g_shadow_maps.logged_frame = g_shadow_maps.frame;
+            std::memset(g_shadow_maps.seen, 0, sizeof(g_shadow_maps.seen));
+            g_shadow_maps.clears = 0;
+            if (g_pass_stat_on) {
+                std::ranges::sort(g_pass_stat, std::greater{}, &PassStat::draws);
+                for (size_t i = 0; i < std::min<size_t>(g_pass_stat.size(), 24); ++i) {
+                    const auto& e = g_pass_stat[i];
+                    LOG_ERROR(Render, "pass/3s: draws {} indices {} color {:#x} {}x{} depth {:#x} {}x{} vp {},{} w{}",
+                              e.draws, e.indices, e.color, e.cw, e.ch, e.depth, e.dw, e.dh, e.vx,
+                              e.vy, e.vw);
+                }
+                g_pass_stat.clear();
+            }
             last_thread = thread_ms;
             last_process = process_ms;
         }
@@ -369,6 +472,15 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     }
 
     const auto& regs = liverpool->regs;
+    if (g_shadow_maps.enabled && g_shadow_maps.Skip(regs.depth_buffer, regs.depth_render_control.depth_clear_enable)) {
+        ++g_stats.filtered;
+        return;
+    }
+    if (!g_skip_depth.empty() &&
+        std::ranges::find(g_skip_depth, regs.depth_buffer.DepthAddress()) != g_skip_depth.end()) {
+        ++g_stats.filtered;
+        return;
+    }
     const GraphicsPipeline* pipeline = pipeline_cache.GetGraphicsPipeline();
     if (!pipeline) {
         ++g_stats.no_pipeline;
@@ -407,6 +519,28 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
                 seen.clear();
             }
         }
+    }
+    if (g_pass_stat_on) {
+        // Test aid: draws per render-target combination, logged with the other statistics.
+        const bool color = pipeline->GetStage(Shader::SwStage::Fragment).mrt_mask != 0;
+        const auto& cb = regs.color_buffers[0];
+        const u64 color_addr = color ? cb.Address() : 0;
+        const u64 depth_addr = regs.depth_buffer.DepthValid() ? regs.depth_buffer.DepthAddress() : 0;
+        const auto& vp = regs.viewports[0];
+        const int vw = int(vp.xscale * 2), vx = int(regs.depth_view.slice_start),
+                  vy = int(vp.yoffset - std::abs(vp.yscale));
+        auto it = std::ranges::find_if(g_pass_stat, [&](const PassStat& e) {
+            return e.color == color_addr && e.depth == depth_addr && e.vx == vx && e.vy == vy &&
+                   e.vw == vw;
+        });
+        if (it == g_pass_stat.end()) {
+            g_pass_stat.push_back({color_addr, depth_addr, color ? cb.Pitch() : 0,
+                                   color ? cb.Height() : 0, regs.depth_buffer.Pitch(),
+                                   regs.depth_buffer.Height(), 0, 0, vx, vy, vw});
+            it = std::prev(g_pass_stat.end());
+        }
+        ++it->draws;
+        it->indices += u64(regs.num_indices) * regs.num_instances.NumInstances();
     }
     VideoCore::OpTrace::Add('D', pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                             pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
@@ -1050,6 +1184,7 @@ void Rasterizer::FlushMirrors(u32 source) {
 }
 
 void Rasterizer::OnSubmit() {
+    g_shadow_maps.NextFrame();
     FlushMirrors(8);
     {
         static const char* at = std::getenv("SOTC_BISECT_AT");

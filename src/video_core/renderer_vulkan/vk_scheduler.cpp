@@ -134,9 +134,11 @@ void Scheduler::Wait(u64 tick) {
     }
     const auto wait_start = std::chrono::steady_clock::now();
     work_semaphore.Wait(tick);
-    Common::g_wait_us[2] += std::chrono::duration_cast<std::chrono::microseconds>(
-                                std::chrono::steady_clock::now() - wait_start)
-                                .count();
+    const u64 waited_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                              std::chrono::steady_clock::now() - wait_start)
+                              .count();
+    Common::g_wait_us[2] += waited_us;
+    Common::g_wait_total_us += waited_us;
 }
 
 void Scheduler::PopPendingOperations() {

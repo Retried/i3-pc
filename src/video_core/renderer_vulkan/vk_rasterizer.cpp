@@ -491,6 +491,7 @@ static void SubmitPeriodically(Scheduler& scheduler) {
 
 void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     RENDERER_TRACE;
+    Common::FreezeTimer freeze_timer{3};
 
     scheduler.PopPendingOperations();
     SubmitPeriodically(scheduler);
@@ -780,6 +781,7 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         }
     }
     ScopedNs total_timer{g_stats.ns_draw_total};
+    Common::FreezeTimer freeze_timer{3};
 
     scheduler.PopPendingOperations();
     SubmitPeriodically(scheduler);
@@ -848,6 +850,27 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
     if (DrawHasNoEffect(pipeline, liverpool->regs)) {
         ++g_stats.filtered;
         return;
+    }
+    {
+        // Test aids: the script action "skipfs=<hash>" also drops indirect draws with that
+        // fragment shader, and I3_PASSSTAT logs each shader pair indirect draws use, once.
+        const u64 fs_hash = pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash;
+        if (VideoCore::PassFilter::skipped_count.load(std::memory_order_relaxed) != 0 &&
+            VideoCore::PassFilter::IsSkipped(fs_hash)) {
+            ++g_stats.filtered;
+            return;
+        }
+        if (g_pass_stat_on) {
+            static std::set<std::pair<u64, u64>> seen;
+            const u64 vs_hash = pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash;
+            if (seen.emplace(vs_hash, fs_hash).second) {
+                const auto& blend = liverpool->regs.blend_control[0];
+                LOG_WARNING(Render, "indirect pair vs {:#x} fs {:#x} indexed {} blend {} src {} dst {}",
+                            vs_hash, fs_hash, is_indexed, u32(blend.enable),
+                            u32(blend.color_src_factor),
+                            u32(blend.color_dst_factor));
+            }
+        }
     }
     {
         // Debug aid: SOTC_SKIP_VS=<hex hash> drops draws using that vertex shader, to see what
@@ -1067,6 +1090,7 @@ void Rasterizer::DispatchDirect() {
     RENDERER_TRACE;
     ++g_stats.dispatch;
     ScopedNs total_timer{g_stats.ns_dispatch_total};
+    Common::FreezeTimer freeze_timer{4};
 
     scheduler.PopPendingOperations();
     SubmitPeriodically(scheduler);
@@ -1245,6 +1269,7 @@ void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
     RENDERER_TRACE;
     ++g_stats.dispatch;
     ScopedNs total_timer{g_stats.ns_dispatch_total};
+    Common::FreezeTimer freeze_timer{4};
 
     scheduler.PopPendingOperations();
     SubmitPeriodically(scheduler);
@@ -1354,6 +1379,52 @@ void Rasterizer::FlushMirrors(u32 source) {
 
 void Rasterizer::OnSubmit() {
     g_shadow_maps.NextFrame();
+    {
+        // Freeze log: when a frame took over 80 ms, say where the time went. Thread CPU time
+        // far below the gap means this thread waited (for the game or the GPU).
+        static const bool freeze_log = Common::g_freeze_log =
+            std::getenv("I3_FREEZELOG") != nullptr;
+        static auto last = std::chrono::steady_clock::now();
+        static u64 last_cpu = 0, last_read_us = 0, last_read_bytes = 0, last_wait = 0;
+        static u64 last_upload = 0;
+        const u64 upload = Common::g_upload_bytes.load();
+        static u64 last_part[9]{};
+        FILETIME creation, exit, kernel, user;
+        GetThreadTimes(GetCurrentThread(), &creation, &exit, &kernel, &user);
+        const auto ticks = [](const FILETIME& t) {
+            return (u64(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+        };
+        const u64 cpu = (ticks(kernel) + ticks(user)) / 10;
+        const u64 read_us = Common::g_file_read_us.load();
+        const u64 read_bytes = Common::g_file_read_bytes.load();
+        const u64 wait = Common::g_wait_total_us.load();
+        const auto now = std::chrono::steady_clock::now();
+        const u64 gap_us = std::chrono::duration_cast<std::chrono::microseconds>(now - last).count();
+        u64 part[9];
+        for (int i = 0; i < 9; ++i) {
+            part[i] = Common::g_freeze_us[i].load();
+        }
+        if (freeze_log && gap_us > 80'000) {
+            LOG_ERROR(Render, "freeze {} ms: render thread cpu {} ms (gpu waits {}, image create {}, "
+                              "image upload {}, pipeline compile {}, draws {}, dispatches {}, "
+                              "buffers {} of which resident {} upload {}, shader compile {}); "
+                              "game file reads {} ms, {} KB; buffer upload {} MB",
+                      gap_us / 1000, (cpu - last_cpu) / 1000, (wait - last_wait) / 1000,
+                      (part[0] - last_part[0]) / 1000, (part[1] - last_part[1]) / 1000,
+                      (part[2] - last_part[2]) / 1000, (part[3] - last_part[3]) / 1000,
+                      (part[4] - last_part[4]) / 1000, (part[5] - last_part[5]) / 1000,
+                      (part[7] - last_part[7]) / 1000, (part[8] - last_part[8]) / 1000,
+                      (part[6] - last_part[6]) / 1000, (read_us - last_read_us) / 1000,
+                      (read_bytes - last_read_bytes) / 1024, (upload - last_upload) >> 20);
+        }
+        last_upload = upload;
+        last = now;
+        last_cpu = cpu;
+        last_read_us = read_us;
+        last_read_bytes = read_bytes;
+        last_wait = wait;
+        std::ranges::copy(part, last_part);
+    }
     FlushMirrors(8);
     {
         static const char* at = std::getenv("SOTC_BISECT_AT");

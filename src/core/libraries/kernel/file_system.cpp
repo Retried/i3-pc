@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
+#include "common/recording.h"
+#include <chrono>
 #include <climits>
 #include <cstdint>
 #include <map>
@@ -571,7 +573,14 @@ s64 PS4_SYSV_ABI posix_read(s32 fd, void* buf, u64 nbytes) {
 }
 
 s64 PS4_SYSV_ABI sceKernelRead(s32 fd, void* buf, u64 nbytes) {
+    const auto read_start = std::chrono::steady_clock::now();
     s64 result = read(fd, buf, nbytes);
+    Common::g_file_read_us += std::chrono::duration_cast<std::chrono::microseconds>(
+                                  std::chrono::steady_clock::now() - read_start)
+                                  .count();
+    if (result > 0) {
+        Common::g_file_read_bytes += result;
+    }
     if (result < 0) {
         LOG_ERROR(Kernel_Fs, "error = {}", *__Error());
         return ErrnoToSceKernelError(*__Error());
@@ -1051,7 +1060,15 @@ s64 PS4_SYSV_ABI posix_pread(s32 fd, void* buf, u64 nbytes, s64 offset) {
 
 s64 PS4_SYSV_ABI sceKernelPread(s32 fd, void* buf, u64 nbytes, s64 offset) {
     OrbisKernelIovec iovec{buf, nbytes};
-    return sceKernelPreadv(fd, &iovec, 1, offset);
+    const auto read_start = std::chrono::steady_clock::now();
+    const s64 read_result = sceKernelPreadv(fd, &iovec, 1, offset);
+    Common::g_file_read_us += std::chrono::duration_cast<std::chrono::microseconds>(
+                                  std::chrono::steady_clock::now() - read_start)
+                                  .count();
+    if (read_result > 0) {
+        Common::g_file_read_bytes += read_result;
+    }
+    return read_result;
 }
 
 s32 PS4_SYSV_ABI posix_fsync(s32 fd) {

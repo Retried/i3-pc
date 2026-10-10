@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <atomic>
 
 namespace Common {
@@ -28,8 +29,43 @@ inline std::atomic<int> g_shadow_rate[2]{};
 /// Draws with fewer indices than this are left out of the sun's shadow map (0 = none are).
 inline std::atomic<unsigned> g_shadow_min_indices{0};
 
+/// Game file reads, for the freeze log: time spent in them (microseconds) and bytes read.
+inline std::atomic<unsigned long long> g_file_read_us{0}, g_file_read_bytes{0};
+/// GPU command thread work the freeze log accounts for (microseconds): [0] creating images,
+/// [1] uploading image data, [2] compiling pipelines, [3] whole draws, [4] whole dispatches,
+/// [5] obtaining buffers, [6] compiling shader modules, [7] making buffer memory resident,
+/// [8] uploading buffer data.
+inline std::atomic<unsigned long long> g_freeze_us[9]{};
+
 /// Time the GPU command thread spent blocked on the GPU, in microseconds, by reason
 /// (0 upload stream wrapped, 1 fault buffer, 2 every wait). Logged with the thread CPU time.
 inline std::atomic<unsigned long long> g_wait_us[3]{};
+/// The same, never reset (freeze log).
+inline std::atomic<unsigned long long> g_wait_total_us{0};
+
+/// Set from the environment variable I3_FREEZELOG: the freeze log and its timers are on.
+/// Off by default: the timers sit in paths that run tens of thousands of times per frame
+/// and halved the frame rate when they were always on.
+inline bool g_freeze_log = false;
+/// Bytes of buffer data uploaded from guest memory (freeze log).
+inline std::atomic<unsigned long long> g_upload_bytes{0};
+
+/// Adds the time it lives to one of the g_freeze_us counters.
+struct FreezeTimer {
+    int slot;
+    std::chrono::steady_clock::time_point start;
+    explicit FreezeTimer(int slot_) : slot{slot_} {
+        if (g_freeze_log) {
+            start = std::chrono::steady_clock::now();
+        }
+    }
+    ~FreezeTimer() {
+        if (g_freeze_log) {
+            g_freeze_us[slot] += std::chrono::duration_cast<std::chrono::microseconds>(
+                                     std::chrono::steady_clock::now() - start)
+                                     .count();
+        }
+    }
+};
 
 } // namespace Common

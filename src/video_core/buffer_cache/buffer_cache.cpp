@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/recording.h"
 #include <algorithm>
 #include <array>
 #include <magic_enum/magic_enum.hpp>
@@ -291,6 +292,7 @@ u64 BufferCache::DebugMismatch(VAddr device_addr, u32 size) {
 
 std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 size,
                                                         bool is_written, bool is_texel_buffer) {
+    Common::FreezeTimer freeze_timer{5};
     // For read-only buffers use device local stream buffer to reduce renderpass breaks.
     static const bool stream_always = std::getenv("SOTC_STREAM_ALWAYS") != nullptr;
     if (!is_written && size <= STREAM_THRESHOLD &&
@@ -303,8 +305,14 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
     const u64 first_block = device_addr >> block_shift;
     const u64 last_block = (device_addr + size - 1) >> block_shift;
     const auto* arena = GetArena(first_block, last_block);
-    EnsureResident(arena, first_block, last_block);
-    SynchronizeMemory(arena, device_addr, size, is_written, is_texel_buffer);
+    {
+        Common::FreezeTimer resident_timer{7};
+        EnsureResident(arena, first_block, last_block);
+    }
+    {
+        Common::FreezeTimer upload_timer{8};
+        SynchronizeMemory(arena, device_addr, size, is_written, is_texel_buffer);
+    }
     if (is_written) {
         gpu_modified_ranges.Add(device_addr, size);
         // Temporary: list distinct GPU-written ranges.
@@ -473,6 +481,13 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
         });
     });
     if (!copies.empty()) {
+        Common::g_upload_bytes += total_size_bytes;
+        if (Common::g_freeze_log && total_size_bytes >= (8u << 20)) {
+            LOG_ERROR(Render, "big buffer upload: request {:#x} size {} KB written {} texel {} -> "
+                              "{} KB in {} ranges, first {:#x} {} KB",
+                      device_addr, size >> 10, is_written, is_texel_buffer, total_size_bytes >> 10,
+                      copies.size(), u64(copies[0].dstOffset), copies[0].size >> 10);
+        }
         const auto staging = staging_pool.Request(total_size_bytes, MemoryType::HostUncached);
         for (auto& copy : copies) {
             memory->CopySparseMemory(copy.dstOffset, staging.mapped + copy.srcOffset, copy.size);

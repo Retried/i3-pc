@@ -187,14 +187,13 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     for (const auto& [addr, size] : ranges) {
         total += Common::AlignUp(size, 64);
     }
-    // inFAMOUS Second Son does not block on the GPU here: the copy is submitted and written to
-    // guest memory when the GPU has reached it, normally early in the next frame. What its CPU
-    // side needs from these results (an exposure-like block, once per frame) tolerates that,
-    // and the blocking wait cost 1.5 to 2 ms of every frame. I3_SYNC_MIRROR=1 waits again.
-    // The copies land in a buffer of their own: a staging allocation can be recycled before a
-    // deferred read gets to it (seen as a crash after a checkpoint reload stalled the frame).
+    // The copy back to guest memory waits for the GPU. A version that did not wait (the copy
+    // was written back when the GPU reached it, a frame later) saved 1.5 to 2 ms per frame in
+    // inFAMOUS Second Son but wrote results over memory the game had already reused: garbage
+    // particle draw arguments, and an access violation after minutes of sustained shooting.
+    // I3_ASYNC_MIRROR=1 turns it on again for experiments only.
     static const bool async = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
-                              std::getenv("I3_SYNC_MIRROR") == nullptr;
+                              std::getenv("I3_ASYNC_MIRROR") != nullptr;
     if (async && total <= MIRROR_BUFFER_SIZE / 8 && mirrors_in_flight < 6) {
         if (!mirror_buffer) {
             mirror_buffer = std::make_unique<Buffer>(instance, 0, MIRROR_BUFFER_SIZE,

@@ -29,6 +29,10 @@ inline std::atomic<int> g_shadow_rate[2]{};
 /// Draws with fewer indices than this are left out of the sun's shadow map (0 = none are).
 inline std::atomic<unsigned> g_shadow_min_indices{0};
 
+/// Number of save data mounts the game has made since it started. inFAMOUS Second Son mounts
+/// a save when a game is continued, loaded or first saved, so 0 means its title menu is up.
+inline std::atomic<int> g_save_mounts{0};
+
 /// Game file reads, for the freeze log: time spent in them (microseconds) and bytes read.
 inline std::atomic<unsigned long long> g_file_read_us{0}, g_file_read_bytes{0};
 /// GPU command thread work the freeze log accounts for (microseconds): [0] creating images,

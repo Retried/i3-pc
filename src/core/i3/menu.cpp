@@ -53,6 +53,9 @@ ImFont* menu_font = nullptr;
 bool fps_shown = false;
 // Set when an option that only takes effect at the next start was changed.
 bool restart_note = false;
+// QUIT GAME asks once more: set by the first press, cleared when the selection moves.
+bool quit_armed = false;
+int quit_armed_row = -1;
 
 // The look of the game's own Options screen: black panel, yellow title, white condensed text.
 constexpr ImU32 Yellow = IM_COL32(246, 190, 0, 255);
@@ -422,7 +425,9 @@ std::vector<Row> BuildRows() {
                         fmt::format("{} / {}", Achievements::UnlockedCount(), Achievements::Count()),
                         "Trophies of the game unlocked in this build"});
         rows.push_back({"RESUME", "", "Return to the game"});
-        rows.push_back({"QUIT GAME", "", "Close the game"});
+        rows.push_back({"QUIT GAME", quit_armed ? "Press again to quit" : "",
+                        quit_armed ? "Unsaved progress since the last checkpoint is lost"
+                                   : "Close the game"});
     } else if (page == Page::Achievements) {
         for (int id = 0; id < Achievements::Count(); id++) {
             const u64 when = Achievements::UnlockedAt(id);
@@ -599,10 +604,16 @@ void Activate(int row, int direction, int count) {
             selected = 0;
         } else if (row == 3) {
             open = false;
+        } else if (!quit_armed) {
+            quit_armed = true;
+            quit_armed_row = row;
         } else {
             SDL_Event quit{};
             quit.type = SDL_EVENT_QUIT;
             SDL_PushEvent(&quit);
+        }
+        if (row != quit_armed_row) {
+            quit_armed = false;
         }
     } else if (row == count - 1) {
         if (direction == 0) {
@@ -746,6 +757,9 @@ void Draw() {
     const std::vector<Row> rows = BuildRows();
     const int count = static_cast<int>(rows.size());
     selected = std::clamp(selected, 0, count - 1);
+    if (quit_armed && (page != Page::Main || selected != quit_armed_row)) {
+        quit_armed = false;
+    }
     int activate_row = -1, activate_direction = 0;
     bool back = false;
     // While a key is being captured the keys below must not act on the menu as well.

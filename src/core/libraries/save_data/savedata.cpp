@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/recording.h"
 #include <cstring>
 #include <span>
 #include <thread>
@@ -376,6 +377,8 @@ static Error saveDataMount(const OrbisSaveDataMount2* mount_info,
         LOG_INFO(Lib_SaveData, "called without dirName");
         return Error::PARAMETER;
     }
+    LOG_INFO(Lib_SaveData, "save mount {}: {}", ++Common::g_save_mounts,
+              std::string_view{mount_info->dirName->data});
 
     // check backup status
     {

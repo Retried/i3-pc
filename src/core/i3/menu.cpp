@@ -283,6 +283,11 @@ std::array<int, 2> shadow_rate{};
 constexpr std::array<const char*, 2> ShadowKeys{"sun_shadows", "light_shadows"};
 constexpr std::array<const char*, 3> ShadowRateKeys{"full", "half", "off"};
 constexpr std::array<const char*, 3> ShadowRateNames{"Every Frame", "Every 2nd Frame", "Off"};
+// Shadow Detail: objects with fewer indices than this cast no sun shadow.
+int shadow_detail = 0;
+constexpr std::array<const char*, 3> ShadowDetailKeys{"full", "reduced", "low"};
+constexpr std::array<const char*, 3> ShadowDetailNames{"Full", "Reduced", "Low"};
+constexpr std::array<u32, 3> ShadowDetailIndices{0, 300, 1000};
 
 constexpr std::array<const char*, 3> PresetNames{"Original", "Sharp", "Minimal"};
 // Which effects each preset keeps on, in the order of `effects`.
@@ -307,6 +312,7 @@ void ApplyEffects() {
     for (size_t kind = 0; kind < shadow_rate.size(); kind++) {
         Common::g_shadow_rate[kind] = shadow_rate[kind];
     }
+    Common::g_shadow_min_indices = ShadowDetailIndices[shadow_detail];
 }
 
 void SaveEffects() {
@@ -318,6 +324,7 @@ void SaveEffects() {
     for (size_t kind = 0; kind < shadow_rate.size(); kind++) {
         file << ShadowKeys[kind] << " = " << ShadowRateKeys[shadow_rate[kind]] << "\n";
     }
+    file << "shadow_detail = " << ShadowDetailKeys[shadow_detail] << "\n";
 }
 
 void LoadEffects() {
@@ -331,6 +338,9 @@ void LoadEffects() {
         }
         if (name == "unlock_frame_rate") {
             unlock_frame_rate = value != "off";
+        }
+        if (name == "shadow_detail") {
+            shadow_detail = value == ShadowDetailKeys[2] ? 2 : value == ShadowDetailKeys[1];
         }
         for (size_t kind = 0; kind < shadow_rate.size(); kind++) {
             if (name == ShadowKeys[kind]) {
@@ -429,6 +439,9 @@ std::vector<Row> BuildRows() {
                         true});
         rows.push_back({"Light Shadows", ShadowRateNames[shadow_rate[1]],
                         "The same for shadows cast by lamps and fires. Applies at once", true});
+        rows.push_back({"Shadow Detail", ShadowDetailNames[shadow_detail],
+                        "Reduced and Low leave small objects out of the sun's shadows. Applies at once",
+                        true});
         rows.push_back({"BACK", "", "Return to the previous menu"});
     }
     return rows;
@@ -508,6 +521,10 @@ void AdjustGraphics(int row, int step) {
         } else if (const int kind = row - 9 - static_cast<int>(effects.size());
                    kind >= 0 && kind < static_cast<int>(shadow_rate.size())) {
             shadow_rate[kind] = (shadow_rate[kind] + step + 3) % 3;
+            ApplyEffects();
+            SaveEffects();
+        } else if (kind == static_cast<int>(shadow_rate.size())) {
+            shadow_detail = (shadow_detail + step + 3) % 3;
             ApplyEffects();
             SaveEffects();
         }

@@ -61,8 +61,9 @@ struct ShadowMaps {
 
     u32 seen[2][2]{};
     u32 clears = 0;
+    u32 sizes[6]{};
     u64 logged_frame = 0;
-    bool Skip(const AmdGpu::DepthBuffer& depth, bool clear) {
+    bool Skip(const AmdGpu::DepthBuffer& depth, bool clear, u64 indices) {
         const u32 size = depth.Pitch();
         if (size < 1024 || size != depth.Height() || !depth.DepthValid()) {
             return false;
@@ -85,7 +86,10 @@ struct ShadowMaps {
         // The two kinds take turns, which keeps the cost of consecutive frames even.
         // Off still lets the game's clear of the map through: an empty map casts no shadow, while
         // one that is never cleared would keep the shadows of the last frame drawn into it.
-        const bool skip = rate == 2 ? !clear : (rate == 1 && ((frame + kind) & 1) != 0);
+        bool skip = rate == 2 ? !clear : (rate == 1 && ((frame + kind) & 1) != 0);
+        // Shadow Detail: small objects are left out of the sun's map (never the clear).
+        skip |= kind == 0 && !clear &&
+                indices < Common::g_shadow_min_indices.load(std::memory_order_relaxed);
         ++seen[kind][skip];
         clears += clear;
         return skip;
@@ -332,6 +336,12 @@ struct DrawStats {
             std::memset(g_shadow_maps.seen, 0, sizeof(g_shadow_maps.seen));
             g_shadow_maps.clears = 0;
             if (g_pass_stat_on) {
+                LOG_ERROR(Render, "sunsizes/3s: <100 {} <300 {} <1000 {} <3000 {} <10000 {} more {}",
+                          g_shadow_maps.sizes[0], g_shadow_maps.sizes[1], g_shadow_maps.sizes[2],
+                          g_shadow_maps.sizes[3], g_shadow_maps.sizes[4], g_shadow_maps.sizes[5]);
+                std::memset(g_shadow_maps.sizes, 0, sizeof(g_shadow_maps.sizes));
+            }
+            if (g_pass_stat_on) {
                 std::ranges::sort(g_pass_stat, std::greater{}, &PassStat::draws);
                 for (size_t i = 0; i < std::min<size_t>(g_pass_stat.size(), 24); ++i) {
                     const auto& e = g_pass_stat[i];
@@ -472,7 +482,8 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     }
 
     const auto& regs = liverpool->regs;
-    if (g_shadow_maps.enabled && g_shadow_maps.Skip(regs.depth_buffer, regs.depth_render_control.depth_clear_enable)) {
+    if (g_shadow_maps.enabled && g_shadow_maps.Skip(regs.depth_buffer, regs.depth_render_control.depth_clear_enable,
+                           u64(regs.num_indices) * regs.num_instances.NumInstances())) {
         ++g_stats.filtered;
         return;
     }
@@ -519,6 +530,11 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
                 seen.clear();
             }
         }
+    }
+    if (g_pass_stat_on && regs.depth_buffer.DepthAddress() == g_shadow_maps.sun) {
+        // Test aid: sizes of the draws into the sun's shadow map.
+        const u64 n = u64(regs.num_indices) * regs.num_instances.NumInstances();
+        ++g_shadow_maps.sizes[n < 100 ? 0 : n < 300 ? 1 : n < 1000 ? 2 : n < 3000 ? 3 : n < 10000 ? 4 : 5];
     }
     if (g_pass_stat_on) {
         // Test aid: draws per render-target combination, logged with the other statistics.

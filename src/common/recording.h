@@ -25,6 +25,9 @@ inline std::atomic<bool> g_bench{false};
 /// shadows of that kind). [0] the sun's map, [1] the maps of local lights.
 inline std::atomic<int> g_shadow_rate[2]{};
 
+/// Draws with fewer indices than this are left out of the sun's shadow map (0 = none are).
+inline std::atomic<unsigned> g_shadow_min_indices{0};
+
 /// Time the GPU command thread spent blocked on the GPU, in microseconds, by reason
 /// (0 upload stream wrapped, 1 fault buffer, 2 every wait). Logged with the thread CPU time.
 inline std::atomic<unsigned long long> g_wait_us[3]{};

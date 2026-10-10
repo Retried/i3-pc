@@ -18,6 +18,10 @@ In game:   F2 (or L3 + R3 on a controller) opens PC OPTIONS over the running gam
                        fastest and removes those shadows. Shadow Detail (Full, Reduced,
                        Low) leaves small objects out of the sun's shadows.
                        Shadow Preset (Original, Balanced, Fast, Off) sets all three.
+             ACHIEVEMENTS  the trophies of the game: locked, or the date unlocked. They are
+                       saved in user\i3_achievements. Names show as "Trophy 1" to "Trophy 48"
+                       unless user\i3_achievements\names.txt lists them (id, tab, name, tab,
+                       description, one per line).
 Keys:      Keys.bat      the same key bindings from outside the game
 Game data: D:\Games\CUSA00004 (read only, never modified; path in game_path.txt)
 Saves:     user\home\1000\savedata\CUSA00004

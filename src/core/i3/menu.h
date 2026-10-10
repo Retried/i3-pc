@@ -5,11 +5,18 @@
 union SDL_Event;
 struct ImFont;
 
-// The PC options overlay of the inFAMOUS Second Son build: key bindings and display settings,
-// drawn over the running game. F2, or L3 + R3 on a controller, opens and closes it.
+// The menus of the inFAMOUS Second Son build. The game itself has no main menu (it loads the
+// last save at once) and draws its Options screen itself, so lines cannot be added to it:
+// - a start screen at launch: Continue, New Game, Load Game, Controls, Graphics,
+//   Achievements, Quit;
+// - one pause menu on the Options button (Esc), holding the game's own Options screen next to
+//   Controls, Graphics, Achievements and Return to Main Menu.
 namespace I3::Menu {
 
 void Toggle();
+/// The pad's Options button, after the binding layer. Returns true when the menu took it (it
+/// opens or closes the pause menu) and the game must not see it.
+bool OnOptionsButton(bool pressed);
 bool IsOpen();
 /// Draws the overlay; called once per frame inside the ImGui frame.
 void Draw();

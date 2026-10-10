@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "core/i3/menu.h"
 #include "input_handler.h"
 
 #include <fstream>
@@ -861,6 +862,9 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
                                new_button_state);
             break;
         default: // is a normal key (hopefully)
+            if (button == SDL_GAMEPAD_BUTTON_START && I3::Menu::OnOptionsButton(new_button_state)) {
+                break;
+            }
             controller->Button(SDLGamepadToOrbisButton(button), new_button_state);
             break;
         }

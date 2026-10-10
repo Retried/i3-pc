@@ -678,21 +678,28 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         // unrelated float data (instance count in the billions), which hangs the GPU until the
         // driver resets the device. No real draw comes near these limits, so drop such draws.
         // SotC is left alone: its arguments are written on the GPU and its frame is draw-bound.
-        // Every slot of a multi draw is checked, and when the arguments live in plain guest
-        // memory (nothing on the GPU wrote them) the draws are issued from the checked values
-        // instead of letting the GPU read the slot again: a slot the game fills in late then
-        // cannot differ between the check and the draw. A device loss was still seen with only
-        // the first slot checked and limits of 64M elements and 1M instances.
+        // Every slot of a multi draw is checked and the draws are issued from the checked
+        // values instead of letting the GPU read the slot: what the GPU would read can differ
+        // from what was checked.
         static const bool check_args = Common::ElfInfo::Instance().GameSerial() != "CUSA08809";
         checked_args.clear();
         if (check_args) {
             constexpr u32 max_elements = 0x400000;
             constexpr u32 max_instances = 0x10000;
             constexpr u32 max_slots = 256;
-            const u32 slots = count_address == 0 ? std::min(max_count, max_slots) : 1;
+            // The draws are issued from the checked values whether or not a compute shader
+            // wrote the slot. Trusting the GPU's own copy of compute-written slots lost the
+            // device within half a minute (I3_TRUST_GPU_ARGS=1 reproduces it): that copy can
+            // hold garbage while guest memory, which receives compute results a frame later,
+            // holds sane counts. The price is particle counts that are a frame old.
+            static const bool trust_gpu_args = std::getenv("I3_TRUST_GPU_ARGS") != nullptr;
+            const bool gpu_written = buffer_cache.IsRegionGpuModified(arg_address + offset,
+                                                                      u64(stride) * max_count);
+            const u32 slots = gpu_written && trust_gpu_args
+                                  ? 0
+                                  : count_address == 0 ? std::min(max_count, max_slots) : 1;
             const bool direct = count_address == 0 && max_count <= max_slots && stride >= 16 &&
-                                !buffer_cache.IsRegionGpuModified(arg_address + offset,
-                                                                  u64(stride) * max_count);
+                                !(gpu_written && trust_gpu_args);
             for (u32 slot = 0; slot < slots; ++slot) {
                 std::array<u32, 5> args{};
                 memory->CopySparseMemory(arg_address + offset + u64(slot) * stride,
@@ -700,8 +707,12 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                                          std::min<u64>(stride, sizeof(args)));
                 if (args[0] > max_elements || args[1] > max_instances) {
                     LOG_WARNING(Render,
-                                "Dropped indirect draw at {:#x}: count {:#x}, instances {:#x}",
-                                arg_address + offset + u64(slot) * stride, args[0], args[1]);
+                                "Dropped indirect draw at {:#x}: count {:#x}, instances {:#x}, "
+                                "gpu-written {}, slots {}, stride {}, indexed {}",
+                                arg_address + offset + u64(slot) * stride, args[0], args[1],
+                                buffer_cache.IsRegionGpuModified(arg_address + offset,
+                                                                 u64(stride) * max_count),
+                                max_count, stride, is_indexed);
                     ++g_stats.filtered;
                     checked_args.clear();
                     return;

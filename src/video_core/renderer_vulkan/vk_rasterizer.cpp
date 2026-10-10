@@ -553,6 +553,19 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
             }
         }
     }
+    if (g_pass_stat_on && regs.blend_control[0].enable) {
+        // Test aid: each shader pair that draws with blending, once, with a draw count, so
+        // effects (fire, smoke, glows) can be told apart and skipped with "skipfs=".
+        static std::map<std::pair<u64, u64>, u32> blended;
+        const u64 vs_hash = pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash;
+        const u64 fs_hash = pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash;
+        if (++blended[{vs_hash, fs_hash}] == 1) {
+            const auto& blend = regs.blend_control[0];
+            LOG_WARNING(Render, "blended pair vs {:#x} fs {:#x} src {} dst {} prim {} indices {}",
+                        vs_hash, fs_hash, u32(blend.color_src_factor),
+                        u32(blend.color_dst_factor), u32(regs.primitive_type), regs.num_indices);
+        }
+    }
     if (g_pass_stat_on && regs.depth_buffer.DepthAddress() == g_shadow_maps.sun) {
         // Test aid: sizes of the draws into the sun's shadow map.
         const u64 n = u64(regs.num_indices) * regs.num_instances.NumInstances();

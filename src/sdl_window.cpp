@@ -483,6 +483,26 @@ void WindowSDL::WaitEvent() {
         return;
     }
 
+    {
+        // Button prompts start as key caps when no controller is connected, and moving the
+        // mouse selects them too (until now only a key or mouse button press did, so a player
+        // who had only moved the mouse saw PlayStation icons).
+        static bool first_event = true;
+        if (first_event) {
+            first_event = false;
+            int count = 0;
+            SDL_JoystickID* pads = SDL_GetGamepads(&count);
+            SDL_free(pads);
+            if (count == 0) {
+                VideoCore::g_prompt_set = VideoCore::PromptSet::Keyboard;
+            }
+        }
+        if (event.type == SDL_EVENT_MOUSE_MOTION &&
+            (std::abs(event.motion.xrel) + std::abs(event.motion.yrel)) > 2.0f) {
+            VideoCore::g_prompt_set = VideoCore::PromptSet::Keyboard;
+        }
+    }
+
     if (Libraries::Mouse::PushSDLEvent(event) || Libraries::Keyboard::PushSDLEvent(event)) {
         return;
     }

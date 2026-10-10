@@ -1,0 +1,74 @@
+inFAMOUS Second Son - PC build, captures of 2026-10-09
+======================================================
+
+Captured from the test build of the same source as the program behind the Desktop shortcut,
+running hidden and driven by scripted keyboard and mouse input from the user's own save
+("The Visitors", 2%). Nothing here was played by hand.
+
+Files
+  01_in_game_after_boot.png      about 40 s after starting the program, no input given
+  02_outdoors_crash_site.png     the user's save: crash site, objective prompt
+  03_exploring.png               after walking around with W A S D, mouse, jump
+  04_options_keyboard_icons.png  pause menu; prompts drawn as key caps ("Press [SPC]", "[SHF] Back")
+  05_load_dialog.png             Options > Load Game: confirm dialog
+  06_load_game_list.png          the slot list that follows, with the user's three saves
+  07_keys_menu.png               the Keys.bat menu (rendered from its text output)
+  08_lift_wreckage_swipe_key.png "Lift Wreckage": the touchpad swipe-up prompt answered with the I key
+  09_after_gaining_power.png     free roaming after the cutscenes in which Delsin gains his power
+  10_smoke_dash.png              first power: Smoke Dash through the fallen trees (Shift)
+  11_ingame_menu_controls.png    in-game PC OPTIONS (F2): key bindings
+  12_ingame_menu_graphics.png    in-game PC OPTIONS (F2): graphics
+  gameplay.mp4                   36 s, 1280x720, H.264 + AAC, recorded in-process at 30 FPS with the
+                                 game's own sound (peak -7.7 dB, mean -31.6 dB)
+
+Working
+  boot from the shortcut straight into the game, own icon and profile; rendering in every scene
+  reached; sound (measured: no clipping, clicks or late buffers); keyboard and mouse incl. the
+  motion gestures of the spray-can tutorial; key rebinding with matching icons; autosave,
+  Continue, Load Game list; 60 FPS in light scenes.
+
+Not verified or not right yet
+  - Heavy scenes (cannery interior, crash site) run at the game's 30 FPS lock; 60 is not reached
+    there. The render thread is near its limit. Light scenes (intro, billboard) reach 107-120 FPS
+    with the 120 cap in Settings.bat; game speed at caps above 60 was not checked by eye.
+  - Played up to just after Delsin gains his power (story cutscenes play, autosave works).
+    Using the powers, combat, the city and later missions are still unplayed.
+  - Touchpad swipe up (I key) works on a real prompt; down/left/right are untested.
+  - After the power cutscene two wrecked cars are drawn flat bright orange. It may be the
+    game's own highlight or a rendering fault; not yet compared with the PS4.
+  - Loading a slot from the Load Game list: the log shows the save being read and the world
+    loading; the resulting scene was not checked on screen.
+  - PS4 Pro mode no longer crashes (a shader pattern the recompiler did not know) and outputs
+    3840x2160, but the picture is wrong: green tint and a dither pattern from the Pro mode's
+    checkerboard reconstruction. Settings.bat still does not offer it.
+  - Xbox icon set exists (A/B/X/Y, LB/LT/RB/RT, LS/RS, MENU, VIEW); seen in the icon sheet,
+    not yet seen in game with a real Xbox pad.
+  - A rare bad draw at scene load used to crash the graphics device; it is now dropped
+    (about 40 boots since without a crash), root cause unknown.
+  - Sound has been measured, not listened to.
+
+Sound check, 2026-10-10 02:35 (optimized build, 30 s of walking, jumping and camera movement
+outdoors, recorded from the program's audio output): 30.02 s of audio against 30.00 s of
+video; no silent gaps of 1 ms or more; no click (sample jump far above the local level); no
+clipped sample (peak 0.19 of full scale); no repeated mixer block; both channels alike
+(RMS 0.023 / 0.024). This is a measurement, not a listening test: wrong or missing sounds
+(a line of speech not playing, a wrong effect) cannot be found this way.
+
+Red tint while standing in burning brush: checked at full resolution, all 256 colour levels in
+use and as smooth as a normal frame, so it is the game's own effect, not a rendering fault.
+
+Play progress, 2026-10-10 04:55 (keyboard only, optimized build): through the cannery gate
+(Smoke Dash), into the building through the wall vents and the skylight, the cutscene inside,
+and the first combat tutorial (chain melee with F breaks both timber barriers). Screenshots
+19 to 24. One device loss (GPU hang, then lost) happened in that scene before the indirect
+draw hardening; three runs of the same scene on the hardened build survived. The cause is
+not proven, so a rare crash there cannot be ruled out.
+
+Stability, 2026-10-10 06:25 (replaces an earlier note that blamed the test tool's pausing;
+that was wrong): the crashes inside the burning cannery were device losses caused by fire and
+particle draws whose counts are written by a GPU compute step. The GPU's copy of those counts
+can be garbage while the copy in game memory is sane; the old guard checked only the latter
+and still let the GPU read its own. Trusting the GPU copy loses the device within 30 seconds.
+Now every such draw uses the checked copy from game memory. Five unpaused minutes in that
+room on the optimized build: no fault, 55 to 60 FPS, 52 bad draws dropped. That build is the
+shortcut's program since 06:19. Why the GPU copy is wrong is not known.

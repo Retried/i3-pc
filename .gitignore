@@ -1,0 +1,26 @@
+# Never commit game data, firmware, keys, saves, caches, logs, builds or captures.
+runtime/Build/
+bin/
+bin-release/
+dist/*.exe
+dist/*.pdb
+dist/game_path.txt
+dist/game.ico
+dist/glyphs/
+dist/user/
+testrun/
+firsttest/
+fixtures/
+showcase/
+tools/venv/
+tools/*.png
+tools/*.log
+tools/*.txt
+tools/*.spv
+*.raw
+*.rgb
+*.f32
+*.mp4
+*.log
+eboot_strings.txt
+HOLD

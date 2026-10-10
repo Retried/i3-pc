@@ -414,7 +414,8 @@ void L::Draw() {
         }
     }
 
-    if (DebugState.IsGuestThreadsPaused()) {
+    // The menus of the inFAMOUS build hold the game themselves and say so in their own words.
+    if (DebugState.IsGuestThreadsPaused() && !I3::Menu::IsOpen()) {
         ImVec2 pos = ImVec2(10, 10);
         ImU32 color = IM_COL32(255, 255, 255, 255);
         ImGui::GetForegroundDrawList()->AddText(pos, color, "Emulation Paused");

@@ -288,6 +288,24 @@ int shadow_detail = 0;
 constexpr std::array<const char*, 3> ShadowDetailKeys{"full", "reduced", "low"};
 constexpr std::array<const char*, 3> ShadowDetailNames{"Full", "Reduced", "Low"};
 constexpr std::array<u32, 3> ShadowDetailIndices{0, 300, 1000};
+// Shadow presets: sun rate, light rate, detail.
+constexpr std::array<const char*, 4> ShadowPresetNames{"Original", "Balanced", "Fast", "Off"};
+constexpr std::array<std::array<int, 3>, 4> ShadowPresets{{
+    {0, 0, 0},
+    {1, 1, 1},
+    {1, 2, 2},
+    {2, 2, 0},
+}};
+
+/// Index of the shadow preset matching the three options, or -1 for a custom mix.
+int CurrentShadowPreset() {
+    for (size_t p = 0; p < ShadowPresets.size(); p++) {
+        if (ShadowPresets[p] == std::array<int, 3>{shadow_rate[0], shadow_rate[1], shadow_detail}) {
+            return static_cast<int>(p);
+        }
+    }
+    return -1;
+}
 
 constexpr std::array<const char*, 3> PresetNames{"Original", "Sharp", "Minimal"};
 // Which effects each preset keeps on, in the order of `effects`.
@@ -434,6 +452,11 @@ std::vector<Row> BuildRows() {
                         "Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
                         "Rate). Applies at once",
                         true});
+        const int shadow_preset = CurrentShadowPreset();
+        rows.push_back({"Shadow Preset",
+                        shadow_preset < 0 ? "Custom" : ShadowPresetNames[shadow_preset],
+                        "Sets the three shadow options below. Original keeps the game's picture",
+                        true});
         rows.push_back({"Sun Shadows", ShadowRateNames[shadow_rate[0]],
                         "How often sun shadows are redrawn: the largest cost of a frame. Applies at once",
                         true});
@@ -518,8 +541,15 @@ void AdjustGraphics(int row, int step) {
             unlock_frame_rate = !unlock_frame_rate;
             ApplyEffects();
             SaveEffects();
-        } else if (const int kind = row - 9 - static_cast<int>(effects.size());
-                   kind >= 0 && kind < static_cast<int>(shadow_rate.size())) {
+        } else if (const int kind = row - 10 - static_cast<int>(effects.size()); kind == -1) {
+            const int count = static_cast<int>(ShadowPresets.size());
+            const auto& preset =
+                ShadowPresets[(std::max(CurrentShadowPreset(), 0) + step + count) % count];
+            shadow_rate = {preset[0], preset[1]};
+            shadow_detail = preset[2];
+            ApplyEffects();
+            SaveEffects();
+        } else if (kind >= 0 && kind < static_cast<int>(shadow_rate.size())) {
             shadow_rate[kind] = (shadow_rate[kind] + step + 3) % 3;
             ApplyEffects();
             SaveEffects();

@@ -212,6 +212,8 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
         }
         const u64 batch = ++mirror_batch;
         ++mirrors_in_flight;
+        inflight_mirrors.emplace_back(batch, std::vector(ranges.begin(), ranges.end()));
+        unissued_mirrors.clear();
         scheduler.DeferOperation(
             [this, base, total, batch, list = std::vector(ranges.begin(), ranges.end())] {
                 mirror_buffer->Invalidate(base, total);
@@ -224,9 +226,18 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
                     data += Common::AlignUp(size, 64);
                 }
                 --mirrors_in_flight;
-                // Ranges stay protected from re-upload until the newest batch has landed.
-                if (batch == mirror_batch) {
-                    pending_mirror_ranges.Clear();
+                // This copy's ranges may be uploaded from guest memory again. Outputs written
+                // since it was issued, and those of copies still on their way, are newer on
+                // the GPU than in guest memory and stay protected.
+                std::erase_if(inflight_mirrors, [&](const auto& e) { return e.first <= batch; });
+                pending_mirror_ranges.Clear();
+                for (const auto& [id, later] : inflight_mirrors) {
+                    for (const auto& [addr, size] : later) {
+                        pending_mirror_ranges.Add(addr, size);
+                    }
+                }
+                for (const auto& [addr, size] : unissued_mirrors) {
+                    pending_mirror_ranges.Add(addr, size);
                 }
             });
         scheduler.Flush();
@@ -251,6 +262,8 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
         cursor += Common::AlignUp(size, 64);
     }
     pending_mirror_ranges.Clear();
+    unissued_mirrors.clear();
+    inflight_mirrors.clear();
 }
 
 // Debug aid: bytes of the GPU-side copy of a range that differ from guest memory.

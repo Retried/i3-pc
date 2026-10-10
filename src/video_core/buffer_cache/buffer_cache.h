@@ -111,6 +111,7 @@ public:
     /// Marks a range as written by the GPU and not yet copied back to guest memory.
     void AddPendingMirror(VAddr device_addr, u32 size) {
         pending_mirror_ranges.Add(device_addr, size);
+        unissued_mirrors.emplace_back(device_addr, size);
     }
 
 private:
@@ -159,6 +160,11 @@ private:
     std::unique_ptr<Buffer> mirror_buffer;
     u64 mirror_offset = 0;
     u32 mirrors_in_flight = 0;
+    /// Ranges added since the last copy was issued, and the ranges of each copy still on its
+    /// way: together they are what pending_mirror_ranges has to keep protecting when one
+    /// copy lands.
+    std::vector<std::pair<VAddr, u32>> unissued_mirrors;
+    std::deque<std::pair<u64, std::vector<std::pair<VAddr, u32>>>> inflight_mirrors;
 
     std::unique_ptr<FaultManager> fault_manager;
     std::unique_ptr<Buffer> bda_pagetable_buffer;

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <set>
+#include <map>
 #include <chrono>
 #include "common/recording.h"
 #include <chrono>
@@ -42,6 +44,25 @@ struct PassStat {
     int vx, vy, vw;
 };
 static std::vector<PassStat> g_pass_stat;
+struct CsWriter {
+    u64 hash;
+    u32 size, x, y, z;
+};
+static std::map<u64, CsWriter> g_cs_writers;
+
+// Test aid (I3_PASSSTAT): which compute shader last wrote which buffer, whatever the buffer
+// kind and whether the dispatch was direct or indirect (see DrawIndirect).
+static void NoteCsWriters(const Shader::Info& cs, u32 x, u32 y, u32 z) {
+    for (const auto& desc : cs.buffers) {
+        if (!desc.is_written || desc.buffer_type != Shader::BufferType::Guest) {
+            continue;
+        }
+        const auto sharp = desc.GetSharp(cs);
+        if (sharp.base_address != 0) {
+            g_cs_writers[sharp.base_address] = {cs.pgm_hash, u32(sharp.GetSize()), x, y, z};
+        }
+    }
+}
 
 // Shadow map options of the inFAMOUS Second Son build. About 70% of the game's draws go into
 // shadow maps, so how often those are redrawn is the largest single cost the player can trade.
@@ -713,9 +734,44 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                                 buffer_cache.IsRegionGpuModified(arg_address + offset,
                                                                  u64(stride) * max_count),
                                 max_count, stride, is_indexed);
+                    if (g_pass_stat_on) {
+                        LOG_WARNING(Render, "   bad args base {:#x} off {:#x} vs {:#x} fs {:#x}",
+                                    arg_address, offset,
+                                    liverpool->regs.vs_program.Address<u64>(),
+                                    liverpool->regs.ps_program.Address<u64>());
+                        const u64 at = arg_address + offset + u64(slot) * stride;
+                        auto it = g_cs_writers.upper_bound(at);
+                        if (it != g_cs_writers.begin() && (--it, at < it->first + it->second.size)) {
+                            u32 raw[8]{};
+                            memory->CopySparseMemory(at, reinterpret_cast<u8*>(raw), sizeof(raw));
+                            LOG_WARNING(Render, "   writer cs {:#x} base {:#x} size {} groups {}x{}x{} "
+                                                "off {} guest {:08x} {:08x} {:08x} {:08x} {:08x} {:08x}",
+                                        it->second.hash, it->first, it->second.size, it->second.x,
+                                        it->second.y, it->second.z, at - it->first, raw[0], raw[1],
+                                        raw[2], raw[3], raw[4], raw[5]);
+                        } else {
+                            LOG_WARNING(Render, "   writer cs unknown");
+                        }
+                    }
                     ++g_stats.filtered;
                     checked_args.clear();
                     return;
+                }
+                if (g_pass_stat_on) {
+                    // Test aid: a sample of accepted argument slots, to compare with dropped ones.
+                    static std::set<u64> seen;
+                    const u64 at = arg_address + offset + u64(slot) * stride;
+                    if (seen.size() < 40 && seen.insert(at).second) {
+                        LOG_WARNING(Render, "   good args at {:#x} base {:#x} off {:#x}: {:08x} {:08x} "
+                                            "{:08x} {:08x} {:08x} gpu-written {} indexed {}",
+                                    at, arg_address, offset, args[0], args[1], args[2], args[3],
+                                    args[4], gpu_written, is_indexed);
+                        auto it = g_cs_writers.upper_bound(at);
+                        if (it != g_cs_writers.begin() && (--it, at < it->first + it->second.size)) {
+                            LOG_WARNING(Render, "      writer cs {:#x} base {:#x} size {}",
+                                        it->second.hash, it->first, it->second.size);
+                        }
+                    }
                 }
                 if (direct) {
                     checked_args.push_back(args);
@@ -1081,6 +1137,9 @@ void Rasterizer::DispatchDirect() {
     auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->Handle());
     VideoCore::OpTrace::Add('C', cs.pgm_hash, cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
+    if (g_pass_stat_on) {
+        NoteCsWriters(cs, cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
+    }
     cmdbuf.dispatch(cs_program.dim_x, cs_program.dim_y, cs_program.dim_z);
     DebugState.IncDispatch();
 
@@ -1198,6 +1257,34 @@ void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
 
     if (ScopedNs timer{g_stats.ns_bind}; !BindResources(pipeline)) {
         return;
+    }
+
+    // Group counts are read from guest memory and checked, like indirect draw arguments: a
+    // slot holding unrelated data would ask the GPU for billions of groups.
+    static const bool check_args = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
+    u32 groups[3]{};
+    if (check_args || g_pass_stat_on) {
+        Core::Memory::Instance()->CopySparseMemory(address + offset,
+                                                   reinterpret_cast<u8*>(groups), sizeof(groups));
+        if (g_pass_stat_on) {
+            static u32 logged = 0;
+            const bool bad = groups[0] > 0x10000 || groups[1] > 0x10000 || groups[2] > 0x10000;
+            if (bad || logged++ < 20) {
+                LOG_WARNING(Render, "indirect dispatch cs {:#x} at {:#x}: groups {:#x} {:#x} {:#x} "
+                                    "gpu-written {}",
+                            pipeline->GetStage(Shader::SwStage::Compute).pgm_hash, address + offset,
+                            groups[0], groups[1], groups[2],
+                            buffer_cache.IsRegionGpuModified(address + offset, size));
+            }
+            NoteCsWriters(pipeline->GetStage(Shader::SwStage::Compute), groups[0], groups[1],
+                          groups[2]);
+        }
+        if (check_args && (groups[0] > 0x10000 || groups[1] > 0x10000 || groups[2] > 0x10000)) {
+            LOG_WARNING(Render, "Dropped indirect dispatch at {:#x}: groups {:#x} {:#x} {:#x}",
+                        address + offset, groups[0], groups[1], groups[2]);
+            ResetBindings(true);
+            return;
+        }
     }
 
     const auto [buffer, base] = buffer_cache.ObtainBuffer(address + offset, size, false);

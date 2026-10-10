@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
 #include "common/recording.h"
 #include <algorithm>
 #include <array>
@@ -488,14 +489,28 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
                       device_addr, size >> 10, is_written, is_texel_buffer, total_size_bytes >> 10,
                       copies.size(), u64(copies[0].dstOffset), copies[0].size >> 10);
         }
+        const bool timed = Common::g_freeze_log && total_size_bytes >= (64u << 20);
+        const auto t0 = std::chrono::steady_clock::now();
         const auto staging = staging_pool.Request(total_size_bytes, MemoryType::HostUncached);
+        const auto t1 = std::chrono::steady_clock::now();
         for (auto& copy : copies) {
             memory->CopySparseMemory(copy.dstOffset, staging.mapped + copy.srcOffset, copy.size);
             copy.srcOffset += staging.offset;
             copy.dstOffset -= arena->cpu_addr;
         }
+        const auto t2 = std::chrono::steady_clock::now();
         staging.Flush();
+        const auto t3 = std::chrono::steady_clock::now();
         runtime.CopyBuffer(staging.buffer, arena, copies);
+        if (timed) {
+            const auto ms = [](auto a, auto b) {
+                return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
+            };
+            LOG_ERROR(Render, "upload split: {} MB, staging request {} ms, guest copy {} ms, "
+                              "flush {} ms, gpu copy record {} ms",
+                      total_size_bytes >> 20, ms(t0, t1), ms(t1, t2), ms(t2, t3),
+                      ms(t3, std::chrono::steady_clock::now()));
+        }
     }
     if (is_texel_buffer && !is_written) {
         return SynchronizeMemoryFromImage(arena, device_addr, size);

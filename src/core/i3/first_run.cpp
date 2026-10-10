@@ -186,12 +186,24 @@ void AdjustSettings() {
     EmulatorSettings.SetFullScreenMode("Fullscreen (Borderless)");
     EmulatorSettings.SetFsrEnabled(upscale);
     EmulatorSettings.SetVblankFrequency(cap);
+    // What the build was tuned and tested with: the saved pipeline cache removes shader
+    // compile hitches after the first play-through of a scene, and the red zone patches are
+    // what the game ran with in every test.
+    EmulatorSettings.SetPipelineCacheEnabled(true);
+    EmulatorSettings.SetRedZonePatchingEnabled(true);
     EmulatorSettings.Save();
     {
         std::ofstream effects{UserFile("i3_graphics.txt"), std::ios::trunc};
         effects << "antialiasing = " << (effects_on[0] ? "on" : "off") << std::endl;
         effects << "reflections = " << (effects_on[1] ? "on" : "off") << std::endl;
         effects << "glow = " << (effects_on[2] ? "on" : "off") << std::endl;
+        // Shadow preset Balanced: shadow maps redrawn every second frame, small objects left
+        // out of the sun's map. Measured about a fifth faster in heavy scenes on an 8-core
+        // desktop CPU with no visible difference; no PC measured so far holds 60 there with
+        // the Original preset, so a new install does not start on it.
+        effects << "sun_shadows = half" << std::endl;
+        effects << "light_shadows = half" << std::endl;
+        effects << "shadow_detail = reduced" << std::endl;
     }
     {
         std::ofstream note{marker, std::ios::trunc};
@@ -202,7 +214,7 @@ void AdjustSettings() {
                             system.gpu, system.vram_mb, system.cores, system.ram_mb)
              << std::endl;
         note << fmt::format("chosen: window {}x{} fullscreen, upscaling {}, frame cap {}, "
-                            "effects {}",
+                            "effects {}, shadows balanced",
                             window.first, window.second, upscale ? "on" : "off", cap, preset)
              << std::endl;
     }

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/elf_info.h"
+#include "core/i3/achievements.h"
 #include <algorithm>
 #include <thread>
 #include <unordered_map>
@@ -969,6 +971,20 @@ int PS4_SYSV_ABI sceNpTrophyUnlockTrophy(OrbisNpTrophyContext context, OrbisNpTr
     if (handle_index >= trophy_handles.Size() ||
         !trophy_handles.IsAllocated({static_cast<u32>(handle_index)})) {
         return ORBIS_NP_TROPHY_ERROR_INVALID_HANDLE;
+    }
+
+    if (Common::ElfInfo::Instance().GameSerial() == "CUSA00004") {
+        // The trophy package cannot be decrypted without a console key: the achievement list
+        // of the build takes the unlock.
+        *platinumId = ORBIS_NP_TROPHY_INVALID_TROPHY_ID;
+        switch (I3::Achievements::Unlock(trophyId)) {
+        case I3::Achievements::UnlockResult::AlreadyUnlocked:
+            return ORBIS_NP_TROPHY_ERROR_TROPHY_ALREADY_UNLOCKED;
+        case I3::Achievements::UnlockResult::UnknownId:
+            return ORBIS_NP_TROPHY_ERROR_INVALID_TROPHY_ID;
+        default:
+            return ORBIS_OK;
+        }
     }
 
     ContextKey contextkey = trophy_contexts[contextId];

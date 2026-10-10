@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "core/i3/achievements.h"
 #include "video_core/pass_filter.h"
 #include "core/i3/menu.h"
 #include "common/recording.h"
@@ -233,6 +234,9 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
             held = it->second;
             controller->Button(held, true);
             release_at = now + 250;
+        } else if (action.starts_with("ach=")) {
+            // Test aid: "ach=5" unlocks achievement 5 as the game would.
+            I3::Achievements::Unlock(std::stoi(action.substr(4)));
         } else if (action.starts_with("key=")) {
             // A keyboard key or mouse button by its binding-file name, sent as SDL events so it
             // goes through the same binding layer as a real device.

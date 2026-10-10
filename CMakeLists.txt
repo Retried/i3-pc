@@ -737,6 +737,8 @@ set(COMPANION_LIBS  src/core/libraries/companion/companion_httpd.cpp
                     src/core/libraries/companion/companion_error.h
 )
 set(DEV_TOOLS src/core/devtools/layer.cpp
+              src/core/i3/achievements.cpp
+              src/core/i3/achievements.h
               src/core/i3/first_run.cpp
               src/core/i3/first_run.h
               src/core/i3/menu.cpp

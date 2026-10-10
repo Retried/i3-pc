@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <ctime>
+#include "core/i3/achievements.h"
 #include <algorithm>
 #include <cctype>
 #include <array>
@@ -41,7 +43,7 @@ namespace I3::Menu {
 
 namespace {
 
-enum class Page { Main, Controls, Graphics };
+enum class Page { Main, Controls, Graphics, Achievements };
 
 std::atomic_bool open{false};
 std::atomic_bool capturing{false};
@@ -416,8 +418,24 @@ std::vector<Row> BuildRows() {
     if (page == Page::Main) {
         rows.push_back({"CONTROLS", "", "Change the keyboard and mouse bindings"});
         rows.push_back({"GRAPHICS", "", "Frame rate, display and image options"});
+        rows.push_back({"ACHIEVEMENTS",
+                        fmt::format("{} / {}", Achievements::UnlockedCount(), Achievements::Count()),
+                        "Trophies of the game unlocked in this build"});
         rows.push_back({"RESUME", "", "Return to the game"});
         rows.push_back({"QUIT GAME", "", "Close the game"});
+    } else if (page == Page::Achievements) {
+        for (int id = 0; id < Achievements::Count(); id++) {
+            const u64 when = Achievements::UnlockedAt(id);
+            std::string state = "Locked";
+            if (when != 0) {
+                const std::time_t time = static_cast<std::time_t>(when);
+                char text[32]{};
+                std::strftime(text, sizeof(text), "%Y-%m-%d", std::localtime(&time));
+                state = fmt::format("Unlocked {}", text);
+            }
+            rows.push_back({Achievements::Name(id), state, Achievements::Description(id)});
+        }
+        rows.push_back({"BACK", "", "Return to the previous menu"});
     } else if (page == Page::Controls) {
         const auto lines = ReadLines();
         for (const auto& action : Actions) {
@@ -577,6 +595,9 @@ void Activate(int row, int direction, int count) {
             page = Page::Graphics;
             selected = 0;
         } else if (row == 2) {
+            page = Page::Achievements;
+            selected = 0;
+        } else if (row == 3) {
             open = false;
         } else {
             SDL_Event quit{};
@@ -593,6 +614,8 @@ void Activate(int row, int direction, int count) {
         if (direction == 0) {
             capturing = true;
         }
+    } else if (page == Page::Achievements) {
+        // A list to read: nothing to change.
     } else {
         AdjustGraphics(row, direction == 0 ? 1 : direction);
     }
@@ -766,9 +789,10 @@ void Draw() {
     const float left = panel_min.x + 44.0f * scale;
     const float right = panel_max.x - 44.0f * scale;
     float y = panel_min.y + 28.0f * scale;
-    const char* title = page == Page::Main       ? "PC OPTIONS"
-                        : page == Page::Controls ? "CONTROLS"
-                                                 : "GRAPHICS";
+    const char* title = page == Page::Main           ? "PC OPTIONS"
+                        : page == Page::Controls     ? "CONTROLS"
+                        : page == Page::Achievements ? "ACHIEVEMENTS"
+                                                     : "GRAPHICS";
     Text(draw, 64.0f * scale, {left, y}, Yellow, title);
     y += 92.0f * scale;
 

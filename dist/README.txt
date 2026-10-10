@@ -5,7 +5,14 @@ Start:     the Desktop or Start menu shortcut, or "inFAMOUS Second Son.exe" here
 Shortcuts: Install.bat creates them again (Install.bat -Remove deletes them)
 Settings:  Settings.bat  (frame rate cap, VSync, fullscreen, window size, FSR upscaling,
                           language)
-In game:   F2 (or L3 + R3 on a controller) opens PC OPTIONS over the running game:
+At start:  a start screen: Continue, New Game, Load Game, Controls, Graphics, Achievements,
+           Quit. The game itself has no main menu and always loads your last save first; New
+           Game and Load Game then open the game's own Options screen on that line for you.
+In game:   Esc (Options on a controller) pauses and opens one menu: Resume, Game Options (the
+           game's own screen: save, new game, load game, difficulty, sound, subtitles),
+           Controls, Graphics, Achievements, Return to Main Menu. Returning asks first: progress
+           since the last checkpoint is lost and the game loads again (about 40 seconds),
+           because the game cannot go back by itself. Quit is on the start screen.
              CONTROLS  every action; confirm, then press the key or mouse button to use.
                        Applies at once, and the button icons are redrawn to match.
              GRAPHICS  frame rate cap and VSync (take effect at the next start); fullscreen,

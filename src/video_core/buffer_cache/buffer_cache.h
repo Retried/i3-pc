@@ -154,6 +154,11 @@ private:
     /// copies them back. Uploads must leave them alone.
     RangeSet pending_mirror_ranges;
     u64 mirror_batch = 0;
+    /// Download target of the non-blocking mirror, used as a ring.
+    static constexpr u64 MIRROR_BUFFER_SIZE = 32ULL << 20;
+    std::unique_ptr<Buffer> mirror_buffer;
+    u64 mirror_offset = 0;
+    u32 mirrors_in_flight = 0;
 
     std::unique_ptr<FaultManager> fault_manager;
     std::unique_ptr<Buffer> bda_pagetable_buffer;

@@ -85,7 +85,10 @@ with open(os.path.join(cap, 'frames.rgb'), 'rb') as f:
         i = int(np.argmin(np.abs(samples[:, 0] - t)))
         _, cpu, thread, gpu, vram, ram = samples[i]
         rows = [('CPU', '%.0f %%   busiest thread %.0f %%' % (cpu, min(thread, 100.0))),
-                ('GPU', '%.0f %%   video memory %.1f GB' % (min(gpu, 100.0), vram / 1024.0)),
+                # Windows' GPU load counters stay near zero for this program on some drivers:
+                # the figure is shown only when the run measured a believable one.
+                ('GPU', ('%.0f %%   ' % min(gpu, 100.0) if samples[:, 3].max() >= 5.0 else '') +
+                 'video memory %.1f GB' % (vram / 1024.0)),
                 ('RAM', '%.1f GB' % (ram / 1024.0)),
                 ('', '1920x1080   %s' % settings)]
         for r, (name, text) in enumerate(rows):

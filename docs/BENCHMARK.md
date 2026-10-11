@@ -191,6 +191,25 @@ the longhouse.
 | Seattle, wrecked bridge ("Enter Seattle") | 59.7 FPS | 16.6 ms | 17.6 ms | 200 ms | 1 |
 | Road checkpoint ("Walk to Seattle") | 50.9 FPS | 16.6 ms | 34.2 ms | 2667 ms | 10 |
 
-The road run freezes once for about 3 seconds in every run (2.7, 3.4 and 2.9 seconds in three
-runs, 37 to 48 seconds in); two repeat runs gave 51.2 and 52.1 FPS on average. The cause is not
-found yet. The bridge run holds 60 with one 200 ms frame.
+The road run froze once for about 3 seconds in each of three runs (2.7, 3.4 and 2.9 seconds, 37
+to 48 seconds in; 51 to 52 FPS on average). A fourth run, after those, held 60.0 FPS with a worst
+frame of 18 ms: the freeze looks like first-time work in that area (shaders and pipelines are
+then cached), not confirmed. The bridge run holds 60 with one 200 ms frame.
+
+## Benchmark clips (2026-10-11)
+
+`bench_*.mp4` in the showcase, 21 seconds each, 1080p, made by `benchvideos.sh`. The panel is
+drawn into the runtime's own capture afterwards: frame rate, average and 1 % low over the last
+five seconds, frame time, total CPU load and the busiest thread, video memory, RAM and a frame
+time graph. Capturing costs frame rate; each clip states the figure without capture. GPU load is
+not shown: Windows reports about 1 % for this program whatever it draws.
+
+| Clip | Scene | Shadow Preset | Captured average | 1 % low |
+|---|---|---|---|---|
+| bench_crash_original | Crash site | Original | 39.2 FPS | 28.8 |
+| bench_crash_balanced | Crash site | Balanced | 45.1 FPS | 29.0 |
+| bench_crash_fast | Crash site | Fast | 46.8 FPS | 28.9 |
+| bench_crash_off | Crash site | Off | 50.0 FPS | 29.0 |
+| bench_cannery | Fish cannery interior | Original | 47.8 FPS | 29.2 |
+| bench_road | Road to the cannery, running | Original | 53.6 FPS | 29.1 |
+| bench_city | Seattle bridge, running | Original | 60.0 FPS | 55.5 |

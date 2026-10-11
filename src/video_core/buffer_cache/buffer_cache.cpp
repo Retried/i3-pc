@@ -5,6 +5,8 @@
 #include "common/recording.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <thread>
 #include <magic_enum/magic_enum.hpp>
 
 #include <cstdlib>
@@ -492,8 +494,42 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
         const auto t0 = std::chrono::steady_clock::now();
         const auto staging = staging_pool.Request(total_size_bytes, MemoryType::HostUncached);
         const auto t1 = std::chrono::steady_clock::now();
+        if (total_size_bytes >= (64u << 20)) {
+            // A first bind of a heap-sized buffer copies gigabytes in one frame: several
+            // threads take 4 MB pieces of it. The walk only reads guest memory.
+            struct Piece {
+                u64 addr;
+                u8* dest;
+                u64 size;
+            };
+            std::vector<Piece> pieces;
+            static constexpr u64 PieceSize = 4ull << 20;
+            for (const auto& copy : copies) {
+                for (u64 done = 0; done < copy.size; done += PieceSize) {
+                    pieces.push_back({copy.dstOffset + done, staging.mapped + copy.srcOffset + done,
+                                      std::min<u64>(PieceSize, copy.size - done)});
+                }
+            }
+            std::atomic<size_t> next{0};
+            const auto work = [&] {
+                for (size_t i = next++; i < pieces.size(); i = next++) {
+                    memory->CopySparseMemory(pieces[i].addr, pieces[i].dest, pieces[i].size);
+                }
+            };
+            std::array<std::thread, 5> helpers;
+            for (auto& helper : helpers) {
+                helper = std::thread{work};
+            }
+            work();
+            for (auto& helper : helpers) {
+                helper.join();
+            }
+        }
         for (auto& copy : copies) {
-            memory->CopySparseMemory(copy.dstOffset, staging.mapped + copy.srcOffset, copy.size);
+            if (total_size_bytes < (64u << 20)) {
+                memory->CopySparseMemory(copy.dstOffset, staging.mapped + copy.srcOffset,
+                                         copy.size);
+            }
             copy.srcOffset += staging.offset;
             copy.dstOffset -= arena->cpu_addr;
         }

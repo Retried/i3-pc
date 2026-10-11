@@ -14,6 +14,7 @@
 #include "video_core/pass_filter.h"
 #include "common/debug.h"
 #include "common/elf_info.h"
+#include "common/path_util.h"
 #include "video_core/op_trace.h"
 #include "video_core/thread_sampler.h"
 #include "core/debug_state.h"
@@ -1390,8 +1391,93 @@ void Rasterizer::FlushMirrors(u32 source) {
     pending_mirrors.clear();
 }
 
+// inFAMOUS binds its geometry heaps whole, read-only: 0.5 and 2.5 GB, indexed by a per-instance
+// offset, so no part of them can be left out. The first bind used to upload all of it in one
+// frame (a freeze of 2 to 3 seconds). The ranges are remembered per title, and in later sessions
+// they are uploaded a slice a frame from the start, so the first bind finds only what the game
+// wrote since the last pass. Uploading early is always sound: a later write marks the page again.
+static constexpr u64 HugeBindSize = 256ull << 20;
+static constexpr u64 HugeWarmSlice = 16ull << 20;
+
+struct HugeBind {
+    VAddr base;
+    u64 size;
+    u64 cursor{};
+    bool bound{};
+};
+
+static bool HugeWarmEnabled() {
+    static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                                std::getenv("I3_NO_HEAP_WARM") == nullptr;
+    return enabled;
+}
+
+static std::filesystem::path HugeBindFile() {
+    return Common::FS::GetUserPath(Common::FS::PathType::CacheDir) /
+           std::string{Common::ElfInfo::Instance().GameSerial()} / "heap_binds.txt";
+}
+
+static std::vector<HugeBind>& HugeBinds() {
+    static std::vector<HugeBind> binds = [] {
+        std::vector<HugeBind> loaded;
+        if (FILE* f = std::fopen(HugeBindFile().string().c_str(), "r")) {
+            unsigned long long base, size;
+            while (loaded.size() < 16 && std::fscanf(f, "%llx %llx", &base, &size) == 2) {
+                if (size >= HugeBindSize && size <= (4ull << 30)) {
+                    loaded.push_back({VAddr(base), u64(size)});
+                }
+            }
+            std::fclose(f);
+        }
+        return loaded;
+    }();
+    return binds;
+}
+
+static void NoteHugeBind(VAddr base, u64 size) {
+    if (!HugeWarmEnabled()) {
+        return;
+    }
+    auto& binds = HugeBinds();
+    for (auto& bind : binds) {
+        if (bind.base == base && bind.size == size) {
+            bind.bound = true;
+            return;
+        }
+    }
+    if (binds.size() >= 16) {
+        return;
+    }
+    binds.push_back({base, size, 0, true});
+    if (FILE* f = std::fopen(HugeBindFile().string().c_str(), "a")) {
+        std::fprintf(f, "%llx %llx\n", static_cast<unsigned long long>(base),
+                     static_cast<unsigned long long>(size));
+        std::fclose(f);
+    }
+}
+
 void Rasterizer::OnSubmit() {
     g_shadow_maps.NextFrame();
+    if (HugeWarmEnabled()) {
+        // One slice of each remembered heap that this session has not bound yet.
+        for (auto& bind : HugeBinds()) {
+            if (bind.bound) {
+                continue;
+            }
+            const VAddr start = bind.base + bind.cursor;
+            const u64 length = std::min(HugeWarmSlice, bind.size - bind.cursor);
+            bind.cursor = bind.cursor + length >= bind.size ? 0 : bind.cursor + length;
+            boost::container::small_vector<std::pair<VAddr, u64>, 8> parts;
+            ForEachMappedRangeInRange(start, length, [&](const auto& range) {
+                parts.emplace_back(range.lower(), range.upper() - range.lower());
+            });
+            for (const auto& [addr, part_size] : parts) {
+                if (part_size > 64_KB) {
+                    (void)buffer_cache.ObtainBuffer(addr, u32(part_size), false);
+                }
+            }
+        }
+    }
     {
         // Freeze log: when a frame took over 80 ms, say where the time went. Thread CPU time
         // far below the gap means this thread waited (for the game or the GPU).
@@ -1941,6 +2027,9 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                     if (unbounded_cap) {
                         size = std::min(size, unbounded_cap);
                     }
+                }
+                if (!desc.is_written && size >= HugeBindSize) {
+                    NoteHugeBind(vsharp.base_address, size);
                 }
                 static int bind_traced = 0;
                 if (desc.is_written && CoversViewBlock(vsharp.base_address, size) &&

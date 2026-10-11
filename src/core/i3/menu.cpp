@@ -742,6 +742,51 @@ bool HasSaves() {
     return false;
 }
 
+/// True when the newest save is in Seattle. From there on the game's Options button opens the
+/// map and Triangle on the map opens "Options and Saves"; in the village Options opens the
+/// Options screen itself and Triangle would close it again.
+bool OptionsOpensMap() {
+    std::error_code ec;
+    std::filesystem::path newest;
+    std::filesystem::file_time_type newest_time{};
+    const auto home_dir = Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "home";
+    for (const auto& user : std::filesystem::directory_iterator(home_dir, ec)) {
+        const auto saves = user.path() / "savedata" / "CUSA00004";
+        for (const auto& entry : std::filesystem::directory_iterator(saves, ec)) {
+            const auto file = entry.path() / "dis.dat";
+            const auto time = std::filesystem::last_write_time(file, ec);
+            if (!ec && (newest.empty() || time > newest_time)) {
+                newest = file;
+                newest_time = time;
+            }
+        }
+    }
+    if (newest.empty()) {
+        return false;
+    }
+    std::string data;
+    if (FILE* f = std::fopen(newest.string().c_str(), "rb")) {
+        data.resize(1 << 20);
+        data.resize(std::fread(data.data(), 1, data.size(), f));
+        std::fclose(f);
+    }
+    return !data.empty() && data.find("world_village") == std::string::npos;
+}
+
+/// Opens the game's own Options screen and moves down to one of its rows.
+void OpenGameOptions(u64 delay_ms, int game_row) {
+    using Libraries::Pad::OrbisPadButtonDataOffset;
+    Press(delay_ms, OrbisPadButtonDataOffset::Options);
+    u64 rows_at = delay_ms + 1700;
+    if (OptionsOpensMap()) {
+        Press(delay_ms + 1500, OrbisPadButtonDataOffset::Triangle);
+        rows_at = delay_ms + 3200;
+    }
+    for (int i = 0; i < game_row; i++) {
+        Press(rows_at + 260 * i, OrbisPadButtonDataOffset::Down, 110);
+    }
+}
+
 /// The game cannot go back to a menu by itself: the program starts again at the start screen.
 void ReturnToMainMenu() {
     auto* mnt = Common::Singleton<Core::FileSys::MntPoints>::Instance();
@@ -789,10 +834,7 @@ void ActivateTop(const std::string& label, int row) {
             }
         } else {
             open = false;
-            Press(300, OrbisPadButtonDataOffset::Options);
-            for (int i = 0; i < game_row; i++) {
-                Press(2000 + 260 * i, OrbisPadButtonDataOffset::Down, 110);
-            }
+            OpenGameOptions(300, game_row);
         }
     } else if (label == "OPTIONS") {
         page = Page::Options;
@@ -1135,10 +1177,7 @@ void Draw() {
             pending_ready_ms = now;
         } else if (now - pending_ready_ms > 5000) {
             using Libraries::Pad::OrbisPadButtonDataOffset;
-            Press(0, OrbisPadButtonDataOffset::Options);
-            for (int i = 0; i < pending_game_row; i++) {
-                Press(2000 + 260 * i, OrbisPadButtonDataOffset::Down, 110);
-            }
+            OpenGameOptions(0, pending_game_row);
             pending_game_row = -1;
         }
     }

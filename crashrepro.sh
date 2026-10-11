@@ -2,7 +2,7 @@
 # Reproduces the route to the "Stay with Reggie" failure and the checkpoint reload after it,
 # then keeps playing for a while. ./crashrepro.sh [VAR=value ...] -> says whether the game survived.
 cd /d/i3-pc || exit 1
-[ "$(tasklist | grep -ci -E 'ShadowOfTheColossus|shadps4')" = "0" ] || { echo "SOTC up"; exit 0; }
+[ "$(tasklist | grep -ci -E 'ShadowOfTheColossus|shadps4|sotc_ab')" = "0" ] || { echo "SOTC up"; exit 0; }
 ./livestart.sh 900 "45:cross,60:cross" "$@" > /dev/null; sleep 25
 until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done; sleep 75
 s() { /d/i3-pc/stepper.sh "$@" > /dev/null; }

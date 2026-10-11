@@ -4,7 +4,7 @@ cd /d/i3-pc || exit 1
 name=$1; shift
 # SotC has priority: a run that had to give way is repeated when the machine is free again.
 for attempt in 1 2 3 4 5 6 7 8; do
-    until [ "$(tasklist | grep -ciE 'shadps4|ShadowOfTheColossus|inFAMOUS Second|^i3.exe')" = "0" ]; do sleep 3; done
+    until [ "$(tasklist | grep -ciE 'shadps4|sotc_ab|ShadowOfTheColossus|inFAMOUS Second|^i3.exe')" = "0" ]; do sleep 3; done
     rm -f testrun/user/screenshots/*.png
     out=$(./test.sh 112 SOTC_SCRIPT="45:cross,60:cross,105:shot" "$@" 2>&1 | grep -v Killed | tail -2)
     echo "$out" | grep -q "YIELDED\|REFUSED" || break

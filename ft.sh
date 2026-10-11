@@ -4,7 +4,7 @@
 # cutscene, timber hits, burned room. Writes tools/ft_<label>.txt (ms per frame) and the log.
 cd /d/i3-pc || exit 1
 label=$1; fx=$2; shift; shift
-[ "$(tasklist | grep -ci -E 'ShadowOfTheColossus|shadps4')" = "0" ] || { echo "SOTC up"; exit 1; }
+[ "$(tasklist | grep -ci -E 'ShadowOfTheColossus|shadps4|sotc_ab')" = "0" ] || { echo "SOTC up"; exit 1; }
 S=testrun/user/home/1000/savedata; rm -rf $S/CUSA00004; cp -rp fixtures/$fx-CUSA00004 $S/CUSA00004
 rm -f testrun/bench_frametimes.txt
 BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 400 "45:cross,60:cross" "$@" > /dev/null; sleep 25
@@ -19,6 +19,13 @@ fishcannery)
     for i in 1 2 3 4; do k "key=w*3000" 3.1; done; k "mouse=-30*2600" 2.8
     for i in 1 2 3 4 5 6; do k "key=w*3000" 3.1; done; k "mouse=30*2600" 2.8
     for i in 1 2 3 4 5 6; do k "key=w*3000" 3.1; done;;
+seattle|roadtoseattle)
+    # Open ground: run, dash, turn, shoot, jump, for about 90 s.
+    for r in 1 2 3 4 5 6; do
+        k "key=w*3000" 1.5; k "key=lshift" 1.6; k "key=w*3000" 1.5; k "key=space" 1.6
+        k "mouse=30*900" 1.1; k "key=rightbutton*1500" 0.3; k "key=leftbutton" 0.6; k "key=leftbutton" 0.8
+        k "key=w*2500" 2.6; k "mouse=-30*500" 0.7
+    done;;
 *)
     k "key=w*2500" 2.7; echo "key=lshift" >> $F; k "key=w*2500" 2.7; k "key=w*2500" 2.7; sleep 40
     for i in 1 2 3 4 5 6; do k "key=f" 1.0; done; k "key=w*2500" 2.7

@@ -2,7 +2,7 @@
 # Unpaused: Hank arena, aim and fire smoke shots for three minutes. ./shootsoak.sh <label> [VAR=..]
 cd /d/i3-pc || exit 1
 label=$1; shift
-until [ "$(tasklist | grep -ci -E 'ffmpeg|ShadowOfTheColossus|shadps4')" = "0" ] && [ ! -f HOLD ]; do sleep 15; done
+until [ "$(tasklist | grep -ci -E 'ffmpeg|ShadowOfTheColossus|shadps4|sotc_ab')" = "0" ] && [ ! -f HOLD ]; do sleep 15; done
 S=testrun/user/home/1000/savedata; rm -rf $S/CUSA00004; cp -rp fixtures/defeathank-CUSA00004 $S/CUSA00004
 BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 400 "45:cross,60:cross" "$@" > /dev/null; sleep 25
 until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done

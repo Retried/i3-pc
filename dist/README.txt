@@ -5,14 +5,18 @@ Start:     the Desktop or Start menu shortcut, or "inFAMOUS Second Son.exe" here
 Shortcuts: Install.bat creates them again (Install.bat -Remove deletes them)
 Settings:  Settings.bat  (frame rate cap, VSync, fullscreen, window size, FSR upscaling,
                           language)
-At start:  a start screen: Continue, New Game, Load Game, Controls, Graphics, Achievements,
-           Quit. The game itself has no main menu and always loads your last save first; New
-           Game and Load Game then open the game's own Options screen on that line for you.
-In game:   Esc (Options on a controller) pauses and opens one menu: Resume, Game Options (the
-           game's own screen: save, new game, load game, difficulty, sound, subtitles),
-           Controls, Graphics, Achievements, Return to Main Menu. Returning asks first: progress
-           since the last checkpoint is lost and the game loads again (about 40 seconds),
-           because the game cannot go back by itself. Quit is on the start screen.
+At start:  a start screen: Continue, New Game, Load Game, Options, Achievements, Quit. The
+           game itself has no main menu and always loads your last save first; New Game and
+           Load Game then open the game's own Options screen on that line for you.
+In game:   Esc (Options on a controller) pauses and opens one menu: Resume, Options,
+           Achievements, Return to Main Menu. Returning asks first: progress since the last
+           checkpoint is lost and the game loads again (about 40 seconds), because the game
+           cannot go back by itself. Quit is on the start screen.
+Menus:     arrow keys or W S, Enter, Esc; the mouse; or a controller (D-pad or left stick,
+           cross to select, circle to go back). Left and right change a value.
+Options:   Graphics and Controls are this build's own pages. Gameplay, Sound, Interface and
+           Save and Load (in the pause menu) open the game's own Options screen on that
+           section: difficulty, volume, subtitles, save, new game, load game.
              CONTROLS  every action; confirm, then press the key or mouse button to use.
                        Applies at once, and the button icons are redrawn to match.
              GRAPHICS  frame rate cap and VSync (take effect at the next start); fullscreen,
@@ -69,7 +73,7 @@ A controller (Xbox, DualShock, DualSense) works alongside the keyboard.
 
 Runtime hotkeys: F11 fullscreen, F10 FPS counter, F9 pause, F12 screenshot.
 
-Status (2026-10-09)
+Status (2026-10-10)
 -------------------
 Verified: boot, title, new game, intro, spray tutorial (60 FPS), cutscenes and the cannery
 interior (about 32 FPS) with correct graphics; autosave and Continue; sideways, shake and spray

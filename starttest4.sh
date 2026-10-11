@@ -1,7 +1,7 @@
 #!/bin/bash
 # No-save start only (direct launch, ignores HOLD: only in an agreed slot); keeps the log.
 cd /d/i3-pc/testrun || exit 1
-[ "$(tasklist | grep -ci -E 'shadps4|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
+[ "$(tasklist | grep -ci -E 'shadps4|sotc_ab|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
 S=user/home/1000/savedata
 rm -f user/screenshots/*.png; rm -rf $S/CUSA00004
 (env SOTC_HEADLESS=1 SOTC_MUTE=1 I3_SKIP_FIRST_RUN=1 I3_START_SCREEN=1 SOTC_SCRIPT="38:shotui,41:key=enter,58:shotui,74:shotui" \

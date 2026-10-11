@@ -121,6 +121,26 @@ options at once. Same scene, optimized build (the shortcut's program), one run e
 Picture comparison: showcase/15_shadow_presets_original_balanced_fast_off.png (in that order,
 left to right, top to bottom).
 
+### Current numbers (2026-10-10 evening, after the crash fix)
+
+The non-blocking copy of compute results (01:11 build above) turned out to be the cause of the
+crashes in burning areas and while shooting: the game reuses that memory, and late copies
+overwrote it. The copy blocks again since the 18:13 build, which is the shortcut's program.
+That costs about 2 FPS, and the tables above from 01:11 on no longer describe the program.
+Re-measured on the optimized build, standing still, 120 cap, four readings each:
+
+| Scene | Shadow Preset | FPS |
+|---|---|---|
+| Crash site | Original | 40 to 41 |
+| Crash site | Balanced | 45 to 48 |
+| Crash site | Fast | 49 |
+| Crash site | Off | 50 to 51 |
+| Cannery | Original | 38 to 41 |
+
+Road run from the cannery checkpoint (80 s, moving, Original): 46.3 FPS average, median frame
+16.9 ms, 99% of frames under 34.5 ms, worst 51 ms, no frame over 100 ms inside the measured
+window. No driver fault events during the session.
+
 Why the worker thread did not help: the copies have to be finished before each batch of
 commands is submitted, and the limiting thread submits often, so it ends up waiting for the
 worker instead of doing other work, and the copy itself is slower on another core.
@@ -159,3 +179,18 @@ Why these are only estimates: frame rate in heavy scenes follows single-thread C
 and only one CPU was measured; GPU load and video memory use were not measured at all
 (the picture is a 1080p PS4 frame, so the GPU classes above are a cautious guess, not a
 finding). A slower CPU than the test PC will be below 30 FPS in heavy scenes.
+
+## Free roam from the edited saves (2026-10-10, 20:20)
+
+Optimized build, Shadow Preset Original, 120 cap, scripted route of about 78 seconds (run, dash,
+jump, turn, shoot). The saves are fixtures made with `tools/saveedit.py`; they skip the fight at
+the longhouse.
+
+| Scene | Average | Median | 99th percentile | Worst frame | Frames over 100 ms |
+|---|---|---|---|---|---|
+| Seattle, wrecked bridge ("Enter Seattle") | 59.7 FPS | 16.6 ms | 17.6 ms | 200 ms | 1 |
+| Road checkpoint ("Walk to Seattle") | 50.9 FPS | 16.6 ms | 34.2 ms | 2667 ms | 10 |
+
+The road run freezes once for about 3 seconds in every run (2.7, 3.4 and 2.9 seconds in three
+runs, 37 to 48 seconds in); two repeat runs gave 51.2 and 52.1 FPS on average. The cause is not
+found yet. The bridge run holds 60 with one 200 ms frame.

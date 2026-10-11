@@ -3,7 +3,7 @@
 # burned room, then stay there. ./roomsoak.sh <label> [VAR=value ...]
 cd /d/i3-pc || exit 1
 label=$1; shift
-[ "$(tasklist | grep -ci -E 'ShadowOfTheColossus|shadps4')" = "0" ] || { echo "SOTC up"; exit 1; }
+[ "$(tasklist | grep -ci -E 'ShadowOfTheColossus|shadps4|sotc_ab')" = "0" ] || { echo "SOTC up"; exit 1; }
 S=testrun/user/home/1000/savedata; rm -rf $S/CUSA00004; cp -rp fixtures/insidecannery-CUSA00004 $S/CUSA00004
 BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 700 "45:cross,60:cross" "$@" > /dev/null; sleep 25
 until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done; sleep 75

@@ -3,7 +3,7 @@
 # Part 1: Load Game on the start screen; the game's Options screen should open on "Load Game"
 # by itself once the save has loaded. Part 2 (new start): Quit with its confirm step.
 cd /d/i3-pc/testrun || exit 1
-[ "$(tasklist | grep -ci -E 'shadps4|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
+[ "$(tasklist | grep -ci -E 'shadps4|sotc_ab|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
 S=user/home/1000/savedata; rm -rf $S/CUSA00004; cp -rp ../fixtures/fishcannery-CUSA00004 $S/CUSA00004
 rm -f user/screenshots/*.png
 run() { # seconds, script

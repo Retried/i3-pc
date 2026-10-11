@@ -3,7 +3,7 @@
 # Part 1: a profile without saves: what the start screen offers and what New Game does.
 # Part 2: with a save: the pause menu, to check that no "Emulation Paused" label shows.
 cd /d/i3-pc/testrun || exit 1
-[ "$(tasklist | grep -ci -E 'shadps4|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
+[ "$(tasklist | grep -ci -E 'shadps4|sotc_ab|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
 S=user/home/1000/savedata
 rm -f user/screenshots/*.png
 run() { # seconds, script

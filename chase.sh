@@ -1,7 +1,7 @@
 #!/bin/bash
 # Chase attempt: loop "locate objective (V), run forward with dash taps". Screenshots every few steps.
 cd /d/i3-pc || exit 1
-until [ "$(tasklist | grep -ciE 'shadps4|ShadowOfTheColossus|inFAMOUS Second|^i3.exe')" = "0" ]; do sleep 3; done
+until [ "$(tasklist | grep -ciE 'shadps4|sotc_ab|ShadowOfTheColossus|inFAMOUS Second|^i3.exe')" = "0" ]; do sleep 3; done
 ./livestart.sh 330 "300:cross" > /dev/null; sleep 25; until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done; sleep 70
 F=testrun/live_cmds.txt; n=0
 for i in $(seq 1 ${STEPS:-45}); do

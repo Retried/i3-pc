@@ -8,7 +8,7 @@ if [ "$(tasklist | grep -ci "^i3.exe")" != "0" ]; then echo "REFUSED: a game ins
 # SotC has priority and two instances do not fit in memory: never start next to one, never
 # start when memory is short, and give way at once if either changes while running.
 memfree_mb() { while read -r k v _; do [ "$k" = "MemFree:" ] && { echo $((v / 1024)); return; }; done < /proc/meminfo; }
-if [ "$(tasklist | grep -ciE 'shadps4|ShadowOfTheColossus')" != "0" ]; then echo "REFUSED: SotC is running"; exit 1; fi
+if [ "$(tasklist | grep -ciE 'shadps4|sotc_ab|ShadowOfTheColossus')" != "0" ]; then echo "REFUSED: SotC is running"; exit 1; fi
 # The user's own game session shares this profile folder (saves, settings): never run beside it.
 if [ "$(tasklist | grep -ci 'inFAMOUS Second')" != "0" ]; then echo "REFUSED: the user is playing inFAMOUS"; exit 1; fi
 # Snipping Tool crashed inside the AMD driver three times on 2026-10-10 and each crash reset the
@@ -21,7 +21,7 @@ env SOTC_HEADLESS=1 ${MUTE-SOTC_MUTE=1} ${FIRSTRUN-I3_SKIP_FIRST_RUN=1} "$@" "$e
 pid=$!
 for ((i = 0; i < secs; i++)); do
     kill -0 $pid 2>/dev/null || break
-    if [ "$(tasklist | grep -ciE 'shadps4|ShadowOfTheColossus')" != "0" ]; then echo "YIELDED: SotC started"; break; fi
+    if [ "$(tasklist | grep -ciE 'shadps4|sotc_ab|ShadowOfTheColossus')" != "0" ]; then echo "YIELDED: SotC started"; break; fi
     if [ "$(tasklist | grep -ci 'inFAMOUS Second')" != "0" ]; then echo "YIELDED: the user started inFAMOUS"; break; fi
     if [ "$(memfree_mb)" -lt 3000 ]; then echo "YIELDED: memory low"; break; fi
     sleep 1

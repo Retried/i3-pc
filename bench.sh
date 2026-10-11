@@ -38,7 +38,7 @@ for scene in ${SCENES:-billboard cannery roam}; do
         esac
         printf 'antialiasing = %s\nreflections = %s\nglow = %s\n' $fx $fx $fx > testrun/user/i3_graphics.txt
         for attempt in 1 2 3 4 5 6 7 8; do
-            until [ "$(tasklist | grep -ciE 'shadps4|ShadowOfTheColossus|inFAMOUS Second|^i3.exe')" = "0" ]; do sleep 3; done
+            until [ "$(tasklist | grep -ciE 'shadps4|sotc_ab|ShadowOfTheColossus|inFAMOUS Second|^i3.exe')" = "0" ]; do sleep 3; done
             rm -rf "$S/CUSA00004"; [ -n "$save" ] && cp -r "$save" "$S/CUSA00004"
             rm -f testrun/bench_frametimes.txt tools/bench_mem.txt
             # Memory use of the game process, sampled near the end of the measurement.

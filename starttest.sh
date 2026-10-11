@@ -4,7 +4,7 @@
 # Return to Main Menu starts the program again; the second start replays the script from its
 # beginning, which shows the start screen once more before the session is ended.
 cd /d/i3-pc/testrun || exit 1
-[ "$(tasklist | grep -ci -E 'shadps4|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
+[ "$(tasklist | grep -ci -E 'shadps4|sotc_ab|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
 S=user/home/1000/savedata; rm -rf $S/CUSA00004; cp -rp ../fixtures/fishcannery-CUSA00004 $S/CUSA00004
 rm -f user/screenshots/*.png
 script="40:shotui,43:key=down,44:key=down,45:key=down,47:shotui,48:key=up,49:key=up,50:key=up,52:key=enter"

@@ -1278,7 +1278,8 @@ void Draw() {
             continue;
         }
         const std::string section = SectionOf(page, row.label, i);
-        if (!section.empty() && section != " ") {
+        // A heading cut by the top edge of the list is left out rather than drawn in part.
+        if (!section.empty() && section != " " && row_y - heading_height >= view_top - 1.0f) {
             Narrow(draw, heading_size, {heading_x, row_y - heading_height}, White, section,
                    HeadingSqueeze);
         }

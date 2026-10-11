@@ -1429,6 +1429,12 @@ static std::vector<HugeBind>& HugeBinds() {
             }
             std::fclose(f);
         }
+        if (loaded.empty()) {
+            // Nothing remembered yet (first session): the two heaps version 1.07 bound in
+            // every measured run. A wrong guess only uploads mapped memory nobody reads.
+            loaded.push_back({VAddr(0x271258600), 0x9bbc9c94});
+            loaded.push_back({VAddr(0x248002000), 0x21dfe000});
+        }
         return loaded;
     }();
     return binds;

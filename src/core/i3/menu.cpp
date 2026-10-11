@@ -463,10 +463,12 @@ std::vector<Row> BuildRows() {
                 rows.push_back({"CONTINUE", "", "Carry on from your last save"});
                 rows.push_back({"NEW GAME", "",
                                 "Your last save loads first; the game's Options screen then "
-                                "opens on New Game"});
+                                "opens on New Game (after a cutscene, if the save starts in one: "
+                                "press Options yourself)"});
                 rows.push_back({"LOAD GAME", "",
                                 "Your last save loads first; the game's Options screen then "
-                                "opens on Load Game"});
+                                "opens on Load Game (after a cutscene, if the save starts in one: "
+                                "press Options yourself)"});
             } else {
                 rows.push_back({"NEW GAME", "", "Start the game"});
             }

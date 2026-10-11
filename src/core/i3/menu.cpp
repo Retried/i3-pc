@@ -52,7 +52,7 @@ namespace I3::Menu {
 
 namespace {
 
-enum class Page { Main, Controls, Graphics, Achievements, Start };
+enum class Page { Main, Controls, Graphics, Achievements, Start, Options };
 
 std::atomic_bool open{false};
 std::atomic_bool capturing{false};
@@ -467,12 +467,12 @@ std::vector<Row> BuildRows() {
             }
         } else {
             rows.push_back({"RESUME", "", "Return to the game"});
-            rows.push_back({"GAME OPTIONS", "",
-                            "The game's own screen: save, new game, load game, difficulty, sound, "
-                            "subtitles"});
         }
-        rows.push_back({"CONTROLS", "", "Change the keyboard and mouse bindings"});
-        rows.push_back({"GRAPHICS", "", "Frame rate, display and image options"});
+        rows.push_back({"OPTIONS", "",
+                        page == Page::Start
+                            ? "Graphics and controls. The game's own options (difficulty, sound, "
+                              "subtitles) open from the pause menu during play"
+                            : "Graphics, controls and the game's own options"});
         rows.push_back({"ACHIEVEMENTS", trophies, "Trophies of the game unlocked in this build"});
         if (page == Page::Start) {
             rows.push_back({"QUIT", quit_armed ? "Press again to quit" : "", "Close the game"});
@@ -482,6 +482,15 @@ std::vector<Row> BuildRows() {
                                          "loads again (about 40 seconds)"
                                        : "Back to the start screen. Quit is there"});
         }
+    } else if (page == Page::Options) {
+        rows.push_back({"GRAPHICS", "", "Frame rate, display, upscaling, effects and shadows"});
+        rows.push_back({"CONTROLS", "", "Change the keyboard and mouse bindings"});
+        if (home == Page::Main) {
+            rows.push_back({"GAME OPTIONS", "",
+                            "The game's own screen: save, new game, load game, difficulty, sound, "
+                            "subtitles"});
+        }
+        rows.push_back({"BACK", "", "Return to the previous menu"});
     } else if (page == Page::Achievements) {
         for (int id = 0; id < Achievements::Count(); id++) {
             const u64 when = Achievements::UnlockedAt(id);
@@ -641,6 +650,11 @@ void AdjustGraphics(int row, int step) {
     EmulatorSettings.Save();
 }
 
+/// The page a sub-page goes back to.
+Page ParentOf(Page of) {
+    return of == Page::Controls || of == Page::Graphics ? Page::Options : home;
+}
+
 void HoldGame(bool hold) {
     if (hold && !game_held) {
         DebugState.PauseGuestThreads();
@@ -722,6 +736,12 @@ void ActivateTop(const std::string& label, int row) {
     } else if (label == "GAME OPTIONS") {
         open = false;
         Press(300, OrbisPadButtonDataOffset::Options);
+    } else if (label == "OPTIONS") {
+        page = Page::Options;
+        selected = 0;
+    } else if (label == "BACK") {
+        page = home;
+        selected = 0;
     } else if (label == "CONTROLS") {
         page = Page::Controls;
         selected = 0;
@@ -770,7 +790,7 @@ void Activate(int row, int direction, int count) {
         }
     } else if (row == count - 1) {
         if (direction == 0) {
-            page = home;
+            page = ParentOf(page);
             selected = 0;
         }
     } else if (page == Page::Controls) {
@@ -1018,6 +1038,7 @@ void Draw() {
     float y = panel_min.y + 28.0f * scale;
     const char* title = page == Page::Main           ? "PAUSED"
                         : page == Page::Start        ? "inFAMOUS SECOND SON"
+                        : page == Page::Options      ? "OPTIONS"
                         : page == Page::Controls     ? "CONTROLS"
                         : page == Page::Achievements ? "ACHIEVEMENTS"
                                                      : "GRAPHICS";
@@ -1104,7 +1125,7 @@ void Draw() {
     }
 
     if (activate_row >= 0) {
-        if (page == Page::Main || page == Page::Start) {
+        if (page == Page::Main || page == Page::Start || page == Page::Options) {
             if (activate_direction == 0) {
                 ActivateTop(rows[activate_row].label, activate_row);
             }
@@ -1115,7 +1136,7 @@ void Draw() {
         if (page == Page::Main) {
             open = false;
         } else if (page != Page::Start) {
-            page = home;
+            page = ParentOf(page);
             selected = 0;
         }
     }

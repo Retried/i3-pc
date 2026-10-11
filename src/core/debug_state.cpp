@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <shared_mutex>
 #include <imgui.h>
 
 #include "common/assert.h"
@@ -16,6 +17,11 @@
 
 using namespace DebugStateType;
 
+namespace Common::Log {
+// Defined in common/logging/log.cpp.
+std::shared_mutex& PauseGate();
+} // namespace Common::Log
+
 DebugStateImpl& DebugState = *Common::Singleton<DebugStateImpl>::Instance();
 
 bool DebugStateType::showing_debug_menu_bar = false;
@@ -30,8 +36,13 @@ static ThreadID ThisThreadID() {
 
 static void PauseThread(ThreadID id) {
 #ifdef _WIN32
-    auto handle = OpenThread(THREAD_SUSPEND_RESUME, FALSE, id);
+    auto handle = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT, FALSE, id);
     SuspendThread(handle);
+    // Suspension is only requested by the call above; reading the context waits until the
+    // thread has really stopped.
+    CONTEXT context{};
+    context.ContextFlags = CONTEXT_CONTROL;
+    GetThreadContext(handle, &context);
     CloseHandle(handle);
 #else
     pthread_kill(id, SIGSLEEP);
@@ -72,12 +83,24 @@ void DebugStateImpl::PauseGuestThreads() {
     }
     bool self_guest = false;
     ThreadID self_id = ThisThreadID();
-    for (const auto& id : guest_threads) {
-        if (id == self_id) {
-            self_guest = true;
-        } else {
-            PauseThread(id);
+    {
+        // A thread stopped while it has the logger's locks or the heap's lock would block every
+        // other thread that logs or allocates, the picture included, until the game is resumed.
+        // Both are taken here first: no game thread can be inside them when it is stopped.
+        std::unique_lock log_gate{Common::Log::PauseGate()};
+#ifdef _WIN32
+        HeapLock(GetProcessHeap());
+#endif
+        for (const auto& id : guest_threads) {
+            if (id == self_id) {
+                self_guest = true;
+            } else {
+                PauseThread(id);
+            }
         }
+#ifdef _WIN32
+        HeapUnlock(GetProcessHeap());
+#endif
     }
     pause_time = Libraries::Kernel::Dev::GetClock()->GetUptime();
     is_guest_threads_paused = true;

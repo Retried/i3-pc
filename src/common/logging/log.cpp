@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <shared_mutex>
 #include <string>
 #include <fmt/std.h>
 #include <spdlog/sinks/async_sink.h>
@@ -56,6 +57,14 @@ static Level FromSpdlog(spdlog::level l) {
     return level_string_views[level_to_number(lvl)];
 }
 
+// Held shared around every log call and exclusively while the game's threads are being
+// suspended (core/debug_state.cpp), so no thread is ever stopped inside the logger with its
+// locks taken.
+std::shared_mutex& PauseGate() {
+    static std::shared_mutex gate;
+    return gate;
+}
+
 void VLog(Class log_class, Level level, const char* file, int line, const char* func,
           fmt::string_view format, fmt::format_args args) {
     const auto& logger = ALL_LOGGERS[static_cast<size_t>(log_class)];
@@ -65,6 +74,7 @@ void VLog(Class log_class, Level level, const char* file, int line, const char* 
     fmt::memory_buffer msg;
     fmt::vformat_to(fmt::appender(msg), format, args);
     const std::string_view fn = std::string_view(func) == "operator()" ? "lambda" : func;
+    std::shared_lock gate{PauseGate()};
     logger->log(ToSpdlog(level), "[{}] <{}> ({}) {}:{} {}: {}", NameOf(log_class),
                 NameOf(ToSpdlog(level)), Common::GetCurrentThreadName(),
                 spdlog::source_loc::basename(file), line, fn,

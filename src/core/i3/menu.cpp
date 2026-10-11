@@ -68,6 +68,11 @@ bool quit_armed = false;
 int quit_armed_row = -1;
 // The page the sub-pages go back to: the start screen at launch, the pause menu during play.
 Page home = Page::Main;
+// Controller input for the menu, taken from the pad events themselves (ImGui's own gamepad
+// navigation is not switched on in this program): bits up, down, left, right, confirm, back.
+enum PadNav : int { NavUp = 1, NavDown = 2, NavLeft = 4, NavRight = 8, NavConfirm = 16, NavBack = 32 };
+std::atomic<int> pad_nav{0};
+int stick_direction = 0;
 // The start screen, shown once per launch when the game presents its first frame.
 enum class StartState { Unknown, Showing, Done };
 StartState start_state = StartState::Unknown;
@@ -470,9 +475,8 @@ std::vector<Row> BuildRows() {
         }
         rows.push_back({"OPTIONS", "",
                         page == Page::Start
-                            ? "Graphics and controls. The game's own options (difficulty, sound, "
-                              "subtitles) open from the pause menu during play"
-                            : "Graphics, controls and the game's own options"});
+                            ? "Graphics, controls, gameplay, sound and interface"
+                            : "Graphics, controls, gameplay, sound, interface, save and load"});
         rows.push_back({"ACHIEVEMENTS", trophies, "Trophies of the game unlocked in this build"});
         if (page == Page::Start) {
             rows.push_back({"QUIT", quit_armed ? "Press again to quit" : "", "Close the game"});
@@ -483,12 +487,23 @@ std::vector<Row> BuildRows() {
                                        : "Back to the start screen. Quit is there"});
         }
     } else if (page == Page::Options) {
+        // Gameplay, Sound and Interface are the game's own settings, kept in its saves: these
+        // lines open the game's Options screen on that section instead of copying them.
+        const char* how = home == Page::Main
+                              ? "Opens the game's own Options screen there"
+                              : has_saves ? "Your last save loads first; the game's Options screen "
+                                            "then opens there"
+                                          : "Available from the pause menu once a game has started";
         rows.push_back({"GRAPHICS", "", "Frame rate, display, upscaling, effects and shadows"});
         rows.push_back({"CONTROLS", "", "Change the keyboard and mouse bindings"});
+        rows.push_back({"GAMEPLAY", "",
+                        fmt::format("Difficulty, aim sensitivity, photo mode. {}", how)});
+        rows.push_back({"SOUND", "",
+                        fmt::format("Dialogue, music and effects volume, audio mix. {}", how)});
+        rows.push_back({"INTERFACE", "", fmt::format("Subtitles and the HUD. {}", how)});
         if (home == Page::Main) {
-            rows.push_back({"GAME OPTIONS", "",
-                            "The game's own screen: save, new game, load game, difficulty, sound, "
-                            "subtitles"});
+            rows.push_back({"SAVE AND LOAD", "",
+                            "Save Game, New Game and Load Game on the game's own Options screen"});
         }
         rows.push_back({"BACK", "", "Return to the previous menu"});
     } else if (page == Page::Achievements) {
@@ -655,7 +670,33 @@ Page ParentOf(Page of) {
     return of == Page::Controls || of == Page::Graphics ? Page::Options : home;
 }
 
+// Holding the game stops its threads wherever they are. One of them can be stopped inside the
+// runtime while it has a lock the picture needs (memory, the command queue): the menu would
+// then never draw again. The watch below sees that the menu has stopped drawing while the game
+// is held, lets the game run for a moment so the lock is given back, and holds it again.
+std::mutex hold_mutex;
+std::atomic<u64> last_draw_ms{0};
+
+void WatchHold() {
+    while (true) {
+        SDL_Delay(100);
+        std::scoped_lock lock{hold_mutex};
+        if (!game_held || SDL_GetTicks() - last_draw_ms.load() < 500) {
+            continue;
+        }
+        DebugState.ResumeGuestThreads();
+        SDL_Delay(2);
+        LOG_INFO(Frontend, "menu: picture stopped while the game was held, hold renewed");
+        DebugState.PauseGuestThreads();
+        last_draw_ms = SDL_GetTicks();
+    }
+}
+
 void HoldGame(bool hold) {
+    static std::once_flag watch_started;
+    std::call_once(watch_started, [] { std::thread{WatchHold}.detach(); });
+    last_draw_ms = SDL_GetTicks();
+    std::scoped_lock lock{hold_mutex};
     if (hold && !game_held) {
         DebugState.PauseGuestThreads();
     } else if (!hold && game_held) {
@@ -733,9 +774,24 @@ void ActivateTop(const std::string& label, int row) {
         LeaveStartScreen(2);
     } else if (label == "RESUME") {
         open = false;
-    } else if (label == "GAME OPTIONS") {
-        open = false;
-        Press(300, OrbisPadButtonDataOffset::Options);
+    } else if (label == "GAMEPLAY" || label == "SOUND" || label == "INTERFACE" ||
+               label == "SAVE AND LOAD") {
+        // Rows of the game's Options screen: Save Game, New Game, Load Game, Difficulty, Aim
+        // Sensitivity, Vertical, Horizontal, Photo Mode, Dialogue, Music, Gameplay, Audio Mix,
+        // Subtitles.
+        const int game_row =
+            label == "GAMEPLAY" ? 3 : label == "SOUND" ? 8 : label == "INTERFACE" ? 12 : 0;
+        if (home == Page::Start) {
+            if (has_saves) {
+                LeaveStartScreen(game_row);
+            }
+        } else {
+            open = false;
+            Press(300, OrbisPadButtonDataOffset::Options);
+            for (int i = 0; i < game_row; i++) {
+                Press(2000 + 260 * i, OrbisPadButtonDataOffset::Down, 110);
+            }
+        }
     } else if (label == "OPTIONS") {
         page = Page::Options;
         selected = 0;
@@ -816,25 +872,103 @@ void Text(ImDrawList* draw, float size, ImVec2 pos, ImU32 color, const std::stri
     draw->AddText(MenuFont(), size, pos, color, text.c_str());
 }
 
-/// One "[key] LABEL" hint, right aligned at `right_x`. Returns the width used.
+/// Text drawn narrower than the font: the game's screen uses condensed faces, the font at hand
+/// (a Windows system font) is a regular one. `squeeze` scales the glyphs' width about `pos`.
+void Narrow(ImDrawList* draw, float size, ImVec2 pos, ImU32 color, const std::string& text,
+            float squeeze) {
+    const int first = draw->VtxBuffer.Size;
+    draw->AddText(MenuFont(), size, pos, color, text.c_str());
+    for (int i = first; i < draw->VtxBuffer.Size; i++) {
+        draw->VtxBuffer[i].pos.x = pos.x + (draw->VtxBuffer[i].pos.x - pos.x) * squeeze;
+    }
+}
+
+constexpr float TitleSqueeze = 0.56f;
+constexpr float HeadingSqueeze = 0.6f;
+constexpr float EntrySqueeze = 0.86f;
+
+/// Entries are written like the game writes them ("Save Game"): the labels that are kept in
+/// capitals for matching get their words' first letters only.
+std::string EntryCase(const std::string& label) {
+    bool lower = false;
+    for (const unsigned char c : label) {
+        lower |= std::islower(c) != 0;
+    }
+    if (lower) {
+        return label;
+    }
+    std::string out = label;
+    bool start = true;
+    for (char& c : out) {
+        const unsigned char u = static_cast<unsigned char>(c);
+        c = static_cast<char>(start ? std::toupper(u) : std::tolower(u));
+        start = c == ' ';
+    }
+    return out;
+}
+
+/// The heading drawn over a line: empty for none, a single space for a gap without a heading.
+std::string SectionOf(Page of, const std::string& label, int index) {
+    if (label == "BACK") {
+        return " ";
+    }
+    switch (of) {
+    case Page::Start:
+    case Page::Main:
+        return index == 0 ? "GAME" : label == "OPTIONS" ? "SETUP" : label == "QUIT" ||
+                                                                      label == "RETURN TO MAIN MENU"
+                                                                      ? "EXIT"
+                                                                      : "";
+    case Page::Options:
+        return label == "GRAPHICS" ? "PC" : label == "GAMEPLAY" ? "GAME"
+                                          : label == "SAVE AND LOAD" ? "SAVE DATA" : "";
+    case Page::Graphics:
+        return index == 0 ? "DISPLAY"
+               : label == "Upscaling (FSR)" ? "IMAGE"
+               : label == "Effects Preset" ? "EFFECTS"
+               : label == "Game Frame Limit" ? "FRAME RATE"
+               : label == "Shadow Preset" ? "SHADOWS" : "";
+    case Page::Controls:
+        return index == 0 ? "ACTIONS"
+               : label == "L3" ? "BUTTONS"
+               : label == "Move Forward" ? "MOVEMENT"
+               : label == "Hold Controller Sideways (Spray Can)" ? "MOTION AND TOUCHPAD" : "";
+    case Page::Achievements:
+        return index == 0 ? "TROPHIES" : "";
+    }
+    return "";
+}
+
+/// Width of one "[key] Label" hint.
+float HintWidth(float scale, const char* keyboard, const char* pad, const char* label) {
+    const bool keys = VideoCore::ActivePromptSet() == VideoCore::PromptSet::Keyboard;
+    const float size = 26.0f * scale;
+    const float cap_height = 30.0f * scale;
+    const float cap_width =
+        std::max(cap_height, TextSize(size * 0.8f, keys ? keyboard : pad).x + 18.0f * scale);
+    return TextSize(size, label).x * EntrySqueeze + cap_width + 34.0f * scale;
+}
+
+/// One "[key] Label" hint, right aligned at `right_x`. Returns the width used.
 float Hint(ImDrawList* draw, float right_x, float y, float scale, const char* keyboard,
            const char* pad, const char* label) {
     const bool keys = VideoCore::ActivePromptSet() == VideoCore::PromptSet::Keyboard;
     const char* name = keys ? keyboard : pad;
-    const float size = 24.0f * scale;
-    const float label_width = TextSize(size, label).x;
+    const float size = 26.0f * scale;
+    const float label_width = TextSize(size, label).x * EntrySqueeze;
     const float cap_height = 30.0f * scale;
     const float cap_width =
-        std::max(cap_height, TextSize(size * 0.85f, name).x + 18.0f * scale);
+        std::max(cap_height, TextSize(size * 0.8f, name).x + 18.0f * scale);
     const float label_x = right_x - label_width;
     const float cap_x = label_x - 10.0f * scale - cap_width;
     draw->AddRectFilled({cap_x, y}, {cap_x + cap_width, y + cap_height}, White,
                         keys ? 6.0f * scale : cap_height * 0.5f);
-    const ImVec2 name_size = TextSize(size * 0.85f, name);
-    Text(draw, size * 0.85f,
+    const ImVec2 name_size = TextSize(size * 0.8f, name);
+    Text(draw, size * 0.8f,
          {cap_x + (cap_width - name_size.x) * 0.5f, y + (cap_height - name_size.y) * 0.5f},
          IM_COL32(16, 16, 16, 255), name);
-    Text(draw, size, {label_x, y + (cap_height - TextSize(size, label).y) * 0.5f}, White, label);
+    Narrow(draw, size, {label_x, y + (cap_height - TextSize(size, label).y) * 0.5f}, White, label,
+           EntrySqueeze);
     return label_width + cap_width + 34.0f * scale;
 }
 
@@ -920,7 +1054,40 @@ bool OnEvent(const SDL_Event& event) {
         }
         return true;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        switch (event.gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+            pad_nav |= NavUp;
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            pad_nav |= NavDown;
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            pad_nav |= NavLeft;
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            pad_nav |= NavRight;
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            pad_nav |= NavConfirm;
+            break;
+        case SDL_GAMEPAD_BUTTON_START:
+        case SDL_GAMEPAD_BUTTON_EAST:
+            pad_nav |= NavBack;
+            break;
+        default:
+            break;
+        }
+        return true;
     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        // The left stick moves the selection too: one step each time it leaves the centre.
+        if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+            const int direction = event.gaxis.value < -20000 ? -1 : event.gaxis.value > 20000 ? 1 : 0;
+            if (direction != stick_direction && direction != 0) {
+                pad_nav |= direction < 0 ? NavUp : NavDown;
+            }
+            stick_direction = direction;
+        }
+        return true;
     case SDL_EVENT_MOUSE_MOTION:
         return true;
     default:
@@ -968,7 +1135,7 @@ void Draw() {
             using Libraries::Pad::OrbisPadButtonDataOffset;
             Press(0, OrbisPadButtonDataOffset::Options);
             for (int i = 0; i < pending_game_row; i++) {
-                Press(1800 + 400 * i, OrbisPadButtonDataOffset::Down, 120);
+                Press(2000 + 260 * i, OrbisPadButtonDataOffset::Down, 110);
             }
             pending_game_row = -1;
         }
@@ -997,74 +1164,127 @@ void Draw() {
     // The key press that opened the menu must not act on it as well.
     const bool skip_input = capturing || was_capturing || SDL_GetTicks() - opened_ms < 250;
     was_capturing = capturing;
+    const int nav = pad_nav.exchange(0);
     if (!skip_input) {
         if (IsKeyPressed(ImGuiKey_DownArrow) || IsKeyPressed(ImGuiKey_GamepadDpadDown) ||
-            IsKeyPressed(ImGuiKey_S)) {
+            IsKeyPressed(ImGuiKey_S) || (nav & NavDown)) {
             selected = (selected + 1) % count;
         }
         if (IsKeyPressed(ImGuiKey_UpArrow) || IsKeyPressed(ImGuiKey_GamepadDpadUp) ||
-            IsKeyPressed(ImGuiKey_W)) {
+            IsKeyPressed(ImGuiKey_W) || (nav & NavUp)) {
             selected = (selected + count - 1) % count;
         }
         if (IsKeyPressed(ImGuiKey_Enter, false) || IsKeyPressed(ImGuiKey_Space, false) ||
-            IsKeyPressed(ImGuiKey_GamepadFaceDown, false)) {
+            IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || (nav & NavConfirm)) {
             activate_row = selected;
         } else if (IsKeyPressed(ImGuiKey_LeftArrow) || IsKeyPressed(ImGuiKey_GamepadDpadLeft) ||
-                   IsKeyPressed(ImGuiKey_A)) {
+                   IsKeyPressed(ImGuiKey_A) || (nav & NavLeft)) {
             activate_row = selected;
             activate_direction = -1;
         } else if (IsKeyPressed(ImGuiKey_RightArrow) || IsKeyPressed(ImGuiKey_GamepadDpadRight) ||
-                   IsKeyPressed(ImGuiKey_D)) {
+                   IsKeyPressed(ImGuiKey_D) || (nav & NavRight)) {
             activate_row = selected;
             activate_direction = 1;
         }
         back = IsKeyPressed(ImGuiKey_Escape, false) || IsKeyPressed(ImGuiKey_Backspace, false) ||
                IsKeyPressed(ImGuiKey_GamepadFaceRight, false) ||
-               IsKeyPressed(ImGuiKey_GamepadStart, false);
+               IsKeyPressed(ImGuiKey_GamepadStart, false) || (nav & NavBack);
     }
 
-    // Laid out like the game's Options screen: a black panel on the left with a yellow title.
+    // Laid out like the game's Options screen: a narrow framed panel on the left with a tall
+    // yellow title, section headings with indented entries under them, values on the right
+    // edge, and the text for the selected line beside the panel.
     const ImVec2 display = GetIO().DisplaySize;
     const float scale = display.y / 1080.0f;
+    const float ox = (display.x - 1920.0f * scale) * 0.5f;
     auto* draw = GetForegroundDrawList();
-    // The start screen stands on black; the pause menu dims the game behind it.
-    draw->AddRectFilled({0.0f, 0.0f}, display, IM_COL32(0, 0, 0, home == Page::Start ? 255 : 150));
-    const ImVec2 panel_min{display.x * 0.16f, display.y * 0.09f};
-    const ImVec2 panel_max{display.x * 0.84f, display.y * 0.91f};
-    draw->AddRectFilled(panel_min, panel_max, IM_COL32(8, 8, 8, 236));
-    draw->AddRect(panel_min, panel_max, IM_COL32(220, 220, 220, 255), 0.0f, 0, 2.0f * scale);
-    const float left = panel_min.x + 44.0f * scale;
-    const float right = panel_max.x - 44.0f * scale;
-    float y = panel_min.y + 28.0f * scale;
+    if (home == Page::Start) {
+        // No scene is loaded behind the start screen: a plain dark backdrop drawn here.
+        draw->AddRectFilledMultiColor({0.0f, 0.0f}, display, IM_COL32(46, 42, 40, 255),
+                                      IM_COL32(30, 28, 27, 255), IM_COL32(6, 6, 6, 255),
+                                      IM_COL32(12, 11, 11, 255));
+    } else {
+        // The game's own screen greys and blurs the picture; this one greys it with a veil.
+        draw->AddRectFilled({0.0f, 0.0f}, display, IM_COL32(34, 30, 30, 168));
+    }
+    const ImVec2 panel_min{ox + 316.0f * scale, 92.0f * scale};
+    const ImVec2 panel_max{ox + 1057.0f * scale, 988.0f * scale};
+    draw->AddRectFilled({panel_max.x + 3.0f * scale, panel_min.y + 3.0f * scale},
+                        {panel_max.x + 16.0f * scale, panel_max.y}, IM_COL32(120, 120, 120, 70));
+    draw->AddRectFilled(panel_min, panel_max, IM_COL32(17, 17, 17, 240));
+    for (float x = panel_min.x + 12.0f * scale; x < panel_max.x; x += 12.0f * scale) {
+        draw->AddLine({x, panel_min.y}, {x, panel_max.y}, IM_COL32(255, 255, 255, 7));
+    }
+    for (float line_y = panel_min.y + 12.0f * scale; line_y < panel_max.y; line_y += 12.0f * scale) {
+        draw->AddLine({panel_min.x, line_y}, {panel_max.x, line_y}, IM_COL32(255, 255, 255, 7));
+    }
+    draw->AddRect(panel_min, panel_max, White, 0.0f, 0, 2.0f * scale);
+    // Corner marks of the frame: a square top left, a thick bar with a slanted end top right.
+    draw->AddRectFilled({panel_min.x - 6.0f * scale, panel_min.y - 6.0f * scale},
+                        {panel_min.x + 5.0f * scale, panel_min.y + 5.0f * scale}, White);
+    draw->AddQuadFilled({panel_max.x - 134.0f * scale, panel_min.y},
+                        {panel_max.x - 124.0f * scale, panel_min.y - 7.0f * scale},
+                        {panel_max.x, panel_min.y - 7.0f * scale}, {panel_max.x, panel_min.y},
+                        White);
+
     const char* title = page == Page::Main           ? "PAUSED"
                         : page == Page::Start        ? "inFAMOUS SECOND SON"
                         : page == Page::Options      ? "OPTIONS"
                         : page == Page::Controls     ? "CONTROLS"
                         : page == Page::Achievements ? "ACHIEVEMENTS"
                                                      : "GRAPHICS";
-    Text(draw, 64.0f * scale, {left, y}, Yellow, title);
-    y += 92.0f * scale;
+    Narrow(draw, 94.0f * scale, {panel_min.x + 32.0f * scale, panel_min.y + 24.0f * scale}, Yellow,
+           title, TitleSqueeze);
 
-    const float row_height = 44.0f * scale;
-    const float text_size = 32.0f * scale;
-    const float footer = 150.0f * scale;
-    const int visible =
-        std::max(1, static_cast<int>((panel_max.y - footer - y) / row_height));
-    // Keep the selection in view on long pages.
-    static int first = 0;
-    if (count <= visible) {
-        first = 0;
-    } else {
-        first = std::clamp(first, std::max(0, selected - visible + 1), selected);
-        first = std::min(first, count - visible);
+    const float heading_x = panel_min.x + 71.0f * scale;
+    const float left = panel_min.x + 99.0f * scale;
+    const float right = panel_min.x + 668.0f * scale;
+    const float row_height = 35.0f * scale;
+    const float text_size = 28.0f * scale;
+    const float heading_size = 42.0f * scale;
+    const float heading_height = 44.0f * scale;
+    const float section_gap = 22.0f * scale;
+    const float view_top = panel_min.y + 148.0f * scale;
+    const float view_bottom = panel_max.y - 14.0f * scale;
+    // Where each line sits in the list, headings included.
+    std::vector<float> block_top(count), row_top(count);
+    float content = 0.0f;
+    for (int i = 0; i < count; i++) {
+        const std::string section = SectionOf(page, rows[i].label, i);
+        block_top[i] = content;
+        if (!section.empty()) {
+            content += i == 0 ? 0.0f : section_gap;
+            if (section != " ") {
+                content += heading_height;
+            }
+        }
+        row_top[i] = content;
+        content += row_height;
     }
+    // Keep the selection, and the heading over it, in view on long pages.
+    static float scroll = 0.0f;
+    const float view = view_bottom - view_top;
+    scroll = std::min(scroll, block_top[selected]);
+    scroll = std::max(scroll, row_top[selected] + row_height - view);
+    scroll = std::clamp(scroll, 0.0f, std::max(0.0f, content - view));
+
     const ImVec2 mouse = GetIO().MousePos;
     const bool mouse_moved = GetIO().MouseDelta.x != 0.0f || GetIO().MouseDelta.y != 0.0f;
-    for (int i = first; i < std::min(count, first + visible); i++) {
+    draw->PushClipRect({panel_min.x, view_top}, {panel_max.x, view_bottom}, true);
+    for (int i = 0; i < count; i++) {
         const Row& row = rows[i];
-        const float row_y = y + row_height * (i - first);
+        const float row_y = view_top + row_top[i] - scroll;
+        if (row_y + row_height < view_top || block_top[i] - scroll > view) {
+            continue;
+        }
+        const std::string section = SectionOf(page, row.label, i);
+        if (!section.empty() && section != " ") {
+            Narrow(draw, heading_size, {heading_x, row_y - heading_height}, White, section,
+                   HeadingSqueeze);
+        }
         const bool hovered = mouse.x >= left && mouse.x <= right && mouse.y >= row_y &&
-                             mouse.y < row_y + row_height;
+                             mouse.y < row_y + row_height && mouse.y >= view_top &&
+                             mouse.y < view_bottom;
         if (hovered && !skip_input) {
             if (mouse_moved) {
                 selected = i;
@@ -1076,53 +1296,82 @@ void Draw() {
             }
         }
         const bool current = i == selected;
-        if (current) {
-            draw->AddRectFilled({left - 14.0f * scale, row_y}, {right + 14.0f * scale, row_y + row_height},
-                                IM_COL32(246, 190, 0, 38));
-        }
         const ImU32 color = current ? Yellow : White;
-        const float text_y = row_y + (row_height - TextSize(text_size, row.label).y) * 0.5f;
-        Text(draw, text_size, {left, text_y}, color, row.label);
+        const std::string label = EntryCase(row.label);
+        const float text_y = row_y + (row_height - TextSize(text_size, label).y) * 0.5f;
+        Narrow(draw, text_size, {left, text_y}, color, label, EntrySqueeze);
         std::string value = row.value;
         if (current && capturing) {
-            value = "PRESS A KEY...";
+            value = "Press a key...";
         } else if (row.adjustable && current) {
             value = "<  " + value + "  >";
         }
         if (!value.empty()) {
-            Text(draw, text_size, {right - TextSize(text_size, value).x, text_y},
-                 current ? Yellow : Grey, value);
+            Narrow(draw, text_size,
+                   {right - TextSize(text_size, value).x * EntrySqueeze, text_y}, color, value,
+                   EntrySqueeze);
         }
     }
-    if (count > visible) {
-        // Scroll position.
-        const float track_top = y;
-        const float track_height = row_height * visible;
-        const float bar_height = track_height * visible / count;
-        const float bar_y = track_top + (track_height - bar_height) * first / (count - visible);
-        draw->AddRectFilled({right + 22.0f * scale, track_top},
-                            {right + 26.0f * scale, track_top + track_height}, Dim);
-        draw->AddRectFilled({right + 22.0f * scale, bar_y},
-                            {right + 26.0f * scale, bar_y + bar_height}, White);
+    draw->PopClipRect();
+    if (content > view) {
+        // Scroll position, where the game's screen has it.
+        const float bar_x = panel_min.x + 710.0f * scale;
+        const float bar_height = view * view / content;
+        const float bar_y = view_top + (view - bar_height) * scroll / (content - view);
+        draw->AddRectFilled({bar_x, view_top}, {bar_x + 14.0f * scale, view_bottom},
+                            IM_COL32(0, 0, 0, 120));
+        draw->AddRectFilled({bar_x, bar_y}, {bar_x + 14.0f * scale, bar_y + bar_height},
+                            IM_COL32(70, 70, 70, 255));
     }
 
+    // Beside the panel, where the game shows its controller picture: the selected line as a
+    // heading over a rule, and what it does under it.
     const Row& current_row = rows[selected];
-    const float note_y = panel_max.y - 128.0f * scale;
-    Text(draw, 26.0f * scale, {left, note_y}, Grey,
-         capturing ? "Press the key or mouse button for this action. Esc keeps the current one."
-                   : current_row.description);
+    const float note_x = panel_max.x + 52.0f * scale;
+    const float note_right = std::min(display.x - 60.0f * scale, note_x + 700.0f * scale);
+    float note_y = 400.0f * scale;
+    std::string note_title = current_row.label;
+    std::transform(note_title.begin(), note_title.end(), note_title.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    Narrow(draw, 34.0f * scale, {note_x, note_y}, White, note_title, HeadingSqueeze);
+    note_y += 40.0f * scale;
+    draw->AddLine({note_x, note_y}, {note_right, note_y}, IM_COL32(236, 236, 236, 150), scale);
+    note_y += 14.0f * scale;
+    const std::string note =
+        capturing ? "Press the key or mouse button for this action. Esc keeps the current one."
+                  : current_row.description;
+    const float note_size = 26.0f * scale;
+    draw->AddText(MenuFont(), note_size, {note_x, note_y}, White, note.c_str(), nullptr,
+                  note_right - note_x);
+    note_y += MenuFont()->CalcTextSizeA(note_size, FLT_MAX, note_right - note_x, note.c_str()).y;
     if (restart_note && page == Page::Graphics) {
-        Text(draw, 26.0f * scale, {left, note_y + 34.0f * scale}, Yellow,
-             "Frame rate cap and VSync changes take effect the next time the game starts.");
+        draw->AddText(MenuFont(), note_size, {note_x, note_y + 18.0f * scale}, Yellow,
+                      "Frame rate cap and VSync changes take effect the next time the game "
+                      "starts.",
+                      nullptr, note_right - note_x);
     }
-    float hint_x = right;
-    const float hint_y = panel_max.y - 52.0f * scale;
-    hint_x -= Hint(draw, hint_x, hint_y, scale, "ESC", "O", "BACK");
-    if (current_row.adjustable) {
-        hint_x -= Hint(draw, hint_x, hint_y, scale, "A  D", "D-PAD", "CHANGE");
-    } else {
-        hint_x -= Hint(draw, hint_x, hint_y, scale, "ENTER", "X", "SELECT");
+
+    // Key hints on a dark strip at the bottom right, as on the game's screen.
+    const float hint_y = 952.0f * scale;
+    const bool on_top = page == Page::Main || page == Page::Start || page == Page::Options;
+    const char* back_label = page == Page::Main ? "Resume" : "Back";
+    const bool show_back = page != Page::Start;
+    const char* act_label = current_row.adjustable ? "Change" : "Select";
+    const char* act_keys = current_row.adjustable ? "A  D" : "ENTER";
+    const char* act_pad = current_row.adjustable ? "D-PAD" : "X";
+    (void)on_top;
+    float strip = 40.0f * scale + HintWidth(scale, act_keys, act_pad, act_label);
+    if (show_back) {
+        strip += HintWidth(scale, "ESC", "O", back_label);
     }
+    strip = std::max(strip, 274.0f * scale);
+    draw->AddRectFilled({display.x - strip, hint_y - 12.0f * scale},
+                        {display.x, hint_y + 43.0f * scale}, IM_COL32(12, 12, 12, 215));
+    float hint_x = display.x - 28.0f * scale;
+    if (show_back) {
+        hint_x -= Hint(draw, hint_x, hint_y, scale, "ESC", "O", back_label);
+    }
+    Hint(draw, hint_x, hint_y, scale, act_keys, act_pad, act_label);
 
     if (activate_row >= 0) {
         if (page == Page::Main || page == Page::Start || page == Page::Options) {

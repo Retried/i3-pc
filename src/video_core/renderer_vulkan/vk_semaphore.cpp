@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: Copyright 2020 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/elf_info.h"
+#include <chrono>
+#include <cstdlib>
+#include <immintrin.h>
 #include <limits>
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
@@ -53,6 +57,25 @@ void Semaphore::Wait(u64 tick) {
     Refresh();
     if (IsFree(tick)) {
         return;
+    }
+
+    // inFAMOUS waits for the GPU several times a frame, for results the game reads right after
+    // (see Rasterizer::FlushMirrors). The work waited for is tiny, but a blocking wait hands
+    // the thread to the scheduler and comes back a good part of a millisecond late. So the
+    // counter is polled for a short while first. I3_NO_SPIN_WAIT=1 switches this off.
+    static const bool spin = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                             std::getenv("I3_NO_SPIN_WAIT") == nullptr;
+    if (spin) {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(1500);
+        do {
+            for (int i = 0; i < 32; ++i) {
+                _mm_pause();
+            }
+            Refresh();
+            if (IsFree(tick)) {
+                return;
+            }
+        } while (std::chrono::steady_clock::now() < until);
     }
 
     // If none of the above is hit, fallback to a regular wait

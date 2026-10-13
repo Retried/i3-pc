@@ -40,6 +40,43 @@ namespace VideoCore {
 u64 g_stream_epoch = 0;
 static u64 mirror_words_kept = 0;
 
+// Crash aid: the last copy-back writes into guest memory, so that a fault in game code can be
+// matched against them (see LogMirrorWritesNear, called from the exception handler).
+struct MirrorWrite {
+    u64 address;
+    u32 size;
+    u64 range_address;
+    u32 range_size;
+    u64 at_ms;
+};
+static MirrorWrite g_mirror_writes[16384];
+static std::atomic<u32> g_mirror_write_count{0};
+static u64 MirrorNowMs() {
+    return u64(std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+                   .count());
+}
+static void NoteMirrorWrite(u64 address, u32 size, u64 range_address, u32 range_size) {
+    const u32 index = g_mirror_write_count.fetch_add(1, std::memory_order_relaxed) % 16384;
+    g_mirror_writes[index] = {address, size, range_address, range_size, MirrorNowMs()};
+}
+void LogMirrorWritesNear(u64 address, u64 before, u64 after) {
+    const u64 now = MirrorNowMs();
+    const u32 total = g_mirror_write_count.load(std::memory_order_relaxed);
+    u32 shown = 0;
+    for (u32 i = 0; i < std::min<u32>(total, 16384) && shown < 24; ++i) {
+        const auto& w = g_mirror_writes[(total - 1 - i) % 16384];
+        if (w.address + w.size > address - before && w.address < address + after) {
+            ++shown;
+            LOG_CRITICAL(Render, "copy back wrote {:#x} size {:#x} (output {:#x} size {:#x}) "
+                                 "{} ms before the fault",
+                         w.address, w.size, w.range_address, w.range_size, now - w.at_ms);
+        }
+    }
+    LOG_CRITICAL(Render, "copy back writes near {:#x}: {} of the last {}", address, shown,
+                 std::min<u32>(total, 16384));
+}
+
 static constexpr size_t GDS_BUFFER_SIZE = 64_KB;
 static constexpr size_t STREAM_BUFFER_SIZE = 128_MB;
 
@@ -218,7 +255,15 @@ void BufferCache::AddPendingMirror(VAddr device_addr, u32 size) {
     memory->CopySparseMemory(device_addr, mirror_snapshot_data.data() + offset, size);
 }
 
-void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
+void BufferCache::RequestCapture(VAddr device_addr, u32 size, u64 key) {
+    capture_requests.emplace_back(device_addr, size, key);
+}
+
+std::vector<std::pair<u64, std::vector<u8>>> BufferCache::TakeCaptured() {
+    return std::exchange(captured, {});
+}
+
+void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges, bool partial) {
     if (ranges.empty()) {
         return;
     }
@@ -245,7 +290,7 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     // I3_ASYNC_MIRROR=1 turns it on again for experiments only.
     static const bool async = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
                               std::getenv("I3_ASYNC_MIRROR") != nullptr;
-    if (async && total <= MIRROR_BUFFER_SIZE / 8 && mirrors_in_flight < 6) {
+    if (async && !partial && total <= MIRROR_BUFFER_SIZE / 8 && mirrors_in_flight < 6) {
         if (!mirror_buffer) {
             mirror_buffer = std::make_unique<Buffer>(instance, 0, MIRROR_BUFFER_SIZE,
                                                      MemoryType::HostCached, "Mirror Buffer");
@@ -312,17 +357,35 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     for (const auto& [addr, size] : ranges) {
         const u8* gpu = download.mapped + cursor;
         cursor += Common::AlignUp(size, 64);
+        for (const auto& [want_addr, want_size, key] : capture_requests) {
+            if (want_addr == addr && want_size == size) {
+                captured.emplace_back(key, std::vector<u8>(gpu, gpu + size));
+            }
+        }
         const auto snapshot = size < MirrorSnapshotMaxSize
                                   ? mirror_snapshots.find(MirrorSnapshotKey(addr, size))
                                   : mirror_snapshots.end();
         if (snapshot == mirror_snapshots.end()) {
             memory->TryWriteBacking(std::bit_cast<u8*>(addr), gpu, size);
+            NoteMirrorWrite(addr, size, addr, size);
             continue;
         }
-        const u8* before = mirror_snapshot_data.data() + snapshot->second;
+        u8* before = mirror_snapshot_data.data() + snapshot->second;
         if (std::memcmp(gpu, before, size) == 0) {
             continue;
         }
+        // After a partial copy back the snapshot is the result itself (see the end of the loop).
+        const struct RefreshSnapshot {
+            u8* to;
+            const u8* from;
+            u32 n;
+            bool on;
+            ~RefreshSnapshot() {
+                if (on) {
+                    std::memcpy(to, from, n);
+                }
+            }
+        } refresh{before, gpu, size, partial};
         // Changed stretches, joined over gaps under 64 bytes, each written with one call.
         // The copy back lands after the game has been told that its compute work is done
         // (flushing at every such signal halves the frame rate), so the game may already have
@@ -341,6 +404,7 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
             if (start != size) {
                 memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start,
                                         end - start);
+                NoteMirrorWrite(addr + start, end - start, addr, size);
                 start = size;
             }
         };
@@ -385,6 +449,10 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
         }
         write_stretch();
     }
+    if (partial) {
+        return;
+    }
+    capture_requests.clear();
     pending_mirror_ranges.Clear();
     unissued_mirrors.clear();
     inflight_mirrors.clear();

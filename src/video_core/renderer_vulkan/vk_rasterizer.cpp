@@ -858,6 +858,38 @@ struct ArgWindows {
 };
 static ArgWindows g_arg_windows;
 
+// Last frame's results of the small compute outputs the game reads on the CPU (see
+// DispatchDirect), by shader and place in the frame.
+struct Predict {
+    std::unordered_map<u64, std::vector<u8>> last;
+    std::unordered_map<u64, u32> ordinal;
+    u64 written{};
+};
+static Predict g_predict;
+// Outputs of those shaders waiting for the next completion signal.
+static std::vector<std::pair<VAddr, u32>> g_urgent_mirrors;
+
+// Test aid: which compute shader wrote a piece of guest memory last (outputs of every dispatch,
+// newest first on lookup). Used to name the writer when the game reads GPU-written memory.
+struct CsOutput {
+    u64 hash;
+    VAddr base;
+    u32 size;
+};
+static CsOutput g_cs_outputs[8192];
+static std::atomic<u32> g_cs_output_count{0};
+static void NoteCsOutput(u64 hash, VAddr base, u32 size) {
+    const u32 total = g_cs_output_count.load(std::memory_order_relaxed);
+    for (u32 i = 0; i < std::min<u32>(total, 64); ++i) {
+        const auto& e = g_cs_outputs[(total - 1 - i) % 8192];
+        if (e.hash == hash && e.base == base && e.size == size) {
+            return;
+        }
+    }
+    g_cs_outputs[total % 8192] = {hash, base, size};
+    g_cs_output_count.store(total + 1, std::memory_order_relaxed);
+}
+
 static bool is_infamous_args_mirror() {
     return Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
            std::getenv("I3_NO_ARG_MIRROR") == nullptr;
@@ -1414,6 +1446,9 @@ void Rasterizer::DispatchDirect() {
             continue;
         }
         const auto sharp = desc.GetSharp(cs);
+        if (sharp.base_address != 0 && sharp.GetSize() != 0) {
+            NoteCsOutput(cs.pgm_hash, sharp.base_address, sharp.GetSize());
+        }
         if (sharp.base_address != 0 && sharp.GetSize() != 0 && sharp.GetSize() <= mirror_limit) {
             mirrors.emplace_back(sharp.base_address, sharp.GetSize());
         } else if (sharp.base_address != 0 && sharp.GetSize() > mirror_limit &&
@@ -1451,6 +1486,48 @@ void Rasterizer::DispatchDirect() {
     g_stats.mirrors += u32(mirrors.size());
     pending_mirrors.insert(pending_mirrors.end(), mirrors.begin(), mirrors.end());
     mirrors_urgent |= urgent && !mirrors.empty();
+    {
+        // Compute shaders whose small outputs the game reads on the CPU right after its
+        // completion signal (found with on-demand readback switched on: the game read these
+        // five about nine times a frame in the first boss arena, and nothing else that is
+        // copied back). The outputs sit in memory the game hands out anew every frame, so until
+        // the result lands the game finds whatever lay there before: garbage counts, dropped
+        // draws that grow in number, and after about two minutes of firing a crash (one soak
+        // in three). Their results are therefore copied back at the next completion signal,
+        // and only theirs (see FlushMirrors). That is a blocking wait for the GPU about three
+        // times a frame; measured cost 4 to 8 FPS in a fire fight and about 8 FPS at the crash
+        // site. I3_NO_READ_URGENT=1 switches it off. Giving the memory last frame's result
+        // instead (I3_PREDICT=1, with the flush switched off) was tried and made things worse:
+        // three soaks of four died.
+        static const bool known_title = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
+        static const bool flush_at_signal = std::getenv("I3_NO_READ_URGENT") == nullptr;
+        static const bool predict = std::getenv("I3_PREDICT") != nullptr;
+        constexpr std::array<u64, 5> cpu_read{0x2c6b674a, 0x63e538c1, 0x47a670fd, 0x3ea96db0,
+                                              0xa8b68717};
+        if (known_title && !mirrors.empty() &&
+            std::ranges::find(cpu_read, u64(cs.pgm_hash)) != cpu_read.end()) {
+            if (flush_at_signal) {
+                g_arg_windows.urgent = true;
+                g_urgent_mirrors.insert(g_urgent_mirrors.end(), mirrors.begin(), mirrors.end());
+            } else if (predict) {
+                for (const auto& [address, size] : mirrors) {
+                    if (size > 4096) {
+                        continue;
+                    }
+                    // The same dispatch of the same shader a frame earlier: by its place among
+                    // that shader's dispatches of the frame.
+                    const u64 key = (u64(cs.pgm_hash) << 20) | (g_predict.ordinal[cs.pgm_hash]++ & 0xfffff);
+                    if (const auto it = g_predict.last.find(key);
+                        it != g_predict.last.end() && it->second.size() == size) {
+                        memory->TryWriteBacking(std::bit_cast<u8*>(address), it->second.data(),
+                                                size);
+                        ++g_predict.written;
+                    }
+                    buffer_cache.RequestCapture(address, size, key);
+                }
+            }
+        }
+    }
     for (const auto& [address, size] : mirrors) {
         buffer_cache.AddPendingMirror(address, size);
     }
@@ -1562,6 +1639,18 @@ void Rasterizer::FlushMirrors(u32 source) {
     if (forced) {
         ++g_stats.forced_flushes;
     }
+    if (forced && !(mask & source) && !g_urgent_mirrors.empty()) {
+        // Only what the game is about to read goes back now; the several hundred other pending
+        // outputs keep waiting for the end of the frame.
+        ScopedNs timer{g_stats.ns_mirror};
+        std::ranges::sort(g_urgent_mirrors);
+        const auto dup = std::ranges::unique(g_urgent_mirrors);
+        g_urgent_mirrors.erase(dup.begin(), dup.end());
+        buffer_cache.MirrorToGuest(g_urgent_mirrors, true);
+        g_urgent_mirrors.clear();
+        g_arg_windows.urgent = false;
+        return;
+    }
     // An end-of-pipe event waits only for outputs the game reads; the rest ride along with the
     // next such flush, or go at the end of a frame that had none.
     if (source == 2 && !mirrors_urgent) {
@@ -1573,6 +1662,7 @@ void Rasterizer::FlushMirrors(u32 source) {
     }
     mirrors_urgent = false;
     g_arg_windows.urgent = false;
+    g_urgent_mirrors.clear();
     mirrors_flushed_this_frame = source != 8;
     ScopedNs timer{g_stats.ns_mirror};
     ++g_stats.flushes;
@@ -1581,6 +1671,9 @@ void Rasterizer::FlushMirrors(u32 source) {
     const auto dup = std::ranges::unique(pending_mirrors);
     pending_mirrors.erase(dup.begin(), dup.end());
     buffer_cache.MirrorToGuest(pending_mirrors);
+    for (auto& [key, bytes] : buffer_cache.TakeCaptured()) {
+        g_predict.last[key] = std::move(bytes);
+    }
     pending_mirrors.clear();
 }
 
@@ -1658,6 +1751,7 @@ static void NoteHugeBind(VAddr base, u64 size) {
 
 void Rasterizer::OnSubmit() {
     g_shadow_maps.NextFrame();
+    g_predict.ordinal.clear();
     if (HugeWarmEnabled()) {
         // One slice of each remembered heap that this session has not bound yet.
         for (auto& bind : HugeBinds()) {
@@ -3144,3 +3238,20 @@ u32 Rasterizer::GetGpuCommandProcessorThreadId() {
 #endif
 
 } // namespace Vulkan
+
+namespace VideoCore {
+/// The compute shader that last declared an output covering `address` (0 when none is known).
+u64 WriterOfGuestMemory(u64 address, u64* base, u32* size) {
+    const u32 total = Vulkan::g_cs_output_count.load(std::memory_order_relaxed);
+    for (u32 i = 0; i < std::min<u32>(total, 8192); ++i) {
+        const auto& e = Vulkan::g_cs_outputs[(total - 1 - i) % 8192];
+        if (address >= e.base && address < e.base + e.size) {
+            *base = e.base;
+            *size = e.size;
+            return e.hash;
+        }
+    }
+    return 0;
+}
+} // namespace VideoCore
+

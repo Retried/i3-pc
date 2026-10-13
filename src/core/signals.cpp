@@ -23,6 +23,10 @@ static constexpr DWORD MS_VC_EXCEPTION = 0x406D1388;
 #endif
 #endif
 
+namespace VideoCore {
+void LogMirrorWritesNear(u64 address, u64 before, u64 after); // buffer_cache.cpp
+} // namespace VideoCore
+
 namespace Core {
 
 #if defined(_WIN32)
@@ -152,6 +156,23 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
         LOG_CRITICAL(Debug, "access {:#x} rsp {:#x} stack: {}",
                      pExp->ExceptionRecord->ExceptionInformation[1], pExp->ContextRecord->Rsp,
                      trace);
+        {
+            // Crash aid for the inFAMOUS soak fault: the object the faulting code works on
+            // (rdi), three of its fields, and the copy-back writes that touched it lately.
+            const auto* ctx = pExp->ContextRecord;
+            u32 fields[2]{};
+            u64 array{};
+            SIZE_T got{};
+            const HANDLE self = GetCurrentProcess();
+            ReadProcessMemory(self, reinterpret_cast<void*>(ctx->Rdi + 0x154), fields,
+                              sizeof(fields), &got);
+            ReadProcessMemory(self, reinterpret_cast<void*>(ctx->Rdi + 0x330), &array,
+                              sizeof(array), &got);
+            LOG_CRITICAL(Debug, "rdi {:#x} rcx {:#x} rdx {:#x} rax {:#x}; [rdi+0x154] {:#x} "
+                                "[rdi+0x158] {:#x} [rdi+0x330] {:#x}",
+                         ctx->Rdi, ctx->Rcx, ctx->Rdx, ctx->Rax, fields[0], fields[1], array);
+            VideoCore::LogMirrorWritesNear(ctx->Rdi, 0x400, 0x800);
+        }
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
 

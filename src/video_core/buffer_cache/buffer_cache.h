@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <tuple>
 #include <span>
 #include <utility>
 #include <deque>
@@ -111,10 +112,19 @@ public:
     u64 DebugMismatch(VAddr device_addr, u32 size);
 
     /// Copies GPU-written ranges back into guest memory with a single flush.
-    void MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges);
+    /// `partial`: only these outputs, now and blocking; everything else that is pending stays
+    /// pending, and the snapshots of these are brought up to date so that the later full
+    /// copy back finds nothing left to write for them.
+    void MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges, bool partial = false);
 
     /// Marks a range as written by the GPU and not yet copied back to guest memory.
     void AddPendingMirror(VAddr device_addr, u32 size);
+
+    /// Asks for the GPU's bytes of a pending output to be kept at the next copy back (see
+    /// TakeCaptured); used to predict the next frame's value of small counters.
+    void RequestCapture(VAddr device_addr, u32 size, u64 key);
+    /// Captured results since the last call: key and bytes.
+    std::vector<std::pair<u64, std::vector<u8>>> TakeCaptured();
 
 private:
     struct ArenaBinds {
@@ -151,6 +161,8 @@ private:
     std::unique_ptr<MemoryTracker> memory_tracker;
 
     StreamBuffer stream_buffer;
+    std::vector<std::tuple<VAddr, u32, u64>> capture_requests;
+    std::vector<std::pair<u64, std::vector<u8>>> captured;
     Buffer gds_buffer;
     RangeSet gpu_modified_ranges;
     /// Compute outputs that are newer on the GPU than in guest memory, until MirrorToGuest

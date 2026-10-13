@@ -40,6 +40,10 @@
 #endif
 
 namespace VideoCore {
+u64 WriterOfGuestMemory(u64 address, u64* base, u32* size); // vk_rasterizer.cpp
+} // namespace VideoCore
+
+namespace VideoCore {
 
 struct PageManager::Impl {
     struct PageState {
@@ -430,8 +434,12 @@ struct SignalImpl : public PageManager::Impl {
         RENDERER_TRACE;
         auto* memory = Core::Memory::Instance();
         auto& impl = memory->GetAddressSpace();
-        ASSERT_MSG(perms != Core::MemoryPermission::Write,
-                   "Attempted to protect region as write-only which is not a valid permission");
+        // A page watched for reads only would be write-only, which Windows cannot express: it
+        // is closed altogether, and a write to it is answered like a read first (the fault
+        // handler fetches the GPU's data before the write goes through).
+        if (perms == Core::MemoryPermission::Write) {
+            perms = Core::MemoryPermission::None;
+        }
         impl.Protect(address, size, perms);
         // Direct memory can be mapped at several addresses; watch every one of them, or writes
         // through another mapping go unnoticed.
@@ -481,6 +489,21 @@ struct SignalImpl : public PageManager::Impl {
             }
             std::this_thread::yield();
             return true;
+        }
+        if (!is_write && !is_gpu_thread) {
+            // Test aid: the game reads memory the GPU wrote. Which output, of which shader?
+            static std::atomic<u32> logged{0};
+            static std::atomic<u64> total{0};
+            const u64 n = ++total;
+            if (logged.load(std::memory_order_relaxed) < 600 || n % 4096 == 0) {
+                ++logged;
+                u64 base = 0;
+                u32 out_size = 0;
+                const u64 hash = WriterOfGuestMemory(addr, &base, &out_size);
+                LOG_ERROR(Render, "cpu read of gpu-written memory at {:#x}: shader {:#x} output "
+                                  "{:#x} size {:#x} ({} reads so far)",
+                          addr, hash, base, out_size, n);
+            }
         }
         const auto handle = [&](VAddr target, u64 target_size) {
             return is_write ? rasterizer->InvalidateMemory(target, target_size, is_gpu_thread)

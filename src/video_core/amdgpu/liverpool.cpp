@@ -18,6 +18,10 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 
+namespace VideoCore {
+extern u64 g_stream_epoch; // buffer_cache.cpp
+} // namespace VideoCore
+
 namespace AmdGpu {
 
 static const char* dcb_task_name{"DCB_TASK"};
@@ -168,6 +172,7 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
         const PM4ItOpcode opcode = header->type3.opcode;
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         state_changed_since_draw = true;
+        ++VideoCore::g_stream_epoch;
         switch (opcode) {
         case PM4ItOpcode::Nop: {
             // const auto* nop = reinterpret_cast<const PM4CmdNop*>(header);
@@ -221,6 +226,7 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
 }
 
 Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<const u32> ccb) {
+    ++VideoCore::g_stream_epoch;
     FIBER_ENTER(dcb_task_name);
 
     cblock.Reset();
@@ -268,6 +274,43 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 break;
             default:
                 state_changed_since_draw = true;
+                break;
+            }
+            // Coarse record of what ran since the last direct draw: 1 context registers,
+            // 2 shader registers other than vertex and pixel user data, 4 vertex or pixel user
+            // data, 8 uconfig registers, 16 index buffer commands, 32 instance count,
+            // 64 anything else that is not a direct draw or padding.
+            switch (opcode) {
+            case PM4ItOpcode::Nop:
+            case PM4ItOpcode::DrawIndex2:
+            case PM4ItOpcode::DrawIndexOffset2:
+            case PM4ItOpcode::DrawIndexAuto:
+                break;
+            case PM4ItOpcode::SetContextReg:
+                change_mask_since_draw |= 1;
+                break;
+            case PM4ItOpcode::SetShReg: {
+                const auto* set_data = reinterpret_cast<const PM4CmdSetData*>(header);
+                const u32 first = set_data->reg_offset;
+                const u32 last = first + count - 2;
+                const bool user_data = (first >= 0xC && last < 0x1C) || (first >= 0x4C && last < 0x5C);
+                change_mask_since_draw |= user_data ? 4 : 2;
+                break;
+            }
+            case PM4ItOpcode::SetUconfigReg:
+                change_mask_since_draw |= 8;
+                break;
+            case PM4ItOpcode::IndexType:
+            case PM4ItOpcode::IndexBase:
+            case PM4ItOpcode::IndexBufferSize:
+                change_mask_since_draw |= 16;
+                break;
+            case PM4ItOpcode::NumInstances:
+                change_mask_since_draw |= 32;
+                break;
+            default:
+                change_mask_since_draw |= 64;
+                ++VideoCore::g_stream_epoch;
                 break;
             }
             switch (opcode) {
@@ -950,6 +993,7 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
 
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         state_changed_since_draw = true;
+        ++VideoCore::g_stream_epoch;
         switch (opcode) {
         case PM4ItOpcode::Nop: {
             const auto* nop = reinterpret_cast<const PM4CmdNop*>(header);

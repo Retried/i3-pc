@@ -43,8 +43,25 @@ struct PassStat {
     u32 draws;
     u64 indices;
     int vx, vy, vw;
+    // How the draws of the pass look: up to 36 and up to 300 indices, drawn with the pipeline
+    // of the draw before, with depth writes on, the depth test of the last one, and how many
+    // different vertex shaders (counted up to eight).
+    u32 tiny{}, small{}, same_pipeline{}, depth_write{}, depth_func{};
+    u64 vs_seen[8]{};
+    u32 vs_count{};
 };
 static std::vector<PassStat> g_pass_stat;
+// Test aid (I3_PASSSTAT): direct draws per shader pair, to tell which shaders issue the many
+// small draws of a scene. Key: vertex and fragment shader hash.
+struct PairStat {
+    u32 draws{};
+    u64 indices{};
+    u32 tiny{};
+};
+static std::map<std::pair<u64, u64>, PairStat> g_pair_stat;
+// Test aid (I3_PASSSTAT): for direct draws that use the pipeline of the draw before, which
+// kinds of commands ran in between (Liverpool::change_mask_since_draw).
+static std::map<u32, u32> g_change_stat;
 struct CsWriter {
     u64 hash;
     u32 size, x, y, z;
@@ -309,6 +326,10 @@ struct DrawStats {
     u64 ns_stage[8]{};
     u64 ns_bind_buffers{}, ns_bind_textures{};
     u64 tsc_stage3{};
+    // Direct draws by stage: filters, pipeline, render state, resources, begin, vertex and
+    // index buffers, descriptors, dynamic state, scheduler begin, draw, reset.
+    u64 ns_direct[11]{};
+    u64 tsc_reset{};
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
     u64 last_tsc = __rdtsc();
     void Tick() {
@@ -328,6 +349,10 @@ struct DrawStats {
                            &tsc_stage3}) {
             *value = u64(double(*value) * scale);
         }
+        for (u64& value : ns_direct) {
+            value = u64(double(value) * scale);
+        }
+        tsc_reset = u64(double(tsc_reset) * scale);
         last = now;
 #ifdef _WIN32
         {
@@ -370,8 +395,28 @@ struct DrawStats {
                     LOG_ERROR(Render, "pass/3s: draws {} indices {} color {:#x} {}x{} depth {:#x} {}x{} vp {},{} w{}",
                               e.draws, e.indices, e.color, e.cw, e.ch, e.depth, e.dw, e.dh, e.vx,
                               e.vy, e.vw);
+                    LOG_ERROR(Render, "pass/3s:    up to 36 indices {} up to 300 {} same pipeline {} "
+                                      "depth write {} depth func {} vertex shaders {}{}",
+                              e.tiny, e.small, e.same_pipeline, e.depth_write, e.depth_func,
+                              e.vs_count, e.vs_count == 8 ? "+" : "");
                 }
                 g_pass_stat.clear();
+                std::vector<std::pair<std::pair<u64, u64>, PairStat>> pairs(g_pair_stat.begin(),
+                                                                            g_pair_stat.end());
+                std::ranges::sort(pairs, [](const auto& a, const auto& b) {
+                    return a.second.draws > b.second.draws;
+                });
+                for (size_t i = 0; i < std::min<size_t>(pairs.size(), 16); ++i) {
+                    const auto& [key, e] = pairs[i];
+                    LOG_ERROR(Render, "pair/3s: draws {} indices {} up to 36 indices {} vs {:#x} "
+                                      "fs {:#x} (of {} pairs)",
+                              e.draws, e.indices, e.tiny, key.first, key.second, pairs.size());
+                }
+                g_pair_stat.clear();
+                for (const auto& [mask, n] : g_change_stat) {
+                    LOG_ERROR(Render, "change/3s: mask {:#x} draws {}", mask, n);
+                }
+                g_change_stat.clear();
             }
             last_thread = thread_ms;
             last_process = process_ms;
@@ -399,6 +444,17 @@ struct DrawStats {
         LOG_ERROR(Render, "bind split ms: buffers {} textures {} repeated {}",
                   ns_bind_buffers / 1000000, ns_bind_textures / 1000000, same_inputs);
         same_pipeline = same_inputs = 0;
+        LOG_ERROR(Render, "direct stages ms: filters {} pipeline {} state {} resources {} begin {} "
+                          "vertex {} index {} descriptors {} dynstate {} sched-begin {} draw {} "
+                          "reset {}",
+                  ns_direct[0] / 1000000, ns_direct[1] / 1000000, ns_direct[2] / 1000000,
+                  ns_direct[3] / 1000000, ns_direct[4] / 1000000, ns_direct[5] / 1000000,
+                  ns_direct[10] / 1000000, ns_direct[6] / 1000000, ns_direct[7] / 1000000,
+                  ns_direct[8] / 1000000, ns_direct[9] / 1000000, tsc_reset / 1000000);
+        for (u64& value : ns_direct) {
+            value = 0;
+        }
+        tsc_reset = 0;
         ns_bind_buffers = ns_bind_textures = 0;
         for (auto& v : ns_stage) {
             v = 0;
@@ -498,6 +554,13 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     SubmitPeriodically(scheduler);
     g_stats.Tick();
     VideoCore::StartThreadSampler();
+    const u32 change_mask = std::exchange(liverpool->change_mask_since_draw, 0u);
+    u64 stage_start = __rdtsc();
+    const auto stage_done = [&stage_start](u32 stage) {
+        const u64 now = __rdtsc();
+        g_stats.ns_direct[stage] += now - stage_start;
+        stage_start = now;
+    };
 
     if (!FilterDraw()) {
         ++g_stats.filtered;
@@ -515,7 +578,9 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         ++g_stats.filtered;
         return;
     }
+    stage_done(0);
     const GraphicsPipeline* pipeline = pipeline_cache.GetGraphicsPipeline();
+    stage_done(1);
     if (!pipeline) {
         ++g_stats.no_pipeline;
         return;
@@ -592,7 +657,30 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
             it = std::prev(g_pass_stat.end());
         }
         ++it->draws;
-        it->indices += u64(regs.num_indices) * regs.num_instances.NumInstances();
+        const u64 n = u64(regs.num_indices) * regs.num_instances.NumInstances();
+        it->indices += n;
+        it->tiny += n <= 36;
+        it->small += n <= 300;
+        static const GraphicsPipeline* previous = nullptr;
+        it->same_pipeline += pipeline == previous;
+        if (pipeline == previous) {
+            ++g_change_stat[change_mask];
+        }
+        previous = pipeline;
+        it->depth_write += regs.depth_control.depth_write_enable;
+        {
+            auto& pair = g_pair_stat[{pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
+                                      pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash}];
+            ++pair.draws;
+            pair.indices += n;
+            pair.tiny += n <= 36;
+        }
+        it->depth_func = u32(regs.depth_control.depth_func);
+        const u64 vs_hash = pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash;
+        if (it->vs_count < 8 &&
+            std::find(it->vs_seen, it->vs_seen + it->vs_count, vs_hash) == it->vs_seen + it->vs_count) {
+            it->vs_seen[it->vs_count++] = vs_hash;
+        }
     }
     VideoCore::OpTrace::Add('D', pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                             pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
@@ -622,8 +710,12 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         return;
     }
 
+    stage_start = __rdtsc();
     PrepareRenderState(pipeline);
-    if (!BindResources(pipeline)) {
+    stage_done(2);
+    const bool bound = BindResources(pipeline);
+    stage_done(3);
+    if (!bound) {
         ++g_stats.bind_failed;
         return;
     }
@@ -650,20 +742,27 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
                   *reinterpret_cast<const u32*>(&regs.depth_control), regs.viewports[0].xscale,
                   regs.viewports[0].yscale);
     }
+    stage_start = __rdtsc();
     const auto state = BeginRendering(pipeline);
+    stage_done(4);
 
     BindVertexBuffers(pipeline);
+    stage_done(5);
     if (is_indexed) {
         BindIndexBuffer(index_offset);
     }
+    stage_done(10);
 
     if (needs_barrier) {
         runtime.FlushBarriers();
     }
 
     pipeline->BindResources(set_writes, push_data);
+    stage_done(6);
     UpdateDynamicState(pipeline, is_indexed);
+    stage_done(7);
     scheduler.BeginRendering(state);
+    stage_done(8);
 
     const auto& vs_info = pipeline->GetStage(Shader::SwStage::Vertex);
     const auto& fetch_shader = pipeline->GetFetchShader();
@@ -680,8 +779,10 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
                     instance_offset);
     }
     DebugState.IncDrawCall();
+    stage_done(9);
 
     ResetBindings(false);
+    g_stats.tsc_reset += __rdtsc() - stage_start;
 }
 
 // Indirect draw arguments read from guest memory and checked (see DrawIndirect); empty when
@@ -1699,9 +1800,13 @@ void Rasterizer::BindVertexBuffers(const GraphicsPipeline* pipeline) {
         const u64 size = memory->ClampRangeSize(range.base_address, range.GetSize());
         std::tie(range.buffer, range.offset) =
             buffer_cache.ObtainBuffer(range.base_address, size, false);
-        needs_barrier |= runtime.IsBufferAccessed(range.buffer, range.offset, size);
-        bound_buffers.emplace_back(range.buffer, range.offset, size,
-                                   vk::AccessFlagBits2::eVertexAttributeRead);
+        // Small vertex ranges are copied into the stream buffer, which needs no barrier
+        // tracking (see BindBuffers).
+        if (range.buffer != &buffer_cache.GetStreamBuffer()) {
+            needs_barrier |= runtime.IsBufferAccessed(range.buffer, range.offset, size);
+            bound_buffers.emplace_back(range.buffer, range.offset, size,
+                                       vk::AccessFlagBits2::eVertexAttributeRead);
+        }
     }
 
     // Bind vertex buffers
@@ -1752,8 +1857,13 @@ void Rasterizer::BindIndexBuffer(u32 index_offset) {
     const u32 index_buffer_size = regs.num_indices * index_size;
     const auto [buffer, offset] =
         buffer_cache.ObtainBuffer(index_address, index_buffer_size, false);
-    needs_barrier |= runtime.IsBufferAccessed(buffer, offset, index_buffer_size);
-    bound_buffers.emplace_back(buffer, offset, index_buffer_size, vk::AccessFlagBits2::eIndexRead);
+    // Small index ranges are copied into the stream buffer, which needs no barrier tracking
+    // (see BindBuffers).
+    if (buffer != &buffer_cache.GetStreamBuffer()) {
+        needs_barrier |= runtime.IsBufferAccessed(buffer, offset, index_buffer_size);
+        bound_buffers.emplace_back(buffer, offset, index_buffer_size,
+                                   vk::AccessFlagBits2::eIndexRead);
+    }
 
     auto& cmdbuf = scheduler.Stream();
     cmdbuf.bindIndexBuffer(buffer->Handle(), offset, index_type);
@@ -2071,12 +2181,20 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                 }
                 push_data.AddOffset(binding.buffer, adjust);
                 buffer_infos.emplace_back(buffer->Handle(), offset_aligned, size + adjust);
-                bound_buffers.emplace_back(buffer, offset, size, src_access);
+                // The stream buffer is only ever written through its mapping, never by the
+                // GPU, so reads of it need no barrier and no bookkeeping. Small read-only
+                // buffers land there for every draw; tracking each copy as a range of its
+                // own was a large part of the per-draw cost.
+                static const bool track_stream = std::getenv("I3_TRACK_STREAM") != nullptr;
+                if (track_stream || buffer != &buffer_cache.GetStreamBuffer()) {
+                    bound_buffers.emplace_back(buffer, offset, size, src_access);
+                    needs_barrier |=
+                        runtime.IsBufferAccessed(buffer, offset, size, desc.is_written);
+                }
                 if (desc.is_written) {
                     // Raw storage-buffer writes can also make an aliased cached image stale.
                     texture_cache.InvalidateMemoryFromGPU(vsharp.base_address, size);
                 }
-                needs_barrier |= runtime.IsBufferAccessed(buffer, offset, size, desc.is_written);
             }
         }
 

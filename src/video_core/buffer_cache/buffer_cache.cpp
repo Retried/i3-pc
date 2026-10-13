@@ -34,6 +34,11 @@
 
 namespace VideoCore {
 
+// Counts the events after which guest memory read by an earlier draw may hold something
+// else: every command that is not a draw, a register write or padding, every compute
+// queue command, every submitted command buffer and every copy back of compute results.
+u64 g_stream_epoch = 0;
+
 static constexpr size_t GDS_BUFFER_SIZE = 64_KB;
 static constexpr size_t STREAM_BUFFER_SIZE = 128_MB;
 
@@ -216,6 +221,8 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     if (ranges.empty()) {
         return;
     }
+    // Guest memory is about to change under earlier stream copies.
+    ++g_stream_epoch;
     u64 total = 0;
     for (const auto& [addr, size] : ranges) {
         total += Common::AlignUp(size, 64);
@@ -380,9 +387,73 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
     static const bool stream_always = std::getenv("SOTC_STREAM_ALWAYS") != nullptr;
     if (!is_written && size <= STREAM_THRESHOLD &&
         (stream_always || !IsRegionGpuModified(device_addr, size))) {
+        {
+            // Test aid (I3_STREAMSTAT): how many of these copies repeat an address and size
+            // already copied since the last Vulkan submit, and how many bytes they carry.
+            static const bool stat = std::getenv("I3_STREAMSTAT") != nullptr;
+            if (stat) {
+                static std::unordered_map<u64, u32> seen;
+                static u64 tick = 0, copies = 0, repeats = 0, bytes = 0, repeat_bytes = 0;
+                static auto last = std::chrono::steady_clock::now();
+                if (const u64 now_tick = scheduler.CurrentTick(); now_tick != tick) {
+                    tick = now_tick;
+                    seen.clear();
+                }
+                ++copies;
+                bytes += size;
+                if (!seen.try_emplace((device_addr << 16) ^ size, 0).second) {
+                    ++repeats;
+                    repeat_bytes += size;
+                }
+                if (const auto now = std::chrono::steady_clock::now();
+                    now - last >= std::chrono::seconds(3)) {
+                    last = now;
+                    LOG_ERROR(Render, "stream/3s: copies {} bytes {} repeats {} repeat bytes {}",
+                              copies, bytes, repeats, repeat_bytes);
+                    copies = repeats = bytes = repeat_bytes = 0;
+                }
+            }
+        }
+        // Draws bind the same small read-only buffers over and over: in the heaviest scenes two
+        // of three of these copies repeat an address and size copied a moment ago. Until
+        // something can have changed that memory (see g_stream_epoch) the earlier copy is
+        // still what the GPU has to read, so it is bound again instead of copied again.
+        static const bool reuse_on = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                                     std::getenv("I3_NO_STREAM_REUSE") == nullptr;
+        struct ReuseSlot {
+            VAddr addr;
+            u32 size;
+            u32 generation;
+            u64 offset;
+        };
+        static std::vector<ReuseSlot> reuse_slots(1u << 16);
+        static u32 reuse_generation = 1;
+        static u64 reuse_epoch = 0, reuse_tick = 0, reuse_last_offset = 0;
+        ReuseSlot* slot = nullptr;
+        if (reuse_on) {
+            if (const u64 tick = scheduler.CurrentTick();
+                tick != reuse_tick || g_stream_epoch != reuse_epoch) {
+                reuse_tick = tick;
+                reuse_epoch = g_stream_epoch;
+                ++reuse_generation;
+            }
+            slot = &reuse_slots[((device_addr >> 2) * 0x9E3779B97F4A7C15ULL ^ size) >> 48];
+            if (slot->generation == reuse_generation && slot->addr == device_addr &&
+                slot->size == size) {
+                return {&stream_buffer, slot->offset};
+            }
+        }
         const auto [data, offset] = stream_buffer.Map(size, instance.UniformMinAlignment());
         memory->CopySparseMemory(device_addr, data, size);
         stream_buffer.Commit();
+        if (slot) {
+            if (offset < reuse_last_offset) {
+                // The stream buffer started over: earlier copies are about to be overwritten.
+                ++reuse_generation;
+            }
+            reuse_last_offset = offset;
+            *slot = {device_addr, size, reuse_generation, offset};
+        }
         return {&stream_buffer, offset};
     }
     const u64 first_block = device_addr >> block_shift;

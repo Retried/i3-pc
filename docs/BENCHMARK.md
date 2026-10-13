@@ -266,3 +266,20 @@ No clip has a frame over 51 ms. A first recording of the same seven an hour earl
 44.4, 46.9, 47.8, 47.2, 51.5 and 59.8 FPS, with one frame of 150 to 283 ms in three of them.
 The clips of 2026-10-11 (build before the copy-back changes, 21 seconds, another display rate)
 gave 39.2, 45.1, 46.8, 50.0, 47.8, 53.6 and 60.0 FPS.
+
+## Seattle, looking at the city (2026-10-13)
+
+Steered by hand from the Seattle save (`livestart.sh`, `livestep.sh`). Looking along the wrecked
+bridge the game holds 60 FPS, which is what the bridge clip and the earlier bridge runs show.
+Turning the camera to the city (the checkpoint across the water, the Space Needle behind it)
+the optimized build falls to 21 to 22 FPS and stays there: about 45 frames over 40 ms in every
+3 seconds, none over 67 ms. The render thread is then busy 2.9 of every 3.0 seconds; two game
+threads sit at 95 and 72 %; the graphics card is not the limit.
+
+Profile of that view (`cityprof.sh`, test build, 25.7 FPS, 38 ms of render-thread time per
+frame): no single hot spot. The time is spread over the work done for every draw: copying small
+buffers into the stream buffer (about 10 %), looking up the shader variant for each stage
+(about 12 %), binding buffers and textures, the barrier bookkeeping for buffers (about 8 %) and
+page protection for uploads (about 8 %). The parts the runtime times itself (copy back,
+dispatches, flushes) are 0.4 of the 2.9 seconds. Reaching 60 there needs the per-draw cost cut
+to less than half or spread over more than one thread; neither is done.

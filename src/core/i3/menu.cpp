@@ -24,6 +24,7 @@
 
 #include "common/recording.h"
 #include "core/i3/first_run.h"
+#include "core/i3/lang.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "core/emulator_settings.h"
@@ -51,6 +52,10 @@ void ToggleSimpleFps();
 namespace I3::Menu {
 
 namespace {
+
+// Texts are kept in English in the tables and rows below (lines are matched by their English
+// label) and put into the console language where they are drawn or handed out for drawing.
+using Lang::Tr;
 
 enum class Page { Main, Controls, Graphics, Achievements, Start, Options };
 
@@ -193,7 +198,7 @@ std::string DisplayName(const std::string& key) {
     };
     for (const auto& [name, shown] : names) {
         if (key == name) {
-            return shown;
+            return Tr(shown);
         }
     }
     std::string upper = key;
@@ -446,6 +451,22 @@ int SharpenIndex() {
     return IndexOf(SharpenValues, static_cast<int>(EmulatorSettings.GetRcasAttenuation()), 2);
 }
 
+// The languages the game ships, under their own names (these are never translated), and the
+// console language id of each.
+constexpr std::array<const char*, 14> LanguageNames{
+    "English", "Français", "Español", "Deutsch", "Italiano", "Nederlands", "Português",
+    "Русский", "Suomi",    "Svenska", "Dansk",   "Norsk",    "Polski",     "Türkçe"};
+constexpr std::array<int, 14> LanguageIds{1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, 19};
+
+/// Index of the stored console language among the game's. The regional variants count as the
+/// language they are shown in; a language the game lacks counts as English.
+int LanguageIndex() {
+    const int stored = EmulatorSettings.GetConsoleLanguage();
+    const int id =
+        stored == 18 ? 1 : stored == 22 ? 2 : stored == 20 ? 3 : stored == 17 ? 7 : stored;
+    return IndexOf(LanguageIds, id, 0);
+}
+
 struct Row {
     std::string label;
     std::string value;
@@ -460,116 +481,131 @@ std::vector<Row> BuildRows() {
             fmt::format("{} / {}", Achievements::UnlockedCount(), Achievements::Count());
         if (page == Page::Start) {
             if (has_saves) {
-                rows.push_back({"CONTINUE", "", "Carry on from your last save"});
+                rows.push_back({"CONTINUE", "", Tr("Carry on from your last save")});
                 rows.push_back({"NEW GAME", "",
-                                "Your last save loads first; the game's Options screen then "
-                                "opens on New Game (after a cutscene, if the save starts in one: "
-                                "press Options yourself)"});
+                                Tr("Your last save loads first; the game's Options screen then "
+                                   "opens on New Game (after a cutscene, if the save starts in one: "
+                                   "press Options yourself)")});
                 rows.push_back({"LOAD GAME", "",
-                                "Your last save loads first; the game's Options screen then "
-                                "opens on Load Game (after a cutscene, if the save starts in one: "
-                                "press Options yourself)"});
+                                Tr("Your last save loads first; the game's Options screen then "
+                                   "opens on Load Game (after a cutscene, if the save starts in one: "
+                                   "press Options yourself)")});
             } else {
-                rows.push_back({"NEW GAME", "", "Start the game"});
+                rows.push_back({"NEW GAME", "", Tr("Start the game")});
             }
         } else {
-            rows.push_back({"RESUME", "", "Return to the game"});
+            rows.push_back({"RESUME", "", Tr("Return to the game")});
         }
         rows.push_back({"OPTIONS", "",
                         page == Page::Start
-                            ? "Graphics, controls, gameplay, sound and interface"
-                            : "Graphics, controls, gameplay, sound, interface, save and load"});
-        rows.push_back({"ACHIEVEMENTS", trophies, "Trophies of the game unlocked in this build"});
+                            ? Tr("Graphics, controls, gameplay, sound and interface")
+                            : Tr("Graphics, controls, gameplay, sound, interface, save and load")});
+        rows.push_back(
+            {"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
         if (page == Page::Start) {
-            rows.push_back({"QUIT", quit_armed ? "Press again to quit" : "", "Close the game"});
+            rows.push_back(
+                {"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
         } else {
-            rows.push_back({"RETURN TO MAIN MENU", quit_armed ? "Press again to confirm" : "",
-                            quit_armed ? "Progress since the last checkpoint is lost, and the game "
-                                         "loads again (about 40 seconds)"
-                                       : "Back to the start screen. Quit is there"});
+            rows.push_back({"RETURN TO MAIN MENU", quit_armed ? Tr("Press again to confirm") : "",
+                            quit_armed ? Tr("Progress since the last checkpoint is lost, and the game "
+                                            "loads again (about 40 seconds)")
+                                       : Tr("Back to the start screen. Quit is there")});
         }
     } else if (page == Page::Options) {
         // Gameplay, Sound and Interface are the game's own settings, kept in its saves: these
         // lines open the game's Options screen on that section instead of copying them.
         const char* how = home == Page::Main
-                              ? "Opens the game's own Options screen there"
-                              : has_saves ? "Your last save loads first; the game's Options screen "
-                                            "then opens there"
-                                          : "Available from the pause menu once a game has started";
-        rows.push_back({"GRAPHICS", "", "Frame rate, display, upscaling, effects and shadows"});
-        rows.push_back({"CONTROLS", "", "Change the keyboard and mouse bindings"});
+                              ? Tr("Opens the game's own Options screen there")
+                              : has_saves ? Tr("Your last save loads first; the game's Options screen "
+                                               "then opens there")
+                                          : Tr("Available from the pause menu once a game has started");
+        rows.push_back({"GRAPHICS", "", Tr("Frame rate, display, upscaling, effects and shadows")});
+        rows.push_back({"CONTROLS", "", Tr("Change the keyboard and mouse bindings")});
         rows.push_back({"GAMEPLAY", "",
-                        fmt::format("Difficulty, aim sensitivity, photo mode. {}", how)});
-        rows.push_back({"SOUND", "",
-                        fmt::format("Dialogue, music and effects volume, audio mix. {}", how)});
-        rows.push_back({"INTERFACE", "", fmt::format("Subtitles and the HUD. {}", how)});
+                        fmt::format(fmt::runtime(Tr("Difficulty, aim sensitivity, photo mode. {}")),
+                                    how)});
+        rows.push_back(
+            {"SOUND", "",
+             fmt::format(fmt::runtime(Tr("Dialogue, music and effects volume, audio mix. {}")),
+                         how)});
+        rows.push_back(
+            {"INTERFACE", "", fmt::format(fmt::runtime(Tr("Subtitles and the HUD. {}")), how)});
         if (home == Page::Main) {
-            rows.push_back({"SAVE AND LOAD", "",
-                            "Save Game, New Game and Load Game on the game's own Options screen"});
+            rows.push_back(
+                {"SAVE AND LOAD", "",
+                 Tr("Save Game, New Game and Load Game on the game's own Options screen")});
         }
-        rows.push_back({"BACK", "", "Return to the previous menu"});
+        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
     } else if (page == Page::Achievements) {
         for (int id = 0; id < Achievements::Count(); id++) {
             const u64 when = Achievements::UnlockedAt(id);
-            std::string state = "Locked";
+            std::string state = Tr("Locked");
             if (when != 0) {
                 const std::time_t time = static_cast<std::time_t>(when);
                 char text[32]{};
                 std::strftime(text, sizeof(text), "%Y-%m-%d", std::localtime(&time));
-                state = fmt::format("Unlocked {}", text);
+                state = fmt::format(fmt::runtime(Tr("Unlocked {}")), text);
             }
             rows.push_back({Achievements::Name(id), state, Achievements::Description(id)});
         }
-        rows.push_back({"BACK", "", "Return to the previous menu"});
+        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
     } else if (page == Page::Controls) {
         const auto lines = ReadLines();
         for (const auto& action : Actions) {
             rows.push_back({action.label, KeysOf(lines, action.pad),
-                            "Confirm, then press the key or mouse button to use"});
+                            Tr("Confirm, then press the key or mouse button to use")});
         }
-        rows.push_back({"BACK", "", "Return to the previous menu"});
+        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
     } else {
         const u32 cap = EmulatorSettings.GetVblankFrequency();
-        rows.push_back({"Frame Rate Cap", cap >= 1000 ? "Uncapped" : fmt::format("{}", cap),
-                        "Applies the next time the game starts", true});
-        rows.push_back({"VSync", EmulatorSettings.GetPresentMode() == "Fifo" ? "On" : "Off",
-                        "Applies the next time the game starts", true});
-        rows.push_back({"Fullscreen", EmulatorSettings.IsFullScreen() ? "On" : "Off",
-                        "Applies at once", true});
+        rows.push_back({"Frame Rate Cap", cap >= 1000 ? Tr("Uncapped") : fmt::format("{}", cap),
+                        Tr("Applies the next time the game starts"), true});
+        rows.push_back(
+            {"VSync", EmulatorSettings.GetPresentMode() == "Fifo" ? Tr("On") : Tr("Off"),
+             Tr("Applies the next time the game starts"), true});
+        rows.push_back({"Fullscreen", EmulatorSettings.IsFullScreen() ? Tr("On") : Tr("Off"),
+                        Tr("Applies at once"), true});
         rows.push_back({"Window Size",
                         fmt::format("{} x {}", EmulatorSettings.GetWindowWidth(),
                                     EmulatorSettings.GetWindowHeight()),
-                        "Applies at once when not in fullscreen", true});
-        rows.push_back({"Upscaling (FSR)", EmulatorSettings.IsFsrEnabled() ? "On" : "Off",
-                        "Scales the 1080p picture to the window. Applies at once", true});
-        rows.push_back({"Sharpening", SharpenNames[SharpenIndex()],
-                        "Sharpening pass of the upscaler. Applies at once", true});
-        rows.push_back({"Frame Rate Counter", fps_shown ? "On" : "Off", "Applies at once", true});
+                        Tr("Applies at once when not in fullscreen"), true});
+        rows.push_back({"Upscaling (FSR)", EmulatorSettings.IsFsrEnabled() ? Tr("On") : Tr("Off"),
+                        Tr("Scales the 1080p picture to the window. Applies at once"), true});
+        rows.push_back({"Sharpening", Tr(SharpenNames[SharpenIndex()]),
+                        Tr("Sharpening pass of the upscaler. Applies at once"), true});
+        rows.push_back({"Frame Rate Counter", fps_shown ? Tr("On") : Tr("Off"),
+                        Tr("Applies at once"), true});
         const int preset = CurrentPreset();
-        rows.push_back({"Effects Preset", preset < 0 ? "Custom" : PresetNames[preset],
-                        "Original keeps every effect; Sharp drops anti-aliasing; Minimal drops all",
-                        true});
+        rows.push_back(
+            {"Effects Preset", preset < 0 ? Tr("Custom") : Tr(PresetNames[preset]),
+             Tr("Original keeps every effect; Sharp drops anti-aliasing; Minimal drops all"),
+             true});
         for (const auto& effect : effects) {
-            rows.push_back({effect.label, effect.on ? "On" : "Off", effect.description, true});
+            rows.push_back(
+                {effect.label, effect.on ? Tr("On") : Tr("Off"), Tr(effect.description), true});
         }
-        rows.push_back({"Game Frame Limit", unlock_frame_rate ? "Unlimited" : "Game Setting",
-                        "Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
-                        "Rate). Applies at once",
-                        true});
+        rows.push_back(
+            {"Game Frame Limit", unlock_frame_rate ? Tr("Unlimited") : Tr("Game Setting"),
+             Tr("Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
+                "Rate). Applies at once"),
+             true});
         const int shadow_preset = CurrentShadowPreset();
-        rows.push_back({"Shadow Preset",
-                        shadow_preset < 0 ? "Custom" : ShadowPresetNames[shadow_preset],
-                        "Sets the three shadow options below. Original keeps the game's picture",
+        rows.push_back(
+            {"Shadow Preset",
+             shadow_preset < 0 ? Tr("Custom") : Tr(ShadowPresetNames[shadow_preset]),
+             Tr("Sets the three shadow options below. Original keeps the game's picture"), true});
+        rows.push_back({"Sun Shadows", Tr(ShadowRateNames[shadow_rate[0]]),
+                        Tr("How often sun shadows are redrawn: the largest cost of a frame. Applies at once"),
                         true});
-        rows.push_back({"Sun Shadows", ShadowRateNames[shadow_rate[0]],
-                        "How often sun shadows are redrawn: the largest cost of a frame. Applies at once",
+        rows.push_back({"Light Shadows", Tr(ShadowRateNames[shadow_rate[1]]),
+                        Tr("The same for shadows cast by lamps and fires. Applies at once"), true});
+        rows.push_back({"Shadow Detail", Tr(ShadowDetailNames[shadow_detail]),
+                        Tr("Reduced and Low leave small objects out of the sun's shadows. Applies at once"),
                         true});
-        rows.push_back({"Light Shadows", ShadowRateNames[shadow_rate[1]],
-                        "The same for shadows cast by lamps and fires. Applies at once", true});
-        rows.push_back({"Shadow Detail", ShadowDetailNames[shadow_detail],
-                        "Reduced and Low leave small objects out of the sun's shadows. Applies at once",
-                        true});
-        rows.push_back({"BACK", "", "Return to the previous menu"});
+        // The game reads the language when it starts, and so do these menus.
+        rows.push_back({"Language", LanguageNames[LanguageIndex()],
+                        Tr("Applies the next time the game starts"), true});
+        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
     }
     return rows;
 }
@@ -661,6 +697,12 @@ void AdjustGraphics(int row, int step) {
             shadow_detail = (shadow_detail + step + 3) % 3;
             ApplyEffects();
             SaveEffects();
+        } else if (kind == static_cast<int>(shadow_rate.size()) + 1) {
+            // Language: kept in the emulator's settings, where the game reads it at its start.
+            const int count = static_cast<int>(LanguageIds.size());
+            EmulatorSettings.SetConsoleLanguage(
+                LanguageIds[(LanguageIndex() + step + count) % count]);
+            EmulatorSettings.Save();
         }
         return;
     }
@@ -951,6 +993,20 @@ std::string EntryCase(const std::string& label) {
     return out;
 }
 
+/// A line's label as it is drawn: in the console language when there is a translation (the
+/// table holds those in entry case already), else the English one through EntryCase.
+std::string Shown(const std::string& label) {
+    const std::string translated = Tr(label);
+    return translated == label ? EntryCase(label) : translated;
+}
+
+/// A title or section heading as it is drawn. Headings are capitals: a translation is put in
+/// capitals here, the English text is drawn as written ("inFAMOUS SECOND SON").
+std::string Heading(const std::string& english) {
+    const std::string translated = Tr(english);
+    return translated == english ? english : Lang::Upper(translated);
+}
+
 /// The heading drawn over a line: empty for none, a single space for a gap without a heading.
 std::string SectionOf(Page of, const std::string& label, int index) {
     if (label == "BACK") {
@@ -971,7 +1027,8 @@ std::string SectionOf(Page of, const std::string& label, int index) {
                : label == "Upscaling (FSR)" ? "IMAGE"
                : label == "Effects Preset" ? "EFFECTS"
                : label == "Game Frame Limit" ? "FRAME RATE"
-               : label == "Shadow Preset" ? "SHADOWS" : "";
+               : label == "Shadow Preset" ? "SHADOWS"
+               : label == "Language" ? "LANGUAGE" : "";
     case Page::Controls:
         return index == 0 ? "ACTIONS"
                : label == "L3" ? "BUTTONS"
@@ -1275,7 +1332,7 @@ void Draw() {
                         : page == Page::Achievements ? "ACHIEVEMENTS"
                                                      : "GRAPHICS";
     Narrow(draw, 94.0f * scale, {panel_min.x + 32.0f * scale, panel_min.y + 24.0f * scale}, Yellow,
-           title, TitleSqueeze);
+           Heading(title), TitleSqueeze);
 
     const float heading_x = panel_min.x + 71.0f * scale;
     const float left = panel_min.x + 99.0f * scale;
@@ -1321,8 +1378,8 @@ void Draw() {
         const std::string section = SectionOf(page, row.label, i);
         // A heading cut by the top edge of the list is left out rather than drawn in part.
         if (!section.empty() && section != " " && row_y - heading_height >= view_top - 1.0f) {
-            Narrow(draw, heading_size, {heading_x, row_y - heading_height}, White, section,
-                   HeadingSqueeze);
+            Narrow(draw, heading_size, {heading_x, row_y - heading_height}, White,
+                   Heading(section), HeadingSqueeze);
         }
         const bool hovered = mouse.x >= left && mouse.x <= right && mouse.y >= row_y &&
                              mouse.y < row_y + row_height && mouse.y >= view_top &&
@@ -1339,12 +1396,12 @@ void Draw() {
         }
         const bool current = i == selected;
         const ImU32 color = current ? Yellow : White;
-        const std::string label = EntryCase(row.label);
+        const std::string label = Shown(row.label);
         const float text_y = row_y + (row_height - TextSize(text_size, label).y) * 0.5f;
         Narrow(draw, text_size, {left, text_y}, color, label, EntrySqueeze);
         std::string value = row.value;
         if (current && capturing) {
-            value = "Press a key...";
+            value = Tr("Press a key...");
         } else if (row.adjustable && current) {
             value = "<  " + value + "  >";
         }
@@ -1372,15 +1429,14 @@ void Draw() {
     const float note_x = panel_max.x + 52.0f * scale;
     const float note_right = std::min(display.x - 60.0f * scale, note_x + 700.0f * scale);
     float note_y = 400.0f * scale;
-    std::string note_title = current_row.label;
-    std::transform(note_title.begin(), note_title.end(), note_title.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    // In capitals, through the language's own letters (std::toupper only knows ASCII).
+    const std::string note_title = Lang::Upper(Tr(current_row.label));
     Narrow(draw, 34.0f * scale, {note_x, note_y}, White, note_title, HeadingSqueeze);
     note_y += 40.0f * scale;
     draw->AddLine({note_x, note_y}, {note_right, note_y}, IM_COL32(236, 236, 236, 150), scale);
     note_y += 14.0f * scale;
     const std::string note =
-        capturing ? "Press the key or mouse button for this action. Esc keeps the current one."
+        capturing ? Tr("Press the key or mouse button for this action. Esc keeps the current one.")
                   : current_row.description;
     const float note_size = 26.0f * scale;
     draw->AddText(MenuFont(), note_size, {note_x, note_y}, White, note.c_str(), nullptr,
@@ -1388,17 +1444,17 @@ void Draw() {
     note_y += MenuFont()->CalcTextSizeA(note_size, FLT_MAX, note_right - note_x, note.c_str()).y;
     if (restart_note && page == Page::Graphics) {
         draw->AddText(MenuFont(), note_size, {note_x, note_y + 18.0f * scale}, Yellow,
-                      "Frame rate cap and VSync changes take effect the next time the game "
-                      "starts.",
+                      Tr("Frame rate cap and VSync changes take effect the next time the game "
+                         "starts."),
                       nullptr, note_right - note_x);
     }
 
     // Key hints on a dark strip at the bottom right, as on the game's screen.
     const float hint_y = 952.0f * scale;
     const bool on_top = page == Page::Main || page == Page::Start || page == Page::Options;
-    const char* back_label = page == Page::Main ? "Resume" : "Back";
+    const char* back_label = page == Page::Main ? Tr("Resume") : Tr("Back");
     const bool show_back = page != Page::Start;
-    const char* act_label = current_row.adjustable ? "Change" : "Select";
+    const char* act_label = current_row.adjustable ? Tr("Change") : Tr("Select");
     const char* act_keys = current_row.adjustable ? "A  D" : "ENTER";
     const char* act_pad = current_row.adjustable ? "D-PAD" : "X";
     (void)on_top;

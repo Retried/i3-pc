@@ -20,6 +20,7 @@
 #include "common/singleton.h"
 #include "core/file_sys/fs.h"
 #include "core/i3/achievements.h"
+#include "core/i3/lang.h"
 #include "core/libraries/np/trophy_ui.h"
 
 namespace I3::Achievements {
@@ -126,7 +127,7 @@ void EnsureLoaded() {
     }
     loaded = true;
     for (size_t i = 0; i < entries.size(); i++) {
-        entries[i].name = fmt::format("Trophy {}", i + 1);
+        entries[i].name = fmt::format(fmt::runtime(Lang::Tr("Trophy {}")), i + 1);
     }
     ExtractIcons();
     std::string line;

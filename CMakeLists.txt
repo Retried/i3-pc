@@ -741,6 +741,8 @@ set(DEV_TOOLS src/core/devtools/layer.cpp
               src/core/i3/achievements.h
               src/core/i3/first_run.cpp
               src/core/i3/first_run.h
+              src/core/i3/lang.cpp
+              src/core/i3/lang.h
               src/core/i3/menu.cpp
               src/core/i3/menu.h
               src/core/devtools/layer.h

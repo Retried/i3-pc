@@ -38,6 +38,7 @@ namespace VideoCore {
 // else: every command that is not a draw, a register write or padding, every compute
 // queue command, every submitted command buffer and every copy back of compute results.
 u64 g_stream_epoch = 0;
+static u64 mirror_words_kept = 0;
 
 static constexpr size_t GDS_BUFFER_SIZE = 64_KB;
 static constexpr size_t STREAM_BUFFER_SIZE = 128_MB;
@@ -221,6 +222,16 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     if (ranges.empty()) {
         return;
     }
+    {
+        // Words of compute results left out because the game had rewritten them first.
+        static auto last = std::chrono::steady_clock::now();
+        if (const auto now = std::chrono::steady_clock::now();
+            now - last >= std::chrono::seconds(3)) {
+            last = now;
+            LOG_ERROR(Render, "copy back: {} result words left out, rewritten by the game", mirror_words_kept);
+            mirror_words_kept = 0;
+        }
+    }
     // Guest memory is about to change under earlier stream copies.
     ++g_stream_epoch;
     u64 total = 0;
@@ -313,11 +324,30 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
             continue;
         }
         // Changed stretches, joined over gaps under 64 bytes, each written with one call.
+        // The copy back lands after the game has been told that its compute work is done
+        // (flushing at every such signal halves the frame rate), so the game may already have
+        // given the memory another use. A word the game has written since the dispatch is
+        // newer than the result and is left alone: it is told from the snapshot taken then.
+        static const bool keep_game_writes = std::getenv("I3_MIRROR_CLOBBER") == nullptr;
+        static std::vector<u8> current;
+        if (keep_game_writes) {
+            current.resize(size);
+            memory->CopySparseMemory(addr, current.data(), size);
+        }
         constexpr u32 Gap = 64;
         u32 start = size;
         u32 end = 0;
+        const auto write_stretch = [&] {
+            if (start != size) {
+                memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start,
+                                        end - start);
+                start = size;
+            }
+        };
         for (u32 at = 0; at < size; at += 4) {
             const u32 step = std::min(4u, size - at);
+            bool changed;
+            bool rewritten = false;
             if (step == 4) {
                 // Whole words are compared in registers: this loop runs over every pending
                 // output of every frame.
@@ -325,25 +355,35 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
                 u32 then;
                 std::memcpy(&now, gpu + at, 4);
                 std::memcpy(&then, before + at, 4);
-                if (now == then) {
-                    continue;
+                changed = now != then;
+                if (keep_game_writes) {
+                    u32 held;
+                    std::memcpy(&held, current.data() + at, 4);
+                    rewritten = held != then;
                 }
-            } else if (std::memcmp(gpu + at, before + at, step) == 0) {
+            } else {
+                changed = std::memcmp(gpu + at, before + at, step) != 0;
+                rewritten = keep_game_writes &&
+                            std::memcmp(current.data() + at, before + at, step) != 0;
+            }
+            if (rewritten) {
+                // Never part of a stretch, not even of a gap inside one.
+                write_stretch();
+                mirror_words_kept += changed;
+                continue;
+            }
+            if (!changed) {
                 continue;
             }
             if (start != size && at - end >= Gap) {
-                memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start,
-                                        end - start);
-                start = size;
+                write_stretch();
             }
             if (start == size) {
                 start = at;
             }
             end = at + step;
         }
-        if (start != size) {
-            memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start, end - start);
-        }
+        write_stretch();
     }
     pending_mirror_ranges.Clear();
     unissued_mirrors.clear();

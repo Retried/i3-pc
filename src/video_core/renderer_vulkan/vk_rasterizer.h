@@ -85,6 +85,10 @@ public:
 
     /// Copies pending compute outputs back into guest memory.
     void FlushMirrors(u32 source);
+    /// True while compute results wait for their copy back to guest memory.
+    bool HasPendingMirrors() const {
+        return !pending_mirrors.empty();
+    }
     void OnFence();
 
     PipelineCache& GetPipelineCache() {

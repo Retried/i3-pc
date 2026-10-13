@@ -14,9 +14,11 @@
 #define MINIMP3_IMPLEMENTATION
 #include <minimp3.h>
 
+#include "common/elf_info.h"
 #include "common/logging/formatter.h"
 #include "common/path_util.h"
 #include "core/emulator_settings.h"
+#include "core/i3/lang.h"
 #include "core/libraries/np/trophy_ui.h"
 
 CMRC_DECLARE(res);
@@ -264,7 +266,11 @@ void TrophyUI::Draw() {
         }
 
         // Displays the name of the trophy
-        const std::string combinedString = "Trophy earned!\n" + trophy_name;
+        // The inFAMOUS Second Son build shows the line in the language of its menus; every
+        // other title gets the text as it is.
+        static const bool i3_build = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
+        const char* earned = i3_build ? I3::Lang::Tr("Trophy earned!") : "Trophy earned!";
+        const std::string combinedString = std::string(earned) + "\n" + trophy_name;
         const float wrap_width =
             CalcWrapWidthForPos(GetCursorScreenPos(), (window_size.x - (60 * AdjustWidth)));
         SetWindowFontScale(1.2 * AdjustHeight);
@@ -288,7 +294,7 @@ void TrophyUI::Draw() {
         }
 
         ImGui::PushTextWrapPos(window_size.x - (60 * AdjustWidth));
-        TextWrapped("Trophy earned!\n%s", trophy_name.c_str());
+        TextWrapped("%s\n%s", earned, trophy_name.c_str());
         ImGui::SameLine(window_size.x - (60 * AdjustWidth));
 
         // Displays the trophy icon

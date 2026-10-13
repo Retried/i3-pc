@@ -17,6 +17,7 @@
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
 #include "core/i3/first_run.h"
+#include "core/i3/lang.h"
 #include "core/i3/menu.h"
 
 #ifdef _WIN32
@@ -294,9 +295,10 @@ void DrawIntro() {
     alpha = alpha * alpha * (3.0f - 2.0f * alpha);
     ImFont* font = Menu::Font();
     const float size = 54.0f * display.y / 1080.0f;
-    const ImVec2 extent = font->CalcTextSizeA(size, FLT_MAX, 0.0f, Lines[line]);
+    const char* text = Lang::Tr(Lines[line]);
+    const ImVec2 extent = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
     draw->AddText(font, size, {(display.x - extent.x) * 0.5f, (display.y - extent.y) * 0.5f},
-                  IM_COL32(236, 236, 236, static_cast<int>(255.0f * alpha)), Lines[line]);
+                  IM_COL32(236, 236, 236, static_cast<int>(255.0f * alpha)), text);
 }
 
 } // namespace I3::FirstRun

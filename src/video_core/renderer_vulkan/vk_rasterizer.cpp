@@ -322,6 +322,11 @@ struct DrawStats {
     u64 ns_pipeline{}, ns_bind{}, ns_draw_total{}, ns_dispatch_total{}, ns_mirror{};
     u32 flushes{};
     u32 flush_source[6]{};
+    // Completion signals (end of sequence, release, fence) that passed while compute results
+    // still waited for their copy back, and how many outputs waited in all.
+    u32 unflushed_signal[6]{};
+    u32 forced_flushes{};
+    u64 unflushed_outputs{};
     u32 same_pipeline{}, same_inputs{};
     u64 ns_stage[8]{};
     u64 ns_bind_buffers{}, ns_bind_textures{};
@@ -433,6 +438,15 @@ struct DrawStats {
         flushes = 0;
         LOG_ERROR(Render, "flush sources: eop {} submit {} immediate {}", flush_source[1],
                   flush_source[3], flush_source[5]);
+        LOG_ERROR(Render, "signals with results pending: eos {} release {} fence {} outputs {}, "
+                          "flushes forced for argument windows {}",
+                  unflushed_signal[0], unflushed_signal[2], unflushed_signal[4],
+                  unflushed_outputs, forced_flushes);
+        forced_flushes = 0;
+        for (auto& v : unflushed_signal) {
+            v = 0;
+        }
+        unflushed_outputs = 0;
         for (auto& v : flush_source) {
             v = 0;
         }
@@ -803,6 +817,47 @@ static void EmitCheckedDraws(Stream& cmdbuf, bool is_indexed) {
     }
 }
 
+// Compute outputs that hold the argument slots of indirect draws. The game reads the counts in
+// them on the CPU as soon as it is told the compute work is done (a crash in long fire fights
+// when they arrive later: a negative count indexes an array), and they are larger than the
+// copy-back limit. Such an output is learned when a draw first takes its arguments from it;
+// from then on it is copied back whatever its size, at the next completion signal.
+// I3_NO_ARG_WINDOWS=1 switches this off.
+struct ArgWindows {
+    std::vector<std::pair<VAddr, u32>> large_outputs; // seen in dispatches, above the limit
+    std::vector<VAddr> learned;                       // bases of outputs draws took arguments from
+    bool urgent{};
+    bool Enabled() const {
+        static const bool on = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                               std::getenv("I3_NO_ARG_WINDOWS") == nullptr;
+        return on;
+    }
+    void NoteOutput(VAddr base, u32 size) {
+        for (const auto& [b, n] : large_outputs) {
+            if (b == base && n == size) {
+                return;
+            }
+        }
+        if (large_outputs.size() < 4096) {
+            large_outputs.emplace_back(base, size);
+        }
+    }
+    void NoteArgument(VAddr address) {
+        for (const auto& [base, size] : large_outputs) {
+            if (address >= base && address < base + size &&
+                std::ranges::find(learned, base) == learned.end()) {
+                learned.push_back(base);
+                LOG_INFO(Render, "argument window learned: {:#x} size {:#x} ({} so far)", base,
+                         size, learned.size());
+            }
+        }
+    }
+    bool IsLearned(VAddr base) const {
+        return std::ranges::find(learned, base) != learned.end();
+    }
+};
+static ArgWindows g_arg_windows;
+
 static bool is_infamous_args_mirror() {
     return Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
            std::getenv("I3_NO_ARG_MIRROR") == nullptr;
@@ -849,6 +904,9 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
             // and then a count that passed the check). The slots themselves are copied back,
             // just their bytes. I3_NO_ARG_MIRROR=1 turns this off.
             static const bool mirror_args = is_infamous_args_mirror();
+            if (gpu_written && g_arg_windows.Enabled()) {
+                g_arg_windows.NoteArgument(arg_address + offset);
+            }
             if (mirror_args && gpu_written && slots != 0) {
                 const u32 bytes = stride * slots;
                 pending_mirrors.emplace_back(arg_address + offset, bytes);
@@ -1358,6 +1416,13 @@ void Rasterizer::DispatchDirect() {
         const auto sharp = desc.GetSharp(cs);
         if (sharp.base_address != 0 && sharp.GetSize() != 0 && sharp.GetSize() <= mirror_limit) {
             mirrors.emplace_back(sharp.base_address, sharp.GetSize());
+        } else if (sharp.base_address != 0 && sharp.GetSize() > mirror_limit &&
+                   sharp.GetSize() <= (1u << 19) && g_arg_windows.Enabled()) {
+            g_arg_windows.NoteOutput(sharp.base_address, sharp.GetSize());
+            if (g_arg_windows.IsLearned(sharp.base_address)) {
+                mirrors.emplace_back(sharp.base_address, sharp.GetSize());
+                g_arg_windows.urgent = true;
+            }
         }
     }
     ResetBindings(true);
@@ -1485,8 +1550,17 @@ void Rasterizer::FlushMirrors(u32 source) {
         const char* value = std::getenv("SOTC_FLUSH_MASK");
         return value ? u32(std::atoi(value)) : (2u | 8u | 32u);
     }();
-    if (pending_mirrors.empty() || !(mask & source)) {
+    // A completion signal with an argument window pending: the game reads it next.
+    const bool forced = g_arg_windows.urgent && (source & (1u | 4u | 16u)) != 0;
+    if (!pending_mirrors.empty() && !(mask & source) && !forced) {
+        ++g_stats.unflushed_signal[std::countr_zero(source)];
+        g_stats.unflushed_outputs += pending_mirrors.size();
+    }
+    if (pending_mirrors.empty() || (!(mask & source) && !forced)) {
         return;
+    }
+    if (forced) {
+        ++g_stats.forced_flushes;
     }
     // An end-of-pipe event waits only for outputs the game reads; the rest ride along with the
     // next such flush, or go at the end of a frame that had none.
@@ -1498,6 +1572,7 @@ void Rasterizer::FlushMirrors(u32 source) {
         return;
     }
     mirrors_urgent = false;
+    g_arg_windows.urgent = false;
     mirrors_flushed_this_frame = source != 8;
     ScopedNs timer{g_stats.ns_mirror};
     ++g_stats.flushes;

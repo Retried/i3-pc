@@ -283,3 +283,39 @@ buffers into the stream buffer (about 10 %), looking up the shader variant for e
 page protection for uploads (about 8 %). The parts the runtime times itself (copy back,
 dispatches, flushes) are 0.4 of the 2.9 seconds. Reaching 60 there needs the per-draw cost cut
 to less than half or spread over more than one thread; neither is done.
+
+### What that view costs, and the first cut (2026-10-13)
+
+`cityview.sh` reaches the view the same way every time (13 turn steps from the save) and
+measures 24 seconds. Optimized build:
+
+| Shadow Preset | Frame rate |
+|---|---|
+| Original | 23.2 FPS |
+| Balanced | 23.0 FPS |
+| Fast | 25.2 FPS |
+| Off | 23.9 FPS |
+
+So shadows are not the cost. Counted with `I3_PASSSTAT=1`: about 9,100 draws a frame, 6,400 of
+them in the main pass, and 5,450 with a single shader pair (vertex 0xbeb7156, fragment
+0x6353e48b): 190 indices on average, two in five with at most 36. `cityskip.sh 6353e48b` shows
+what it is: with those draws left out the distant skyline is gone (the Space Needle, the far
+buildings) and the same view runs at 36.6 FPS instead of 23.5. Between two such draws the game
+changes only per-object constants, the index buffer and the instance count in 94 % of cases.
+
+Time per stage of a direct draw on the test build (ms of render-thread time per 3 seconds, of
+2,900): binding buffers and textures 1,014, pipeline lookup 443, releasing bindings 329, vertex
+buffers 248, starting the render pass 118, descriptors 118. And 4.3 million copies of small
+read-only buffers into the stream buffer per 3 seconds (930 MB a second), of which 65 % repeat
+an address and size copied a moment before.
+
+Runtime c774955b stops tracking reads of the stream buffer (the GPU never writes it; releasing
+bindings fell from 329 to 33 ms) and binds a repeated copy again instead of copying it again
+while nothing can have changed the memory. Optimized builds, alternating (`cityab.sh`): 22.9 and
+22.8 FPS before, 25.9 after; crash site 47.8 before, 50.4 after; shooting soak alive with no
+dropped draws. The first run of a new build after an old one does not reach the view in time
+(its pipeline cache is rebuilt) and is not counted.
+
+Still far from 60 there. What remains is spread over the work each of the 9,100 draws needs;
+the next candidates are a short path for a draw that follows one with the same pipeline and
+only new constants, and reusing the texture bindings of the draw before.

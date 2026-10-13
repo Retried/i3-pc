@@ -147,7 +147,9 @@ Options > Graphics. Start with these and change one thing at a time:
 
 - The frame rate is below 60 in the heaviest scenes on every PC tested so far (one).
 - In Seattle the frame rate depends on where the camera points: 60 FPS looking along the
-  wrecked bridge, 21 to 22 FPS looking at the city from the same spot (see `docs/BENCHMARK.md`).
+  wrecked bridge, about 26 FPS looking at the city from the same spot (23 before the runtime
+  of 2026-10-13). The Shadow Preset does not change that; the distant skyline is the cost
+  (see `docs/BENCHMARK.md`).
 - A few freezes of about a quarter of a second in the first minute after a save has loaded (one
   of 2 to 3 seconds there is gone with the copy-back changes of 2026-10-13).
 - On the road to Seattle the game loads its city geometry in one step: a pause of about half a

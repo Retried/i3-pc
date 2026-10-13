@@ -319,3 +319,41 @@ dropped draws. The first run of a new build after an old one does not reach the 
 Still far from 60 there. What remains is spread over the work each of the 9,100 draws needs;
 the next candidates are a short path for a draw that follows one with the same pipeline and
 only new constants, and reusing the texture bindings of the draw before.
+
+## The crash in long fire fights (2026-10-13)
+
+`shootsoak.sh` (three minutes of firing in the first boss arena) killed optimized builds in
+about one run of three, always 112 to 136 seconds in, after dropped indirect draws had grown
+from a few to 60 or 80 every 3 seconds. Two different game instructions faulted, both on
+garbage data.
+
+Found with the emulator's precise readback (made to run on Windows for this) and a log of every
+game read of GPU-written memory: the game reads the small outputs of five compute shaders about
+nine times a frame, right after its completion signal, from memory it hands out anew every
+frame. The copy back at the end of the frame came too late, so it read leftovers.
+
+| Variant (optimized builds unless noted) | Soaks alive | Dropped draws | Soak | Crash site |
+|---|---|---|---|---|
+| Copy back at the end of the frame (before) | about 2 of 3 | up to 472 | 57 FPS | about 50 FPS |
+| Copy back of everything at every completion signal | 2 of 2 | 0 | 23 FPS | |
+| The same at label writes only / at release only | 1 of 1 each | 0 / 1 | 24 / 17 FPS | |
+| Label writes held back until the next flush | game stops in 2 s | | | |
+| Copy-back limit 1 MB instead of 16 KB | 2 of 3 | 170 in the dead run | 53 FPS | |
+| Last frame's result written at dispatch (prediction) | 1 of 4 | 86 to 165 | 53 FPS | 47 FPS |
+| On-demand readback, relaxed / precise (test build) | 1 of 1 each | 55 / 0 | 54 / 32 FPS | |
+| Those five shaders' outputs, with all pending, at the next signal | 3 of 3 | 0 | 32 to 34 FPS | 33 FPS |
+| Those five shaders' outputs only, at the next signal | 4 of 4 | 1, 0, 0, 0 | 44 to 46 FPS | 41.7 FPS |
+| The same, GPU wait polled before blocking (installed) | 3 of 3 | 1, 0, 0 | 49 to 53.5 FPS | 41.6 FPS |
+
+The installed variant waits for the graphics card about 2.4 times a frame at the crash site;
+the wait is for the card to catch up with the frame so far, which is why it costs more than the
+copy itself. With the frame clock at 144 the crash site runs at 36.6 FPS (median 27.6 ms)
+instead of 52.2 FPS (median 20.5 ms) before the fix. Not blocking the command thread at all,
+and writing the game's label only when the results have landed, is the next thing to try.
+
+## Frame clock (2026-10-13)
+
+`clocktest.sh`, crash site, build before the crash fix: 60 Hz 49.3 FPS with 226 frames over
+34 ms; 120 Hz 50.9 FPS with 10; uncapped 50.8 FPS with 5 (median 20.0 ms); 144 Hz 52.2 FPS,
+99th percentile 28.7 ms. The game presents once per tick, so a 60 Hz clock turns a frame of
+18 ms into one of 33 ms.

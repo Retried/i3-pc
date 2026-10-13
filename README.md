@@ -56,9 +56,10 @@ place while recording. Details, method and older figures are in `docs/BENCHMARK.
 | Seattle, wrecked bridge, looking along it | Original | 59.9 FPS | 56.7 |
 | Seattle, same spot, looking at the city | any | about 26 FPS | not measured |
 
-The runtime installed since then is a few percent faster at the crash site (47.8 to 50.4 FPS in
-a run without recording). The city view is the limit: about 9,100 draws a frame, most of them
-for the distant skyline, and one CPU thread has to prepare them all.
+The runtime installed since then holds the fix for the crash in long fire fights, which
+costs frame rate where fire and particles are on screen: the crash site now runs at 41.6 FPS
+without recording (about 50 before the fix). The city view is the other limit: about 9,100
+draws a frame, most of them for the distant skyline, and one CPU thread has to prepare them all.
 
 **Work in progress.** Played and checked from the keyboard from the tutorial to the first boss
 fight. See [Known problems](#known-problems).
@@ -183,12 +184,26 @@ Options > Graphics. Start with these and change one thing at a time:
 
 - **Shadow Preset** is the setting that changes the frame rate most. Original is the game's
   picture; Balanced looks the same when standing still; Fast and Off remove shadows.
+- **Frame Rate Cap** is the game's frame clock. At 60 a frame that needs 18 ms is shown after
+  33 ms; at 120 or 144 it is shown after 25 ms or less, which is smoother in heavy scenes
+  whatever your display's rate (measured at the crash site: frames over 34 ms fell from 226 to
+  10). The average hardly changes.
 - **Upscaling (FSR)** scales the game's 1080p picture to your screen. It costs almost nothing.
 - **Effects Preset** changes the look more than the speed.
 - Frame Rate Cap and VSync take effect the next time the game starts. Everything else applies
   at once.
 
-### 9. Saving
+### 9. Language
+
+The game follows the console language of its settings, and the screens this program adds
+(start screen, pause menu, Options, key bindings, achievements) follow it too. Change it under
+Options > Graphics > Language; it applies the next time the game starts. English, French,
+Spanish, German, Italian, Dutch, Portuguese, Russian, Finnish, Swedish, Danish, Norwegian,
+Polish and Turkish are there, the languages this release of the game ships. The texts of this
+program's own screens are machine translations that no native speaker has checked; where one is
+missing, English is shown.
+
+### 10. Saving
 
 - The game saves by itself at checkpoints (a small icon shows in a corner).
 - To save by hand: pause, Options > Save and Load, then "Save Game" on the game's screen.
@@ -205,10 +220,12 @@ Options > Graphics. Start with these and change one thing at a time:
   of 2 to 3 seconds there is gone with the copy-back changes of 2026-10-13).
 - On the road to Seattle the game loads its city geometry in one step: a pause of about half a
   second there (it was 2 to 3 seconds before runtime f3481a25).
-- An earlier build crashed in long fire fights at the crash site (three test runs of four). Two
-  fixes went into the runtime and seven later test runs of three minutes of firing each stayed alive, but
-  the build from before stayed alive in the same test too, so the cause is not confirmed. If
-  the game closes by itself, please report it with the log.
+- Earlier builds crashed after about two minutes of sustained firing in the first boss arena
+  (one test run in three). The cause is found and fixed in the runtime of 2026-10-13: the
+  game reads a few small results of GPU compute work right after it is told they are done,
+  and they used to arrive a frame late. Ten test runs in a row have stayed alive since. The
+  fix waits for the graphics card about three times a frame and costs 4 to 8 FPS where fire
+  and particles are on screen.
 - New Game and Load Game on the start screen open the game's Options screen for you once the
   last save has loaded. If that save opens in a cutscene, the game shows "Paused" instead:
   continue the cutscene, then open Options yourself (in Seattle: Options, then Triangle / R).

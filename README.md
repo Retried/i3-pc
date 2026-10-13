@@ -40,6 +40,26 @@ What the runtime changes against upstream, in short:
 - Test aids: scripted input, screenshots and capture, per-pass and per-draw statistics, a
   sampling profiler.
 
+## Frame rates
+
+Measured on one PC (Ryzen 7 5700X3D, Radeon RX 9060 XT, 1080p, 60 Hz), 2026-10-13, 24 seconds a
+place while recording. Details, method and older figures are in `docs/BENCHMARK.md`.
+
+| Place | Shadow Preset | Average | 1 % low |
+|---|---|---|---|
+| Crash site (heaviest early scene) | Original | 37.8 FPS | 20.0 |
+| Crash site | Balanced | 45.2 FPS | 29.1 |
+| Crash site | Fast | 45.9 FPS | 29.2 |
+| Crash site | Off | 48.9 FPS | 29.1 |
+| Fish cannery interior | Original | 48.0 FPS | 29.2 |
+| Road to the cannery, running | Original | 52.5 FPS | 29.2 |
+| Seattle, wrecked bridge, looking along it | Original | 59.9 FPS | 56.7 |
+| Seattle, same spot, looking at the city | any | about 26 FPS | not measured |
+
+The runtime installed since then is a few percent faster at the crash site (47.8 to 50.4 FPS in
+a run without recording). The city view is the limit: about 9,100 draws a frame, most of them
+for the distant skyline, and one CPU thread has to prepare them all.
+
 **Work in progress.** Played and checked from the keyboard from the tutorial to the first boss
 fight. See [Known problems](#known-problems).
 

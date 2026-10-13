@@ -239,20 +239,25 @@ measured part began); the changed build did not (0.25 seconds at most). The soak
 library call and searched a list of about 880 outputs each frame: 45.5 FPS against 48.1. The
 version above finds them by key.
 
-## Benchmark clips (2026-10-11)
+## Benchmark clips (2026-10-13)
 
-`bench_*.mp4` in the showcase, 21 seconds each, 1080p, made by `benchvideos.sh`. The panel is
-drawn into the runtime's own capture afterwards: frame rate, average and 1 % low over the last
-five seconds, frame time, total CPU load and the busiest thread, video memory, RAM and a frame
-time graph. Capturing costs frame rate; each clip states the figure without capture. GPU load is
-not shown: Windows reports about 1 % for this program whatever it draws.
+`bench_*.mp4` in the showcase, 24 seconds each, made by `benchvideos.sh` on runtime 76a2edaf
+(`bench_<name>_1080.mp4` at 1080p, `bench_<name>.mp4` at 720p). The panel is drawn into the
+runtime's own capture afterwards: frame rate, average and 1 % low from the start of the clip,
+frame time, total CPU load and the busiest thread, video memory, RAM and a frame time graph.
+Capturing costs frame rate; each clip states the figure without capture. GPU load is not shown:
+Windows reports about 1 % for this program whatever it draws.
 
-| Clip | Scene | Shadow Preset | Captured average | 1 % low |
-|---|---|---|---|---|
-| bench_crash_original | Crash site | Original | 39.2 FPS | 28.8 |
-| bench_crash_balanced | Crash site | Balanced | 45.1 FPS | 29.0 |
-| bench_crash_fast | Crash site | Fast | 46.8 FPS | 28.9 |
-| bench_crash_off | Crash site | Off | 50.0 FPS | 29.0 |
-| bench_cannery | Fish cannery interior | Original | 47.8 FPS | 29.2 |
-| bench_road | Road to the cannery, running | Original | 53.6 FPS | 29.1 |
-| bench_city | Seattle bridge, running | Original | 60.0 FPS | 55.5 |
+| Clip | Scene | Shadow Preset | Captured average | 1 % low | Worst frame | Clips of 2026-10-11 |
+|---|---|---|---|---|---|---|
+| bench_crash_original | Crash site | Original | 37.4 FPS | 20.0 | 51 ms | 39.2 FPS |
+| bench_crash_balanced | Crash site | Balanced | 44.4 FPS | 28.9 | 50 ms | 45.1 FPS |
+| bench_crash_fast | Crash site | Fast | 46.9 FPS | 29.0 | 50 ms | 46.8 FPS |
+| bench_crash_off | Crash site | Off | 47.8 FPS | 29.0 | 150 ms | 50.0 FPS |
+| bench_cannery | Fish cannery interior | Original | 47.2 FPS | 29.0 | 283 ms | 47.8 FPS |
+| bench_road | Road to the cannery, running | Original | 51.5 FPS | 29.2 | 233 ms | 53.6 FPS |
+| bench_city | Seattle bridge, running | Original | 59.8 FPS | 56.4 | 83 ms | 60.0 FPS |
+
+The clips of 2026-10-11 were 21 seconds long and came from the build before the copy-back
+changes; the display ran at a higher rate then, so the two columns are not a clean comparison.
+Three clips have one frame over 100 ms.

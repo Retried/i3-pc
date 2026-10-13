@@ -12,7 +12,7 @@ rm -rf testrun/user/capture; rm -f testrun/bench_frametimes.txt testrun/perf_sam
 BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 400 "45:cross,60:cross" > /dev/null; sleep 25
 until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done
 (powershell -NoProfile -ExecutionPolicy Bypass -File tools/perfsample.ps1 > /dev/null 2>&1 &)
-sleep 75
+sleep ${WAIT:-75}
 F=testrun/live_cmds.txt
 k() { echo "$1" >> $F; sleep "$2"; }
 printf "rec=on\nbench=on\n" >> $F

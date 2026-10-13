@@ -13,6 +13,10 @@ BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 400 "45:cross,60:cross" > /dev/n
 until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done
 (powershell -NoProfile -ExecutionPolicy Bypass -File tools/perfsample.ps1 > /dev/null 2>&1 &)
 sleep ${WAIT:-75}
+# Frame rate without recording: the mean of the runtime's own counter over the last 12 seconds
+# before the clip starts (four log lines, one every 3 s), standing where the clip begins.
+sleep 25
+plain=$(grep -a "Flip: fps" testrun/user/log/shad_log.txt | tail -4 | sed 's/.*Flip: fps //; s/ .*//' | awk '{s+=$1; n++} END {if (n) printf "%.0f FPS", s/n; else printf "not measured"}')
 F=testrun/live_cmds.txt
 k() { echo "$1" >> $F; sleep "$2"; }
 printf "rec=on\nbench=on\n" >> $F

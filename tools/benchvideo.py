@@ -113,7 +113,7 @@ with open(os.path.join(cap, 'frames.rgb'), 'rb') as f:
         note = 'Ryzen 7 5700X3D, Radeon RX 9060 XT - figures measured while recording'
         d.text((C1, PY + PH - 68), note, font=small, fill=GREY)
         if uncaptured:
-            d.text((C1, PY + PH - 40), 'Same place without recording: %s' % uncaptured, font=small, fill=GREY)
+            d.text((C1, PY + PH - 40), 'Without recording, just before the clip: %s' % uncaptured, font=small, fill=GREY)
         img = Image.alpha_composite(img.convert('RGBA'), panel).convert('RGB')
         enc.stdin.write(img.tobytes())
 enc.stdin.close()

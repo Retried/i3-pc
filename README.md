@@ -164,7 +164,9 @@ Options > Graphics. Start with these and change one thing at a time:
 - Trophies are listed as "Trophy 1" to "Trophy 48": their names are not readable from the game
   data.
 - Played up to the first boss fight. Beyond it only the road to Seattle and the start of the
-  bridge into the city, from edited saves; the way off that bridge has not been played.
+  bridge into the city have been seen, from saves edited by hand. Those are good for
+  measuring but not for playing on: on the bridge only walking works in them (jump and dash
+  do nothing), so nothing past that point has been played.
 - The picture is always rendered at 1080p; higher output sizes are upscaled.
 - `docs/NOTES.txt` lists what has been checked and what is open.
 

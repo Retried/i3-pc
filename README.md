@@ -9,6 +9,37 @@ changes for this game is in the `runtime` branch of this repository.
 It is an unofficial, game-specific build derived from shadPS4. It is not affiliated with or
 endorsed by Sony Interactive Entertainment, Sucker Punch Productions or the shadPS4 project.
 
+## How this works
+
+This is not a rewrite of the game and not a native port in the strict sense. The game's own
+PS4 program, read from your copy and left as it is on disk, runs inside a **custom build of
+the shadPS4 emulator** made for this one game:
+
+- **The runtime** (the `runtime` folder, a git submodule) is the source of
+  [shadPS4](https://github.com/shadps4-emu/shadPS4), GPL-2.0-or-later, with this project's
+  commits on top of an upstream commit. Nothing here is sent upstream, and the upstream project
+  has no part in it.
+- **This repository** (the wrapper) holds everything around the runtime: build scripts, the
+  files that sit beside the finished program (launcher, settings and key scripts, default key
+  bindings, the player's guide), the test and benchmark scripts and the notes.
+- **The game is not included.** You need your own copy of the game, dumped from your own
+  console; the program only reads it.
+
+What the runtime changes against upstream, in short:
+
+- Fixes that this game needs and that are switched on for its serial only: results of compute
+  shaders are copied back to the game's memory where the game reads them, garbage arguments of
+  indirect draws are caught, the game's large geometry heaps are uploaded ahead of their first
+  use, and repeated per-draw work is cut down (see `docs/BENCHMARK.md`).
+- A PC front end drawn by the runtime: start screen, pause menu, Graphics and Controls pages,
+  key rebinding, shadow and effects presets, an achievements page, first-run settings.
+- Keyboard and mouse as a full input device, with key caps instead of controller pictures in
+  the game's button prompts.
+- Its own program name, window title and settings folder, so that it does not touch an
+  installed shadPS4.
+- Test aids: scripted input, screenshots and capture, per-pass and per-draw statistics, a
+  sampling profiler.
+
 **Work in progress.** Played and checked from the keyboard from the tutorial to the first boss
 fight. See [Known problems](#known-problems).
 

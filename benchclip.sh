@@ -19,18 +19,21 @@ printf "rec=on\nbench=on\n" >> $F
 case $route in
 road)
     k "key=w*2000" 2.1; k "mouse=30*800" 1; for i in 1 2 3; do k "key=w*2500" 2.6; done
-    k "mouse=30*700" 1; for i in 1 2 3; do k "key=w*3000" 3.1; done;;
+    k "mouse=30*700" 1; for i in 1 2 3 4; do k "key=w*3000" 3.1; done;;
 city)
-    for r in 1 2; do
+    for r in 1 2 3; do
         k "key=w*3000" 1.5; k "key=lshift" 1.6; k "key=w*3000" 1.5; k "key=space" 1.6
         k "mouse=30*900" 1.1; k "key=rightbutton*1500" 0.3; k "key=leftbutton" 0.6; k "key=leftbutton" 0.8
         k "key=w*2500" 2.6; k "mouse=-30*500" 0.7
     done;;
 *)
-    k "mouse=12*4000" 5; sleep 5; k "mouse=-12*4000" 5; sleep 6;;
+    k "mouse=12*4000" 5; sleep 6; k "mouse=-12*4000" 5; sleep 8;;
 esac
 printf "bench=off\nrec=off\n" >> $F; sleep 2
 echo quit >> $F; sleep 8; taskkill //IM i3.exe //F > /dev/null 2>&1
 cp tools/gfx.bak testrun/user/i3_graphics.txt
-tools/venv/Scripts/python tools/benchvideo.py testrun showcase/bench_$label.mp4 "$scene" "$settings" "$plain" 0 21
-ls -la showcase/bench_$label.mp4 | awk '{print $5, $9}'
+# 1920x1080 clip with the readout, then the 1280x720 copy (15 MB at most for 24 s: 4500 kbit/s).
+tools/venv/Scripts/python tools/benchvideo.py testrun showcase/bench_${label}_1080.mp4 "$scene" "$settings" "$plain" 0 24 | tail -1 > showcase/bench_$label.txt
+echo "build: $(basename ${BIN:-/d/i3-pc/bin-release})" >> showcase/bench_$label.txt
+ffmpeg -y -loglevel error -i showcase/bench_${label}_1080.mp4 -vf scale=1280:720 -c:v libx264 -preset medium -b:v 4300k -maxrate 4500k -bufsize 9000k -c:a aac -b:a 128k showcase/bench_$label.mp4
+ls -la showcase/bench_$label.mp4 showcase/bench_${label}_1080.mp4 | awk '{print $5, $9}'; cat showcase/bench_$label.txt

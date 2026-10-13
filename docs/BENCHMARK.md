@@ -192,9 +192,52 @@ the longhouse.
 | Road checkpoint ("Walk to Seattle") | 50.9 FPS | 16.6 ms | 34.2 ms | 2667 ms | 10 |
 
 The road run froze once for about 3 seconds in each of three runs (2.7, 3.4 and 2.9 seconds, 37
-to 48 seconds in; 51 to 52 FPS on average). A fourth run, after those, held 60.0 FPS with a worst
-frame of 18 ms: the freeze looks like first-time work in that area (shaders and pipelines are
-then cached), not confirmed. The bridge run holds 60 with one 200 ms frame.
+to 48 seconds in; 51 to 52 FPS on average). A fourth run held 60.0 FPS with a worst frame of
+18 ms only because its route never reached the spot; the freeze returned in later runs (2.3 to
+3.1 seconds), so it was not first-time shader work. The bridge run holds 60 with one 200 ms
+frame, and three minutes of continuous play there (2026-10-11) gave 60.0 FPS, 99th percentile
+17.7 ms, worst frame 33 ms.
+
+Cause of the road freeze, measured with the freeze log (`I3_FREEZELOG=1`): at that point the
+game first binds its two geometry heaps whole and read-only (2.5 GB and 0.5 GB, 16-bit data
+indexed by a per-instance offset), and the runtime uploaded all of it in one frame: about 3 GB
+copied, 1.6 of the 2.3 seconds; image uploads were another 0.3. Bounding the buffers would be
+unsound because of the offset. From runtime 673a9c8 the heap ranges are remembered and uploaded
+16 MB a frame from the start of the session, so the first bind finds only recent writes, and
+large uploads copy on six threads. Test build, same run: worst frame 2401 ms without the
+ranges, 451 ms with them (what remains is image uploads); 60.0 FPS before the bind either way.
+
+## Copy back of compute results (2026-10-13)
+
+Optimized builds of 2026-10-11 died in the shooting soak (`shootsoak.sh`, three minutes of
+firing in the first boss arena) in three runs of four. The crash records show the game's own
+memory overwritten: a copy command of the game with a garbage address, and null reads in game
+code. Two changes followed in the runtime: the argument slots of an indirect draw are copied
+back to game memory when the GPU wrote them, and a compute output is copied back only where the
+GPU changed it, so that what the game wrote into the same range meanwhile is kept
+(`I3_NO_ARG_MIRROR=1` and `I3_MIRROR_WHOLE=1` switch them off).
+
+The crash did not come back in the test that was meant to confirm this (`crashtest.sh`, seven
+soaks: three with both changes, one with the second switched off, one with both off, two of the
+build from before): all seven stayed alive, the old build included. The display had been set
+to 60 Hz between the crashes and this test, which may matter. So the cause is not confirmed;
+the changes are kept because they are right on their own and cost nothing measurable.
+
+Crash site, optimized builds, alternating runs (`abtest2.sh`):
+
+| Build | Length | Average | 99th percentile | Worst frame | Copy back per 3 s |
+|---|---|---|---|---|---|
+| Before the changes, run 1 | 63 s | 47.2 FPS | 34.4 ms | 3366 ms | 185 ms |
+| With the changes, run 1 | 70 s | 47.9 FPS | 34.4 ms | 250 ms | 231 ms |
+| Before the changes, run 2 | 96 s | 48.4 FPS | 34.2 ms | 51 ms | 244 ms |
+| With the changes, run 2 | 96 s | 47.1 FPS | 34.5 ms | 51 ms | 260 ms |
+
+Run 1 of each started late and is shorter. The build from before froze once in each run in the
+first seconds after the save loaded (3.4 seconds, and 2.3 seconds in run 2, there before the
+measured part began); the changed build did not (0.25 seconds at most). The soak shows the same:
+3.4 and 2.2 seconds before, 0.75 seconds at most after. A first version of the second change compared every four bytes with a
+library call and searched a list of about 880 outputs each frame: 45.5 FPS against 48.1. The
+version above finds them by key.
 
 ## Benchmark clips (2026-10-11)
 

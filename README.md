@@ -146,11 +146,20 @@ Options > Graphics. Start with these and change one thing at a time:
 ### Known problems
 
 - The frame rate is below 60 in the heaviest scenes on every PC tested so far (one).
-- One freeze of about 1.7 seconds shortly after a save has loaded, and a few of about a quarter
-  of a second in the first minute.
+- A few freezes of about a quarter of a second in the first minute after a save has loaded (one
+  of 2 to 3 seconds there is gone with the copy-back changes of 2026-10-13).
+- On the road to Seattle the game loads its city geometry in one step: a pause of about half a
+  second there (it was 2 to 3 seconds before runtime f3481a25).
+- An earlier build crashed in long fire fights at the crash site (three test runs of four). Two
+  fixes went into the runtime and seven later test runs of three minutes of firing each stayed alive, but
+  the build from before stayed alive in the same test too, so the cause is not confirmed. If
+  the game closes by itself, please report it with the log.
+- New Game and Load Game on the start screen open the game's Options screen for you once the
+  last save has loaded. If that save opens in a cutscene, the game shows "Paused" instead:
+  continue the cutscene, then open Options yourself (in Seattle: Options, then Triangle / R).
 - Trophies are listed as "Trophy 1" to "Trophy 48": their names are not readable from the game
   data.
-- Not played past the first boss fight yet.
+- Played up to the first boss fight; beyond it only the road to Seattle and the bridge into the city (from edited saves).
 - The picture is always rendered at 1080p; higher output sizes are upscaled.
 - `docs/NOTES.txt` lists what has been checked and what is open.
 

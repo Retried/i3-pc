@@ -41,10 +41,10 @@ samples[:, 0] -= rec_start
 
 W, H = 1920, 1080
 font_dir = 'C:/Windows/Fonts/'
-big = ImageFont.truetype(font_dir + 'bahnschrift.ttf', 54)
-mid = ImageFont.truetype(font_dir + 'bahnschrift.ttf', 26)
-small = ImageFont.truetype(font_dir + 'bahnschrift.ttf', 20)
-YELLOW, WHITE, GREY = (246, 190, 0), (236, 236, 236), (160, 160, 160)
+face = next(f for f in ('pala.ttf', 'georgia.ttf', 'times.ttf') if os.path.exists(font_dir + f))
+mid = ImageFont.truetype(font_dir + face, 30)
+small = ImageFont.truetype(font_dir + face, 22)
+ORANGE, WHITE, GREY, GREEN = (240, 160, 60), (236, 236, 236), (200, 200, 200), (140, 235, 130)
 
 first = int(start_s * rate)
 last = min(n_frames, first + int(length_s * rate))
@@ -57,9 +57,16 @@ cmd += ['-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv42
         '-b:a', '160k', '-shortest', out]
 enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
-PX, PY, PW, PH = 28, 28, 470, 372
-GX, GY, GW, GH = PX + 18, PY + 236, PW - 36, 84
+# The readout of the Shadow of the Colossus clips: a title line, rows of label and figures, the
+# frame-time graph, a line naming the PC. Top right, 1920x1080 picture.
+PW, PH = 760, 500
+PX, PY = W - PW - 40, 40
+GX, GY, GW, GH = PX + 26, PY + 310, PW - 52, 110
+C1, C2, C3, C4 = PX + 26, PX + 240, PX + 420, PX + PW - 26
 overall = ft[(ft_at >= start_s) & (ft_at <= start_s + (last - first) / rate)]
+# Windows' GPU load counters stay near zero for this program on some drivers: the figure is
+# shown only when the run measured a believable one.
+gpu_known = samples[:, 3].max() >= 5.0
 
 with open(os.path.join(cap, 'frames.rgb'), 'rb') as f:
     f.seek(first * frame_bytes)
@@ -71,45 +78,42 @@ with open(os.path.join(cap, 'frames.rgb'), 'rb') as f:
         img = Image.frombytes('RGB', (w, h), raw).resize((W, H), Image.BILINEAR)
         panel = Image.new('RGBA', (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(panel)
-        d.rectangle([PX, PY, PX + PW, PY + PH], fill=(12, 12, 12, 205), outline=(236, 236, 236, 255), width=2)
-        # The last second of frames gives the current figure; the last five the lows.
+        d.rounded_rectangle([PX, PY, PX + PW, PY + PH], radius=12, fill=(24, 24, 24, 205))
+        # The last second of frames gives the current figure; average and 1% low count from
+        # the first frame of the clip.
         sec = ft[(ft_at > t - 1.0) & (ft_at <= t)]
-        win = ft[(ft_at > t - 5.0) & (ft_at <= t)]
+        run_ft = ft[(ft_at >= start_s) & (ft_at <= t)]
         fps = 1000.0 / sec.mean() if len(sec) else 0.0
-        avg = 1000.0 / win.mean() if len(win) else 0.0
-        low = 1000.0 / np.percentile(win, 99) if len(win) else 0.0
-        d.text((PX + 18, PY + 10), '%.0f' % fps, font=big, fill=YELLOW)
-        d.text((PX + 110, PY + 34), 'FPS', font=mid, fill=WHITE)
-        d.text((PX + 190, PY + 16), 'avg %.1f   1%% low %.1f' % (avg, low), font=small, fill=WHITE)
-        d.text((PX + 190, PY + 42), 'frame %.1f ms' % (sec[-1] if len(sec) else 0.0), font=small, fill=WHITE)
+        avg = 1000.0 / run_ft.mean() if len(run_ft) else 0.0
+        low = 1000.0 / np.percentile(run_ft, 99) if len(run_ft) else 0.0
         i = int(np.argmin(np.abs(samples[:, 0] - t)))
         _, cpu, thread, gpu, vram, ram = samples[i]
-        rows = [('CPU', '%.0f %%   busiest thread %.0f %%' % (cpu, min(thread, 100.0))),
-                # Windows' GPU load counters stay near zero for this program on some drivers:
-                # the figure is shown only when the run measured a believable one.
-                ('GPU', '%.0f %%   video memory %.1f GB' % (min(gpu, 100.0), vram / 1024.0))
-                if samples[:, 3].max() >= 5.0 else ('VRAM', '%.1f GB' % (vram / 1024.0)),
-                ('RAM', '%.1f GB' % (ram / 1024.0)),
-                ('', '1920x1080   %s' % settings)]
-        for r, (name, text) in enumerate(rows):
-            y = PY + 84 + 30 * r
-            d.text((PX + 18, y), name, font=small, fill=GREY)
-            d.text((PX + 78 if name else PX + 18, y), text, font=small, fill=WHITE)
-        d.text((PX + 18, PY + 206), 'FRAME TIME, LAST 10 S (0-50 ms)', font=small, fill=GREY)
-        d.rectangle([GX, GY, GX + GW, GY + GH], fill=(0, 0, 0, 160))
+        d.text((C1, PY + 18), '%s - %s' % (scene, settings), font=mid, fill=WHITE)
+        rows = [('FPS', '%.0f' % fps, 'avg %.0f' % avg, '1%% low %.0f' % low),
+                ('GPU', '%.0f %%' % min(gpu, 100.0) if gpu_known else 'not read',
+                 '%.1f GB' % (vram / 1024.0), ''),
+                ('CPU', '%.0f %%' % cpu, 'busiest thread %.0f %%' % min(thread, 100.0), ''),
+                ('RAM', '%.1f GB' % (ram / 1024.0), '', ''),
+                ('Frametime', '%.1f ms' % (sec[-1] if len(sec) else 0.0), '', '1920 x 1080')]
+        for r, (name, value, second, right) in enumerate(rows):
+            y = PY + 70 + 46 * r
+            d.text((C1, y), name, font=mid, fill=ORANGE)
+            d.text((C2, y), value, font=mid, fill=WHITE)
+            d.text((C3, y), second, font=mid, fill=GREY)
+            d.text((C4 - d.textlength(right, font=mid), y), right, font=mid, fill=GREY)
+        d.rectangle([GX, GY, GX + GW, GY + GH], fill=(0, 0, 0, 170))
         for ms in (16.7, 33.3):
             y = GY + GH - ms / 50.0 * GH
-            d.line([GX, y, GX + GW, y], fill=(120, 120, 120, 255))
+            d.line([GX, y, GX + GW, y], fill=(90, 90, 90, 255))
         sel = (ft_at > t - 10.0) & (ft_at <= t)
         if sel.sum() > 1:
             xs = GX + (ft_at[sel] - (t - 10.0)) / 10.0 * GW
             ys = GY + GH - np.minimum(ft[sel], 50.0) / 50.0 * GH
-            d.line(list(zip(xs.tolist(), ys.tolist())), fill=YELLOW + (255,), width=2)
-        d.text((PX + 18, PY + PH - 46), scene, font=mid, fill=WHITE)
-        note = 'Measured while capturing.'
+            d.line(list(zip(xs.tolist(), ys.tolist())), fill=GREEN + (255,), width=2)
+        note = 'Ryzen 7 5700X3D, Radeon RX 9060 XT - figures measured while recording'
+        d.text((C1, PY + PH - 68), note, font=small, fill=GREY)
         if uncaptured:
-            note += ' Without capture: %s' % uncaptured
-        d.text((PX, PY + PH + 8), note, font=small, fill=WHITE, stroke_width=2, stroke_fill=(0, 0, 0))
+            d.text((C1, PY + PH - 40), 'Same place without recording: %s' % uncaptured, font=small, fill=GREY)
         img = Image.alpha_composite(img.convert('RGBA'), panel).convert('RGB')
         enc.stdin.write(img.tobytes())
 enc.stdin.close()
@@ -117,5 +121,7 @@ enc.wait()
 print('samples %d, GPU load max %.0f %%, video memory max %.0f MB' % (
     len(samples), samples[:, 3].max(), samples[:, 4].max()))
 if len(overall):
-    print('%s: captured avg %.1f fps, 1%% low %.1f, worst %.0f ms, frames %d' % (
-        scene, 1000.0 / overall.mean(), 1000.0 / np.percentile(overall, 99), overall.max(), len(overall)))
+    print('%s, %s: recorded avg %.1f fps, 1%% low %.1f, worst frame %.0f ms, frames over 50 ms %d, '
+          'over 100 ms %d, of %d' % (
+              scene, settings, 1000.0 / overall.mean(), 1000.0 / np.percentile(overall, 99),
+              overall.max(), int((overall > 50).sum()), int((overall > 100).sum()), len(overall)))

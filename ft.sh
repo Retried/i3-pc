@@ -24,7 +24,7 @@ seattle|roadtoseattle)
     for r in 1 2 3 4 5 6; do
         k "key=w*3000" 1.5; k "key=lshift" 1.6; k "key=w*3000" 1.5; k "key=space" 1.6
         k "mouse=30*900" 1.1; k "key=rightbutton*1500" 0.3; k "key=leftbutton" 0.6; k "key=leftbutton" 0.8
-        k "key=w*2500" 2.6; k "mouse=-30*500" 0.7
+        k "key=w*2500" 2.6; k "mouse=-30*500" 0.7; [ -n "$SHOTS" ] && echo shot >> $F
     done;;
 *)
     k "key=w*2500" 2.7; echo "key=lshift" >> $F; k "key=w*2500" 2.7; k "key=w*2500" 2.7; sleep 40

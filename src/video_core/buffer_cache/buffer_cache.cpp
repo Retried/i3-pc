@@ -200,15 +200,16 @@ void BufferCache::AddPendingMirror(VAddr device_addr, u32 size) {
     if (!MirrorChangedOnly()) {
         return;
     }
-    for (const auto& snapshot : mirror_snapshots) {
-        if (snapshot.addr == device_addr && snapshot.size == size) {
-            return;
-        }
+    // Several hundred outputs wait per frame: found by key, not by walking a list.
+    if (size >= MirrorSnapshotMaxSize) {
+        return;
     }
     const u32 offset = u32(mirror_snapshot_data.size());
+    if (!mirror_snapshots.try_emplace(MirrorSnapshotKey(device_addr, size), offset).second) {
+        return;
+    }
     mirror_snapshot_data.resize(offset + size);
     memory->CopySparseMemory(device_addr, mirror_snapshot_data.data() + offset, size);
-    mirror_snapshots.push_back({device_addr, size, offset});
 }
 
 void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
@@ -293,14 +294,14 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     for (const auto& [addr, size] : ranges) {
         const u8* gpu = download.mapped + cursor;
         cursor += Common::AlignUp(size, 64);
-        const auto snapshot = std::ranges::find_if(mirror_snapshots, [&](const auto& s) {
-            return s.addr == addr && s.size == size;
-        });
+        const auto snapshot = size < MirrorSnapshotMaxSize
+                                  ? mirror_snapshots.find(MirrorSnapshotKey(addr, size))
+                                  : mirror_snapshots.end();
         if (snapshot == mirror_snapshots.end()) {
             memory->TryWriteBacking(std::bit_cast<u8*>(addr), gpu, size);
             continue;
         }
-        const u8* before = mirror_snapshot_data.data() + snapshot->offset;
+        const u8* before = mirror_snapshot_data.data() + snapshot->second;
         if (std::memcmp(gpu, before, size) == 0) {
             continue;
         }
@@ -310,7 +311,17 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
         u32 end = 0;
         for (u32 at = 0; at < size; at += 4) {
             const u32 step = std::min(4u, size - at);
-            if (std::memcmp(gpu + at, before + at, step) == 0) {
+            if (step == 4) {
+                // Whole words are compared in registers: this loop runs over every pending
+                // output of every frame.
+                u32 now;
+                u32 then;
+                std::memcpy(&now, gpu + at, 4);
+                std::memcpy(&then, before + at, 4);
+                if (now == then) {
+                    continue;
+                }
+            } else if (std::memcmp(gpu + at, before + at, step) == 0) {
                 continue;
             }
             if (start != size && at - end >= Gap) {

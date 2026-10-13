@@ -169,12 +169,12 @@ private:
     std::deque<std::pair<u64, std::vector<std::pair<VAddr, u32>>>> inflight_mirrors;
     /// What guest memory held in each pending output when its shader ran. The copy back
     /// writes only what the GPU changed against it.
-    struct MirrorSnapshot {
-        VAddr addr;
-        u32 size;
-        u32 offset;
-    };
-    std::vector<MirrorSnapshot> mirror_snapshots;
+    /// Keyed by address and size, the value is the offset into mirror_snapshot_data.
+    static constexpr u32 MirrorSnapshotMaxSize = 1u << 20;
+    static u64 MirrorSnapshotKey(VAddr addr, u32 size) {
+        return (addr << 20) | size;
+    }
+    std::unordered_map<u64, u32> mirror_snapshots;
     std::vector<u8> mirror_snapshot_data;
     /// Parts of pending outputs an upload left out: their pages lost their written-by-the-game
     /// mark with that upload and get it back once the outputs are copied back.

@@ -10,6 +10,7 @@
 #include <magic_enum/magic_enum.hpp>
 
 #include <cstdlib>
+#include <cstring>
 #include <unordered_map>
 #include <vector>
 #include <unordered_set>
@@ -181,6 +182,35 @@ void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 siz
 // Copies GPU-written ranges back into guest memory so CPU-side readers see what compute shaders
 // produced: the game itself (culling results) and the SRT walker that flattens shader constants.
 // One GPU flush covers the whole batch.
+// A compute output is declared larger than what its shader writes (inFAMOUS: up to the end of
+// the block it sits in), and the game writes the rest of that range itself while the output
+// waits for its copy back. Copying the whole range back put the GPU's older bytes over those
+// writes: pointers and command words of the game turned into garbage (access violations in the
+// game's code and in a copy command of its own, after minutes of shooting). Only bytes the GPU
+// changed are written back. I3_MIRROR_WHOLE=1 copies whole ranges as before.
+static bool MirrorChangedOnly() {
+    static const bool on = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                           std::getenv("I3_MIRROR_WHOLE") == nullptr;
+    return on;
+}
+
+void BufferCache::AddPendingMirror(VAddr device_addr, u32 size) {
+    pending_mirror_ranges.Add(device_addr, size);
+    unissued_mirrors.emplace_back(device_addr, size);
+    if (!MirrorChangedOnly()) {
+        return;
+    }
+    for (const auto& snapshot : mirror_snapshots) {
+        if (snapshot.addr == device_addr && snapshot.size == size) {
+            return;
+        }
+    }
+    const u32 offset = u32(mirror_snapshot_data.size());
+    mirror_snapshot_data.resize(offset + size);
+    memory->CopySparseMemory(device_addr, mirror_snapshot_data.data() + offset, size);
+    mirror_snapshots.push_back({device_addr, size, offset});
+}
+
 void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     if (ranges.empty()) {
         return;
@@ -261,12 +291,52 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges) {
     download.buffer->Invalidate(download.offset, total);
     cursor = 0;
     for (const auto& [addr, size] : ranges) {
-        memory->TryWriteBacking(std::bit_cast<u8*>(addr), download.mapped + cursor, size);
+        const u8* gpu = download.mapped + cursor;
         cursor += Common::AlignUp(size, 64);
+        const auto snapshot = std::ranges::find_if(mirror_snapshots, [&](const auto& s) {
+            return s.addr == addr && s.size == size;
+        });
+        if (snapshot == mirror_snapshots.end()) {
+            memory->TryWriteBacking(std::bit_cast<u8*>(addr), gpu, size);
+            continue;
+        }
+        const u8* before = mirror_snapshot_data.data() + snapshot->offset;
+        if (std::memcmp(gpu, before, size) == 0) {
+            continue;
+        }
+        // Changed stretches, joined over gaps under 64 bytes, each written with one call.
+        constexpr u32 Gap = 64;
+        u32 start = size;
+        u32 end = 0;
+        for (u32 at = 0; at < size; at += 4) {
+            const u32 step = std::min(4u, size - at);
+            if (std::memcmp(gpu + at, before + at, step) == 0) {
+                continue;
+            }
+            if (start != size && at - end >= Gap) {
+                memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start,
+                                        end - start);
+                start = size;
+            }
+            if (start == size) {
+                start = at;
+            }
+            end = at + step;
+        }
+        if (start != size) {
+            memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start, end - start);
+        }
     }
     pending_mirror_ranges.Clear();
     unissued_mirrors.clear();
     inflight_mirrors.clear();
+    mirror_snapshots.clear();
+    mirror_snapshot_data.clear();
+    // Guest memory now holds both the outputs and what the game wrote around them.
+    for (const auto& [addr, size] : skipped_uploads) {
+        memory_tracker->MarkRegionAsCpuModified(addr, size);
+    }
+    skipped_uploads.clear();
 }
 
 // Debug aid: bytes of the GPU-side copy of a range that differ from guest memory.
@@ -324,6 +394,18 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
         }
     }
     return {arena, arena->Offset(device_addr)};
+}
+
+void BufferCache::WarmRange(VAddr device_addr, u32 size) {
+    boost::container::small_vector<std::pair<VAddr, u64>, 16> parts;
+    gpu_modified_ranges.ForEachNotInRange(device_addr, size, [&](VAddr addr, u64 part_size) {
+        parts.emplace_back(addr, part_size);
+    });
+    for (const auto& [addr, part_size] : parts) {
+        if (part_size > 64_KB) {
+            (void)ObtainBuffer(addr, u32(part_size), false);
+        }
+    }
 }
 
 std::pair<const Buffer*, u64> BufferCache::ObtainBufferForImage(VAddr device_addr, u32 size) {
@@ -481,6 +563,11 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
             copies.emplace_back(total_size_bytes, part_addr, part_size);
             total_size_bytes += part_size;
         });
+        if (MirrorChangedOnly()) {
+            pending_mirror_ranges.ForEachInRange(addr, size, [&](u64 part_addr, u64 part_end) {
+                skipped_uploads.emplace_back(part_addr, u32(part_end - part_addr));
+            });
+        }
     });
     if (!copies.empty()) {
         Common::g_upload_bytes += total_size_bytes;

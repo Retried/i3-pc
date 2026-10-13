@@ -88,6 +88,11 @@ public:
                                                              bool is_written,
                                                              bool is_texel_buffer = false);
 
+    /// Uploads what the game wrote in a range ahead of its use. Ranges the GPU has written
+    /// are left out: their pages may be marked as written by the game too, and uploading
+    /// them would put old game bytes over the GPU's results.
+    void WarmRange(VAddr device_addr, u32 size);
+
     /// Attempts to obtain a buffer without modifying the cache contents.
     [[nodiscard]] std::pair<const Buffer*, u64> ObtainBufferForImage(VAddr device_addr, u32 size);
 
@@ -109,10 +114,7 @@ public:
     void MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges);
 
     /// Marks a range as written by the GPU and not yet copied back to guest memory.
-    void AddPendingMirror(VAddr device_addr, u32 size) {
-        pending_mirror_ranges.Add(device_addr, size);
-        unissued_mirrors.emplace_back(device_addr, size);
-    }
+    void AddPendingMirror(VAddr device_addr, u32 size);
 
 private:
     struct ArenaBinds {
@@ -165,6 +167,18 @@ private:
     /// copy lands.
     std::vector<std::pair<VAddr, u32>> unissued_mirrors;
     std::deque<std::pair<u64, std::vector<std::pair<VAddr, u32>>>> inflight_mirrors;
+    /// What guest memory held in each pending output when its shader ran. The copy back
+    /// writes only what the GPU changed against it.
+    struct MirrorSnapshot {
+        VAddr addr;
+        u32 size;
+        u32 offset;
+    };
+    std::vector<MirrorSnapshot> mirror_snapshots;
+    std::vector<u8> mirror_snapshot_data;
+    /// Parts of pending outputs an upload left out: their pages lost their written-by-the-game
+    /// mark with that upload and get it back once the outputs are copied back.
+    std::vector<std::pair<VAddr, u32>> skipped_uploads;
 
     std::unique_ptr<FaultManager> fault_manager;
     std::unique_ptr<Buffer> bda_pagetable_buffer;

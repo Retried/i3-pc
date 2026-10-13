@@ -702,6 +702,11 @@ static void EmitCheckedDraws(Stream& cmdbuf, bool is_indexed) {
     }
 }
 
+static bool is_infamous_args_mirror() {
+    return Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+           std::getenv("I3_NO_ARG_MIRROR") == nullptr;
+}
+
 void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u32 stride,
                               u32 max_count, VAddr count_address, u16 vertex_sgpr_offset,
                               u16 instance_sgpr_offset) {
@@ -736,6 +741,18 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                                   : count_address == 0 ? std::min(max_count, max_slots) : 1;
             const bool direct = count_address == 0 && max_count <= max_slots && stride >= 16 &&
                                 !(gpu_written && trust_gpu_args);
+            // Slots a compute shader writes reach guest memory only through the copy back, and
+            // that leaves out outputs over its size limit: inFAMOUS declares each slot as a
+            // 128 KB window. Such a slot was then read from whatever the game's heap held
+            // there, zeros (the draw silently missing) or old floats (dropped draws, and now
+            // and then a count that passed the check). The slots themselves are copied back,
+            // just their bytes. I3_NO_ARG_MIRROR=1 turns this off.
+            static const bool mirror_args = is_infamous_args_mirror();
+            if (mirror_args && gpu_written && slots != 0) {
+                const u32 bytes = stride * slots;
+                pending_mirrors.emplace_back(arg_address + offset, bytes);
+                buffer_cache.AddPendingMirror(arg_address + offset, bytes);
+            }
             for (u32 slot = 0; slot < slots; ++slot) {
                 std::array<u32, 5> args{};
                 memory->CopySparseMemory(arg_address + offset + u64(slot) * stride,
@@ -1395,7 +1412,8 @@ void Rasterizer::FlushMirrors(u32 source) {
 // offset, so no part of them can be left out. The first bind used to upload all of it in one
 // frame (a freeze of 2 to 3 seconds). The ranges are remembered per title, and in later sessions
 // they are uploaded a slice a frame from the start, so the first bind finds only what the game
-// wrote since the last pass. Uploading early is always sound: a later write marks the page again.
+// wrote since the last pass. Uploading early is sound for memory only the game writes (a later
+// write marks the page again); ranges the GPU has written are left out.
 static constexpr u64 HugeBindSize = 256ull << 20;
 static constexpr u64 HugeWarmSlice = 16ull << 20;
 
@@ -1478,9 +1496,7 @@ void Rasterizer::OnSubmit() {
                 parts.emplace_back(range.lower(), range.upper() - range.lower());
             });
             for (const auto& [addr, part_size] : parts) {
-                if (part_size > 64_KB) {
-                    (void)buffer_cache.ObtainBuffer(addr, u32(part_size), false);
-                }
+                buffer_cache.WarmRange(addr, u32(part_size));
             }
         }
     }

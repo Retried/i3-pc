@@ -255,6 +255,69 @@ void BufferCache::AddPendingMirror(VAddr device_addr, u32 size) {
     memory->CopySparseMemory(device_addr, mirror_snapshot_data.data() + offset, size);
 }
 
+void BufferCache::MirrorUrgentAsync(std::span<const std::pair<VAddr, u32>> ranges,
+                                    Common::UniqueFunction<void>&& done) {
+    u64 total = 0;
+    for (const auto& [addr, size] : ranges) {
+        total += Common::AlignUp(size, 64);
+    }
+    if (!mirror_buffer) {
+        mirror_buffer = std::make_unique<Buffer>(instance, 0, MIRROR_BUFFER_SIZE,
+                                                 MemoryType::HostCached, "Mirror Buffer");
+    }
+    if (mirror_offset + total > MIRROR_BUFFER_SIZE) {
+        mirror_offset = 0;
+    }
+    const u64 base = mirror_offset;
+    mirror_offset += total;
+    u64 cursor = 0;
+    for (const auto& [addr, size] : ranges) {
+        const auto [buffer, offset] = ObtainBuffer(addr, size, false);
+        const vk::BufferCopy copy{offset, base + cursor, size};
+        runtime.CopyBuffer(buffer, mirror_buffer.get(), std::span{&copy, 1});
+        cursor += Common::AlignUp(size, 64);
+    }
+    scheduler.DeferOperation([this, base, total, generation = mirror_generation,
+                              list = std::vector(ranges.begin(), ranges.end()),
+                              done = std::move(done)]() mutable {
+        mirror_buffer->Invalidate(base, total);
+        const u8* gpu = mirror_buffer->mapped_data.data() + base;
+        for (const auto& [addr, size] : list) {
+            const u8* result = gpu;
+            gpu += Common::AlignUp(size, 64);
+            // A full copy back since then has already brought this result over.
+            if (generation != mirror_generation || size >= MirrorSnapshotMaxSize ||
+                !memory->IsValidMapping(addr, size)) {
+                continue;
+            }
+            const auto snapshot = mirror_snapshots.find(MirrorSnapshotKey(addr, size));
+            if (snapshot == mirror_snapshots.end()) {
+                continue;
+            }
+            u8* before = mirror_snapshot_data.data() + snapshot->second;
+            // Word by word: what the GPU changed, where the game has not written since.
+            for (u32 at = 0; at + 4 <= size; at += 4) {
+                u32 now;
+                u32 then;
+                u32 held;
+                std::memcpy(&now, result + at, 4);
+                std::memcpy(&then, before + at, 4);
+                if (now == then) {
+                    continue;
+                }
+                memory->CopySparseMemory(addr + at, reinterpret_cast<u8*>(&held), 4);
+                if (held == then) {
+                    memory->TryWriteBacking(std::bit_cast<u8*>(addr + at), result + at, 4);
+                }
+            }
+            std::memcpy(before, result, size);
+        }
+        ++g_stream_epoch;
+        done();
+    });
+    scheduler.Flush();
+}
+
 void BufferCache::RequestCapture(VAddr device_addr, u32 size, u64 key) {
     capture_requests.emplace_back(device_addr, size, key);
 }
@@ -452,6 +515,7 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges, b
     if (partial) {
         return;
     }
+    ++mirror_generation;
     capture_requests.clear();
     pending_mirror_ranges.Clear();
     unissued_mirrors.clear();

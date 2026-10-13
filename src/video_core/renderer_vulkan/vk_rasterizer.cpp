@@ -1853,6 +1853,57 @@ void Rasterizer::OnSubmit() {
     runtime.TickFrame();
 }
 
+// The game waits for a label before it reads the results of its compute work. Blocking the
+// command thread until those results are back costs the overlap of CPU and GPU work (about
+// 7 ms a frame at the crash site). Instead the copy of the results is submitted, the command
+// thread goes on, and the label is written by a deferred operation once the GPU has run the
+// copy and the results are in guest memory: the game is told only when it is true, as on the
+// console. Labels written while one is still waiting queue up behind it, so their order holds.
+// I3_ASYNC_LABELS=1 switches this on (test).
+bool Rasterizer::DeferLabel(void* address, const void* data, u32 size) {
+    static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                                std::getenv("I3_ASYNC_LABELS") != nullptr;
+    if (!enabled || size > 32) {
+        return false;
+    }
+    std::array<u8, 32> bytes{};
+    std::memcpy(bytes.data(), data, size);
+    if (g_arg_windows.urgent && !g_urgent_mirrors.empty()) {
+        std::ranges::sort(g_urgent_mirrors);
+        const auto dup = std::ranges::unique(g_urgent_mirrors);
+        g_urgent_mirrors.erase(dup.begin(), dup.end());
+        ++deferred_labels;
+        ++g_stats.forced_flushes;
+        buffer_cache.MirrorUrgentAsync(g_urgent_mirrors, [this, address, bytes, size] {
+            std::memcpy(address, bytes.data(), size);
+            --deferred_labels;
+        });
+        g_urgent_mirrors.clear();
+        g_arg_windows.urgent = false;
+        return true;
+    }
+    if (deferred_labels != 0) {
+        ++deferred_labels;
+        scheduler.DeferOperation([this, address, bytes, size] {
+            std::memcpy(address, bytes.data(), size);
+            --deferred_labels;
+        });
+        scheduler.Flush();
+        return true;
+    }
+    return false;
+}
+
+void Rasterizer::CompleteDeferred(bool wait) {
+    if (deferred_labels == 0) {
+        return;
+    }
+    if (wait) {
+        scheduler.Finish();
+    }
+    scheduler.PopPendingOperations();
+}
+
 void Rasterizer::OnFence() {
     FlushMirrors(16);
     texture_cache.ProcessDownloadImages();

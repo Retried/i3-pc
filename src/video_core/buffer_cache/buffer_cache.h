@@ -9,6 +9,7 @@
 #include <deque>
 #include <boost/container/small_vector.hpp>
 
+#include "common/unique_function.h"
 #include "common/interval_set.h"
 #include "common/types.h"
 #include "video_core/buffer_cache/buffer.h"
@@ -120,6 +121,12 @@ public:
     /// Marks a range as written by the GPU and not yet copied back to guest memory.
     void AddPendingMirror(VAddr device_addr, u32 size);
 
+    /// Copies a few pending outputs back without blocking: the copy is submitted now, and
+    /// when the GPU has run it the results are written to guest memory and `done` is called
+    /// (from PopPendingOperations on the command thread).
+    void MirrorUrgentAsync(std::span<const std::pair<VAddr, u32>> ranges,
+                           Common::UniqueFunction<void>&& done);
+
     /// Asks for the GPU's bytes of a pending output to be kept at the next copy back (see
     /// TakeCaptured); used to predict the next frame's value of small counters.
     void RequestCapture(VAddr device_addr, u32 size, u64 key);
@@ -173,6 +180,9 @@ private:
     static constexpr u64 MIRROR_BUFFER_SIZE = 32ULL << 20;
     std::unique_ptr<Buffer> mirror_buffer;
     u64 mirror_offset = 0;
+    /// Counts full copy backs; a deferred partial one from before the last full one has
+    /// nothing left to write.
+    u64 mirror_generation = 0;
     u32 mirrors_in_flight = 0;
     /// Ranges added since the last copy was issued, and the ranges of each copy still on its
     /// way: together they are what pending_mirror_ranges has to keep protecting when one

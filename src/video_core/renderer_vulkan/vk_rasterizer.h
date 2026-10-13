@@ -90,6 +90,13 @@ public:
         return !pending_mirrors.empty();
     }
     void OnFence();
+    /// A label write of the game: when results the game reads next are still on their way,
+    /// the label is written only once they have landed. Returns false when the caller has
+    /// to write it itself.
+    bool DeferLabel(void* address, const void* data, u32 size);
+    /// Runs deferred work the GPU has finished; with `wait`, waits for all of it.
+    void CompleteDeferred(bool wait);
+    u32 deferred_labels{};
 
     PipelineCache& GetPipelineCache() {
         return pipeline_cache;

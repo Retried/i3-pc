@@ -132,6 +132,11 @@ void Liverpool::Process(std::stop_token stoken) {
                 task = queue.submits.front();
             }
             task.resume();
+            if (rasterizer) {
+                // The task finished or waits: run what the GPU has finished meanwhile, so a
+                // label the game waits for is not left hanging.
+                rasterizer->CompleteDeferred(false);
+            }
 
             if (task.done()) {
                 task.destroy();
@@ -145,6 +150,9 @@ void Liverpool::Process(std::stop_token stoken) {
             }
         }
 
+        if (rasterizer) {
+            rasterizer->CompleteDeferred(true);
+        }
         if (submit_done) {
             VideoCore::EndCapture();
             if (rasterizer) {
@@ -744,6 +752,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
             case PM4ItOpcode::EventWriteEop: {
                 // The game may read compute results once this event fires.
                 if (rasterizer) {
+                    // Labels still held back come before this event.
+                    rasterizer->CompleteDeferred(true);
                     rasterizer->FlushMirrors(2);
                 }
                 const auto* event_eop = reinterpret_cast<const PM4CmdEventWriteEop*>(header);
@@ -801,6 +811,10 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 const u32 data_size = (header->type3.count.Value() - 2) * 4;
                 u64* address = write_data->Address<u64*>();
                 if (!write_data->wr_one_addr.Value()) {
+                    if (rasterizer &&
+                        rasterizer->DeferLabel(address, write_data->data, data_size)) {
+                        break;
+                    }
                     if (rasterizer) {
                         rasterizer->OnFence();
                     }
@@ -1145,6 +1159,10 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
             ASSERT(write_data->dst_sel.Value() == 2 || write_data->dst_sel.Value() == 5);
             const u32 data_size = (header->type3.count.Value() - 2) * 4;
             if (!write_data->wr_one_addr.Value()) {
+                if (rasterizer && rasterizer->DeferLabel(write_data->Address<void*>(),
+                                                         write_data->data, data_size)) {
+                    break;
+                }
                 if (rasterizer) {
                     rasterizer->OnFence();
                 }

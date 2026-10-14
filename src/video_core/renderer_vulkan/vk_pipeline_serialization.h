@@ -17,5 +17,9 @@ void RegisterShaderMeta(const Shader::Info& info,
                         const std::optional<Shader::Gcn::FetchShaderData>& fetch_shader_data,
                         const Shader::StageSpecialization& spec, size_t perm_hash, size_t perm_idx);
 void RegisterShaderBinary(std::vector<u32>&& spv, u64 pgm_hash, size_t perm_idx);
+/// A shader variant's key: a hash of its specialization, the same in every session.
+u64 VariantKey(const Shader::StageSpecialization& spec);
+/// Stores a variant's SPIR-V under its program and variant key.
+void RegisterShaderBinaryByKey(std::vector<u32>&& spv, u64 pgm_hash, u64 key);
 
 } // namespace Vulkan

@@ -642,7 +642,8 @@ bool PipelineCache::RefreshComputeKey() {
 
 vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::RuntimeInfo& runtime_info,
                                               const std::span<const u32>& code, size_t perm_idx,
-                                              Shader::Backend::Bindings& binding) {
+                                              Shader::Backend::Bindings& binding,
+                                              std::vector<u32>* keep_spv) {
     Common::FreezeTimer freeze_timer{6};
     LOG_INFO(Render_Vulkan, "Compiling {} shader {:#x} {}", info.hw_stage, info.pgm_hash,
              perm_idx != 0 ? "(permutation)" : "");
@@ -663,13 +664,16 @@ vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::Runtim
         module = CompileSPV(spv, instance.GetDevice());
     }
 
-    RegisterShaderBinary(std::move(spv), info.pgm_hash, perm_idx);
-
     const auto name = GetShaderName(info.hw_stage, info.pgm_hash, perm_idx);
     Vulkan::SetObjectName(instance.GetDevice(), module, name);
     if (EmulatorSettings.IsShaderCollect()) {
         DebugState.CollectShader(name, info.sw_stage, module, spv, code,
                                  patch ? *patch : std::span<const u32>{}, is_patched);
+    }
+    if (keep_spv) {
+        *keep_spv = std::move(spv);
+    } else {
+        RegisterShaderBinary(std::move(spv), info.pgm_hash, perm_idx);
     }
     return module;
 }
@@ -683,12 +687,16 @@ PipelineCache::Result PipelineCache::GetProgram(HwStage hw_stage, SwStage sw_sta
         it_pgm.value() = std::make_unique<Program>(hw_stage, sw_stage, params);
         auto& program = it_pgm.value();
         auto start = binding;
-        const auto module = CompileModule(program->info, runtime_info, params.code, 0, binding);
+        std::vector<u32> spv;
+        const auto module =
+            CompileModule(program->info, runtime_info, params.code, 0, binding, &spv);
         auto spec = Shader::StageSpecialization(program->info, runtime_info, profile, start);
-        const auto perm_hash = HashCombine(params.hash, 0);
+        const u64 key = VariantKey(spec);
+        RegisterShaderBinaryByKey(std::move(spv), params.hash, key);
+        const auto perm_hash = HashCombine(params.hash, key);
 
         RegisterShaderMeta(program->info, spec.fetch_shader_data, spec, perm_hash, 0);
-        program->AddPermut(module, std::move(spec));
+        program->AddPermut(module, std::move(spec), key);
         if (auto& fetch = program->modules[0].spec.fetch_shader_data; !fetch.Empty()) {
             fetch_shader = &fetch;
         }
@@ -703,22 +711,26 @@ PipelineCache::Result PipelineCache::GetProgram(HwStage hw_stage, SwStage sw_sta
     auto spec = Shader::StageSpecialization(info, runtime_info, profile, binding);
 
     size_t perm_idx = program->modules.size();
-    u64 perm_hash = HashCombine(params.hash, perm_idx);
+    u64 perm_hash{};
 
     vk::ShaderModule module{};
 
     const auto it = std::ranges::find(program->modules, spec, &Program::Module::spec);
     if (it == program->modules.end()) {
         auto new_info = Shader::Info(hw_stage, sw_stage, params);
-        module = CompileModule(new_info, runtime_info, params.code, perm_idx, binding);
+        const u64 key = VariantKey(spec);
+        std::vector<u32> spv;
+        module = CompileModule(new_info, runtime_info, params.code, perm_idx, binding, &spv);
+        RegisterShaderBinaryByKey(std::move(spv), params.hash, key);
+        perm_hash = HashCombine(params.hash, key);
 
         RegisterShaderMeta(info, spec.fetch_shader_data, spec, perm_hash, perm_idx);
-        program->AddPermut(module, std::move(spec));
+        program->AddPermut(module, std::move(spec), key);
     } else {
         info.AddBindings(binding);
         module = it->module;
         perm_idx = std::distance(program->modules.begin(), it);
-        perm_hash = HashCombine(params.hash, perm_idx);
+        perm_hash = HashCombine(params.hash, it->key);
     }
     if (auto& fetch = program->modules[perm_idx].spec.fetch_shader_data; !fetch.Empty()) {
         fetch_shader = &fetch;

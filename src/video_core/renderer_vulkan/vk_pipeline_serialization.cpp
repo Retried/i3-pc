@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <xxhash.h>
 #include "common/serdes.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
@@ -88,6 +89,29 @@ void RegisterShaderBinary(std::vector<u32>&& spv, u64 pgm_hash, size_t perm_idx)
 
     Storage::DataBase::Instance().Save(Storage::BlobType::ShaderBinary,
                                        fmt::format("{:#018x}_{}", pgm_hash, perm_idx),
+                                       std::move(spv));
+}
+
+// Variants used to be numbered in the order a session first met them, and stored pipelines
+// named their shaders by that number. Sessions disagree on the order, so in every session many
+// stored pipelines named the wrong variant and were compiled again on the render thread (city
+// stutter: 50 to 160 pipelines and "conflicts with index" in a short walk through Seattle).
+// Variants are now named by a hash of their specialization. Stores written before keep their
+// files but are not used: their pipelines are compiled once more and stored the new way.
+u64 VariantKey(const Shader::StageSpecialization& spec) {
+    Serialization::Archive ar;
+    spec.Serialize(ar);
+    const auto bytes = ar.TakeOff();
+    return XXH3_64bits(bytes.data(), bytes.size());
+}
+
+void RegisterShaderBinaryByKey(std::vector<u32>&& spv, u64 pgm_hash, u64 key) {
+    if (!Storage::DataBase::Instance().IsOpened()) {
+        return;
+    }
+
+    Storage::DataBase::Instance().Save(Storage::BlobType::ShaderBinary,
+                                       fmt::format("{:#018x}_k{:016x}", pgm_hash, key),
                                        std::move(spv));
 }
 
@@ -254,43 +278,39 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
         return false;
     }
 
+    const u64 key = VariantKey(spec);
     std::vector<u32> spv{};
     Storage::DataBase::Instance().Load(Storage::BlobType::ShaderBinary,
-                                       fmt::format("{:#018x}_{}", program->info.pgm_hash, perm_idx),
+                                       fmt::format("{:#018x}_k{:016x}", program->info.pgm_hash, key),
                                        spv);
     if (spv.empty()) {
+        // Stored before variants were named by their content: compiled when first needed.
         return false;
     }
 
-    // Permutation hash depends on shader variation index. To prevent collisions, we need insert it
-    // at the exact position rather than append
-
     vk::ShaderModule module{};
-
+    size_t perm_idx_found{};
     auto [it_pgm, new_program] = program_cache.try_emplace(program->info.pgm_hash);
     if (new_program) {
         module = CompileSPV(spv, instance.GetDevice());
         it_pgm.value() = std::move(program);
+        it_pgm.value()->AddPermut(module, std::move(spec), key);
+        perm_idx_found = it_pgm.value()->modules.size() - 1;
     } else {
-        const auto& it = std::ranges::find(it_pgm.value()->modules, spec, &Program::Module::spec);
-        if (it != it_pgm.value()->modules.end()) {
-            // A matching permutation is valid only at its original index. A different index means
-            // the store holds entries from more than one cache generation, so this pipeline is
-            // left to compile at runtime.
-            const auto idx = std::distance(it_pgm.value()->modules.begin(), it);
-            if (perm_idx != idx) {
-                LOG_WARNING(Render_Vulkan,
-                            "Cached permutation {} of {}_{:x} conflicts with index {}, skipping "
-                            "preload",
-                            perm_idx, program->info.hw_stage, program->info.pgm_hash, idx);
-                return false;
-            }
+        auto& modules_list = it_pgm.value()->modules;
+        const auto it = std::ranges::find(modules_list, key, &Program::Module::key);
+        if (it != modules_list.end()) {
             module = it->module;
+            perm_idx_found = std::distance(modules_list.begin(), it);
         } else {
             module = CompileSPV(spv, instance.GetDevice());
+            // The variant belongs to the program already loaded, not to this temporary one.
+            spec.info = &it_pgm.value()->info;
+            it_pgm.value()->AddPermut(module, std::move(spec), key);
+            perm_idx_found = modules_list.size() - 1;
         }
     }
-    it_pgm.value()->InsertPermut(module, std::move(spec), perm_idx);
+    perm_idx = perm_idx_found;
 
     infos[stage] = &it_pgm.value()->info;
     modules[stage] = module;

@@ -43,8 +43,16 @@ def edit(path, active, world, done):
     assert b[o:o + 4] == bytes.fromhex('13addbba'), b[o:o + 4].hex()
     ln = struct.unpack_from('<I', b, o + 4)[0]
     cur = active.encode() + b'\0'
-    assert len(cur) == ln, 'mission name of another length would move the data behind it'
-    b[o + 8:o + 8 + ln] = cur
+    if len(cur) != ln:
+        # Another length moves everything behind the name; the file keeps its size (the end
+        # of the 128 KiB block is padding).
+        size = len(b)
+        b[o + 4:o + 8] = struct.pack('<I', len(cur))
+        b[o + 8:o + 8 + ln] = cur
+        del b[size:]
+        b.extend(b'\0' * (size - len(b)))
+    else:
+        b[o + 8:o + 8 + ln] = cur
     w = b.index(b'world_', o)
     old = b[w:b.index(b'\0', w)]
     assert len(old) == len(world), (old, world)

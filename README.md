@@ -253,10 +253,13 @@ missing, English is shown.
   continue the cutscene, then open Options yourself (in Seattle: Options, then Triangle / R).
 - Trophies are listed as "Trophy 1" to "Trophy 48": their names are not readable from the game
   data.
-- Played up to the first boss fight. Beyond it only the road to Seattle and the start of the
-  bridge into the city have been seen, from saves edited by hand. Those are good for
-  measuring but not for playing on: on the bridge only walking works in them (jump and dash
-  do nothing), so nothing past that point has been played.
+- Played up to the first boss fight by hand. Beyond it, tested from saves edited for testing:
+  the mission after the boss starts in the longhouse, and the first open-world mission in
+  Seattle ("Find Core Relays") plays with running, climbing, jumping and the smoke dash.
+- Moving into parts of Seattle the game has not shown before stutters while their shaders
+  are compiled (pauses of 0.1 to 1.7 s); they are stored, and later sessions stutter less
+  (in one walk repeated four times: 128, 45, 15 and 18 pauses). The first session after
+  installing the runtime of 2026-10-14 compiles everything again, once.
 - The picture is always rendered at 1080p; higher output sizes are upscaled.
 - `docs/NOTES.txt` lists what has been checked and what is open.
 

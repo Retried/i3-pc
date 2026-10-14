@@ -25,10 +25,18 @@ for id in ${@:-1 2 3 4 5 6 7 8 12 13 14 15 16 19}; do
     a="38:shotui,39:pad=dpdown,40:pad=dpdown,41:pad=dpdown,42:pad=a,44:shotui,45:pad=a,47:shotui"
     for i in $(seq 0 15); do a="$a,$((48 + i)):pad=dpdown"; done
     a="$a,65:shotui"
+    if [ -n "$CONTROLS" ]; then
+        # CONTROLS=1: the Controls page instead (second row of Options): top, then scrolled twice.
+        a="38:shotui,39:pad=dpdown,40:pad=dpdown,41:pad=dpdown,42:pad=a,44:pad=dpdown,45:pad=a,47:shotui"
+        for i in $(seq 0 11); do a="$a,$((48 + i)):pad=dpdown"; done
+        a="$a,61:shotui"
+        for i in $(seq 0 13); do a="$a,$((62 + i)):pad=dpdown"; done
+        a="$a,77:shotui"
+    fi
     (cd testrun && env SOTC_HEADLESS=1 SOTC_MUTE=1 I3_SKIP_FIRST_RUN=1 I3_START_SCREEN=1 SOTC_VPAD=1 SOTC_SCRIPT="$a" \
         "${BIN:-/d/i3-pc/bin}/i3.exe" -f false --game "D:/Games/CUSA00004/eboot.bin" > /dev/null 2>&1 &)
     sleep ${RUN:-85}; taskkill //IM i3.exe //F > /dev/null 2>&1; sleep 2
-    n=0; for f in $(ls -tr testrun/user/screenshots/*.png 2>/dev/null); do n=$((n + 1)); ffmpeg -y -loglevel error -i "$f" -vf scale=960:-1 tools/lang_${id}_$n.png; done
+    n=0; for f in $(ls -tr testrun/user/screenshots/*.png 2>/dev/null); do n=$((n + 1)); ffmpeg -y -loglevel error -i "$f" -vf scale=960:-1 tools/lang${CONTROLS:+c}_${id}_$n.png; done
     echo "language $id: $n pictures"
     touch SLOT_DONE
 done

@@ -10,6 +10,8 @@ label=$1; shift
 [ "$(tasklist | grep -ci -E 'shadps4|sotc_ab|ShadowOfTheColossus|^i3.exe')" = "0" ] || { echo "busy"; exit 1; }
 S=testrun/user/home/1000/savedata; rm -rf $S/CUSA00004; cp -rp fixtures/${FX:-seattle}-CUSA00004 $S/CUSA00004
 cp tools/gfx.bak testrun/user/i3_graphics.txt
+# SUN, LIGHT, DETAIL add a Shadow Preset to the graphics file (Balanced: half half reduced).
+[ -n "$SUN" ] && printf "sun_shadows = $SUN\nlight_shadows = $LIGHT\nshadow_detail = $DETAIL\n" >> testrun/user/i3_graphics.txt
 rm -rf testrun/user/capture; rm -f tools/try_${label}_*.png
 BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 400 "45:cross,60:cross" > /dev/null; sleep ${WAIT:-115}
 F=testrun/live_cmds.txt

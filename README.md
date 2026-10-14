@@ -56,6 +56,26 @@ place while recording. Details, method and older figures are in `docs/BENCHMARK.
 | Seattle, wrecked bridge, looking along it | Original | 59.9 FPS | 56.7 |
 | Seattle, same spot, looking at the city | any | about 26 FPS | not measured |
 
+One frame of each benchmark clip, with the readout that was measured while it was recorded:
+
+![Crash site, Shadow Preset Original](docs/img/bench_crash_original.jpg)
+
+![Crash site, Balanced](docs/img/bench_crash_balanced.jpg)
+
+![Crash site, Fast](docs/img/bench_crash_fast.jpg)
+
+![Crash site, Off](docs/img/bench_crash_off.jpg)
+
+![Fish cannery interior](docs/img/bench_cannery.jpg)
+
+![Road to the cannery](docs/img/bench_road.jpg)
+
+![Seattle, wrecked bridge](docs/img/bench_city.jpg)
+
+The pictures show the author's own copy of the game running in this build. The game, its
+art and its characters belong to their owners; the pictures are here only to show the
+measurements.
+
 The runtime installed since then holds the fix for the crash in long fire fights, which
 costs frame rate where fire and particles are on screen: the crash site now runs at 41.6 FPS
 without recording (about 50 before the fix). The city view is the other limit: about 9,100
@@ -246,8 +266,9 @@ game files or saves.
 
 ## What is not here
 
-No game files, no PS4 system modules, no keys, no saves, no shader caches, no screenshots or
-videos, and no icons, fonts or textures from the game. The program icon is not included either:
+No game files, no PS4 system modules, no keys, no saves, no shader caches, no videos, and no
+icons, fonts or textures from the game. The only pictures of the game are the seven benchmark
+frames under Frame rates. The program icon is not included either:
 `dist/Install.ps1` uses `dist/game.ico` if you put one there. `dist/Keys.ps1` redraws the button
 icons as key caps on top of the game's own icon sheet, which you have to dump from your copy
 first (`dist/glyphs/atlas_original.raw`); without it the key bindings still work and the icons

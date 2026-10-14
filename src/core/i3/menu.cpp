@@ -6,6 +6,7 @@
 #include "core/libraries/pad/pad.h"
 #include "emulator.h"
 #include "input/controller.h"
+#include <cstdlib>
 #include <ctime>
 #include "core/i3/achievements.h"
 #include <algorithm>
@@ -57,11 +58,13 @@ namespace {
 // label) and put into the console language where they are drawn or handed out for drawing.
 using Lang::Tr;
 
-enum class Page { Main, Controls, Graphics, Achievements, Start, Options };
+// Start: the start screen. Pc: the PC sections at the end of the game's own Options screen.
+// Achievements: the trophy list, reached from either.
+enum class Page { Start, Pc, Achievements };
 
 std::atomic_bool open{false};
 std::atomic_bool capturing{false};
-Page page = Page::Main;
+Page page = Page::Start;
 int selected = 0;
 ImFont* menu_font = nullptr;
 bool fps_shown = false;
@@ -71,8 +74,18 @@ bool restart_note = false;
 // selection moves.
 bool quit_armed = false;
 int quit_armed_row = -1;
-// The page the sub-pages go back to: the start screen at launch, the pause menu during play.
-Page home = Page::Main;
+// The page the trophy list goes back to: the start screen at launch, the PC sections in play.
+Page home = Page::Start;
+// What the last frames read back showed of the game's Options screen (see OnProbe): when the
+// panel was last seen, and whether its last line was the selected one.
+std::atomic<u64> probe_seen_ms{0};
+std::atomic<u64> probe_title_ms{0};
+std::atomic_bool probe_last_row{false};
+std::atomic<u32> probe_count{0};
+// The left stick's direction the last time it was looked at while the game's screen was up.
+int closed_stick_direction = 0;
+// Lines of the PC sections before the Controls lines (Language comes after them).
+int graphics_count = 0;
 // Controller input for the menu, taken from the pad events themselves (ImGui's own gamepad
 // navigation is not switched on in this program): bits up, down, left, right, confirm, back.
 enum PadNav : int { NavUp = 1, NavDown = 2, NavLeft = 4, NavRight = 8, NavConfirm = 16, NavBack = 32 };
@@ -85,7 +98,6 @@ bool has_saves = false;
 // The game is held (its threads paused) while a menu is up.
 bool game_held = false;
 u64 opened_ms = 0;
-bool options_consumed = false;
 // Pad presses sent to the game later: opening its own Options screen for the player.
 struct TimedPress {
     u64 at_ms;
@@ -476,66 +488,29 @@ struct Row {
 
 std::vector<Row> BuildRows() {
     std::vector<Row> rows;
-    if (page == Page::Main || page == Page::Start) {
-        const std::string trophies =
-            fmt::format("{} / {}", Achievements::UnlockedCount(), Achievements::Count());
-        if (page == Page::Start) {
-            if (has_saves) {
-                rows.push_back({"CONTINUE", "", Tr("Carry on from your last save")});
-                rows.push_back({"NEW GAME", "",
-                                Tr("Your last save loads first; the game's Options screen then "
-                                   "opens on New Game (after a cutscene, if the save starts in one: "
-                                   "press Options yourself)")});
-                rows.push_back({"LOAD GAME", "",
-                                Tr("Your last save loads first; the game's Options screen then "
-                                   "opens on Load Game (after a cutscene, if the save starts in one: "
-                                   "press Options yourself)")});
-            } else {
-                rows.push_back({"NEW GAME", "", Tr("Start the game")});
-            }
+    const std::string trophies =
+        fmt::format("{} / {}", Achievements::UnlockedCount(), Achievements::Count());
+    if (page == Page::Start) {
+        if (has_saves) {
+            rows.push_back({"CONTINUE", "", Tr("Carry on from your last save")});
+            rows.push_back({"NEW GAME", "",
+                            Tr("Your last save loads first; the game's Options screen then "
+                               "opens on New Game (after a cutscene, if the save starts in one: "
+                               "press Options yourself)")});
+            rows.push_back({"LOAD GAME", "",
+                            Tr("Your last save loads first; the game's Options screen then "
+                               "opens on Load Game (after a cutscene, if the save starts in one: "
+                               "press Options yourself)")});
         } else {
-            rows.push_back({"RESUME", "", Tr("Return to the game")});
+            rows.push_back({"NEW GAME", "", Tr("Start the game")});
         }
+        // The game's own Options screen, which holds the PC settings at its end.
         rows.push_back({"OPTIONS", "",
-                        page == Page::Start
-                            ? Tr("Graphics, controls, gameplay, sound and interface")
-                            : Tr("Graphics, controls, gameplay, sound, interface, save and load")});
-        rows.push_back(
-            {"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
-        if (page == Page::Start) {
-            rows.push_back(
-                {"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
-        } else {
-            rows.push_back({"RETURN TO MAIN MENU", quit_armed ? Tr("Press again to confirm") : "",
-                            quit_armed ? Tr("Progress since the last checkpoint is lost, and the game "
-                                            "loads again (about 40 seconds)")
-                                       : Tr("Back to the start screen. Quit is there")});
-        }
-    } else if (page == Page::Options) {
-        // Gameplay, Sound and Interface are the game's own settings, kept in its saves: these
-        // lines open the game's Options screen on that section instead of copying them.
-        const char* how = home == Page::Main
-                              ? Tr("Opens the game's own Options screen there")
-                              : has_saves ? Tr("Your last save loads first; the game's Options screen "
-                                               "then opens there")
-                                          : Tr("Available from the pause menu once a game has started");
-        rows.push_back({"GRAPHICS", "", Tr("Frame rate, display, upscaling, effects and shadows")});
-        rows.push_back({"CONTROLS", "", Tr("Change the keyboard and mouse bindings")});
-        rows.push_back({"GAMEPLAY", "",
-                        fmt::format(fmt::runtime(Tr("Difficulty, aim sensitivity, photo mode. {}")),
-                                    how)});
-        rows.push_back(
-            {"SOUND", "",
-             fmt::format(fmt::runtime(Tr("Dialogue, music and effects volume, audio mix. {}")),
-                         how)});
-        rows.push_back(
-            {"INTERFACE", "", fmt::format(fmt::runtime(Tr("Subtitles and the HUD. {}")), how)});
-        if (home == Page::Main) {
-            rows.push_back(
-                {"SAVE AND LOAD", "",
-                 Tr("Save Game, New Game and Load Game on the game's own Options screen")});
-        }
-        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
+                        has_saves ? Tr("Your last save loads first; the game's Options screen "
+                                       "then opens there")
+                                  : Tr("Available from the pause menu once a game has started")});
+        rows.push_back({"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
+        rows.push_back({"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
     } else if (page == Page::Achievements) {
         for (int id = 0; id < Achievements::Count(); id++) {
             const u64 when = Achievements::UnlockedAt(id);
@@ -549,14 +524,9 @@ std::vector<Row> BuildRows() {
             rows.push_back({Achievements::Name(id), state, Achievements::Description(id)});
         }
         rows.push_back({"BACK", "", Tr("Return to the previous menu")});
-    } else if (page == Page::Controls) {
-        const auto lines = ReadLines();
-        for (const auto& action : Actions) {
-            rows.push_back({action.label, KeysOf(lines, action.pad),
-                            Tr("Confirm, then press the key or mouse button to use")});
-        }
-        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
     } else {
+        // The PC sections: graphics, the keyboard and mouse bindings, the language, the trophy
+        // list and leaving the game.
         const u32 cap = EmulatorSettings.GetVblankFrequency();
         rows.push_back({"Frame Rate Cap", cap >= 1000 ? Tr("Uncapped") : fmt::format("{}", cap),
                         Tr("Applies the next time the game starts"), true});
@@ -602,10 +572,21 @@ std::vector<Row> BuildRows() {
         rows.push_back({"Shadow Detail", Tr(ShadowDetailNames[shadow_detail]),
                         Tr("Reduced and Low leave small objects out of the sun's shadows. Applies at once"),
                         true});
-        // The game reads the language when it starts, and so do these menus.
+        graphics_count = static_cast<int>(rows.size());
+        const auto lines = ReadLines();
+        for (const auto& action : Actions) {
+            rows.push_back({action.label, KeysOf(lines, action.pad),
+                            Tr("Confirm, then press the key or mouse button to use")});
+        }
+        // The game reads the language when it starts, and so do these screens.
         rows.push_back({"Language", LanguageNames[LanguageIndex()],
                         Tr("Applies the next time the game starts"), true});
-        rows.push_back({"BACK", "", Tr("Return to the previous menu")});
+        rows.push_back({"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
+        rows.push_back({"RETURN TO MAIN MENU", quit_armed ? Tr("Press again to confirm") : "",
+                        quit_armed ? Tr("Progress since the last checkpoint is lost, and the game "
+                                        "loads again (about 40 seconds)")
+                                   : Tr("Back to the start screen. Quit is there")});
+        rows.push_back({"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
     }
     return rows;
 }
@@ -710,8 +691,8 @@ void AdjustGraphics(int row, int step) {
 }
 
 /// The page a sub-page goes back to.
-Page ParentOf(Page of) {
-    return of == Page::Controls || of == Page::Graphics ? Page::Options : home;
+Page ParentOf(Page) {
+    return home;
 }
 
 // Holding the game stops its threads wherever they are. One of them can be stopped inside the
@@ -839,13 +820,13 @@ void ReturnToMainMenu() {
 
 void LeaveStartScreen(int game_row) {
     start_state = StartState::Done;
-    home = Page::Main;
+    home = Page::Pc;
     open = false;
     pending_game_row = game_row;
     pending_ready_ms = 0;
 }
 
-/// Confirm on a row of the start screen or of the pause menu.
+/// Confirm on a line of the start screen, or on Achievements, Return or Quit in the PC sections.
 void ActivateTop(const std::string& label, int row) {
     using Libraries::Pad::OrbisPadButtonDataOffset;
     const bool needs_confirm = label == "QUIT" || label == "RETURN TO MAIN MENU";
@@ -861,35 +842,11 @@ void ActivateTop(const std::string& label, int row) {
         LeaveStartScreen(has_saves ? 1 : -1);
     } else if (label == "LOAD GAME") {
         LeaveStartScreen(2);
-    } else if (label == "RESUME") {
-        open = false;
-    } else if (label == "GAMEPLAY" || label == "SOUND" || label == "INTERFACE" ||
-               label == "SAVE AND LOAD") {
-        // Rows of the game's Options screen: Save Game, New Game, Load Game, Difficulty, Aim
-        // Sensitivity, Vertical, Horizontal, Photo Mode, Dialogue, Music, Gameplay, Audio Mix,
-        // Subtitles.
-        const int game_row =
-            label == "GAMEPLAY" ? 3 : label == "SOUND" ? 8 : label == "INTERFACE" ? 12 : 0;
-        if (home == Page::Start) {
-            if (has_saves) {
-                LeaveStartScreen(game_row);
-            }
-        } else {
-            open = false;
-            OpenGameOptions(300, game_row);
-        }
     } else if (label == "OPTIONS") {
-        page = Page::Options;
-        selected = 0;
-    } else if (label == "BACK") {
-        page = home;
-        selected = 0;
-    } else if (label == "CONTROLS") {
-        page = Page::Controls;
-        selected = 0;
-    } else if (label == "GRAPHICS") {
-        page = Page::Graphics;
-        selected = 0;
+        // The game's own Options screen once the last save has loaded.
+        if (has_saves) {
+            LeaveStartScreen(0);
+        }
     } else if (label == "ACHIEVEMENTS") {
         page = Page::Achievements;
         selected = 0;
@@ -903,47 +860,85 @@ void ActivateTop(const std::string& label, int row) {
 }
 
 /// direction: 0 = confirm, -1 / +1 = left / right.
-void Activate(int row, int direction, int count) {
-    if (page == Page::Main) {
-        if (direction != 0) {
-            return;
-        }
-        if (row == 0) {
-            page = Page::Controls;
-            selected = 0;
-        } else if (row == 1) {
-            page = Page::Graphics;
-            selected = 0;
-        } else if (row == 2) {
-            page = Page::Achievements;
-            selected = 0;
-        } else if (row == 3) {
-            open = false;
-        } else if (!quit_armed) {
-            quit_armed = true;
-            quit_armed_row = row;
-        } else {
-            SDL_Event quit{};
-            quit.type = SDL_EVENT_QUIT;
-            SDL_PushEvent(&quit);
-        }
-        if (row != quit_armed_row) {
-            quit_armed = false;
-        }
-    } else if (row == count - 1) {
-        if (direction == 0) {
+void Activate(int row, int direction, int count, const std::string& label) {
+    if (page == Page::Achievements) {
+        // A list to read: only its last line, Back, does something.
+        if (row == count - 1 && direction == 0) {
             page = ParentOf(page);
             selected = 0;
         }
-    } else if (page == Page::Controls) {
+        return;
+    }
+    const int actions = static_cast<int>(Actions.size());
+    if (row < graphics_count) {
+        AdjustGraphics(row, direction == 0 ? 1 : direction);
+    } else if (row < graphics_count + actions) {
         if (direction == 0) {
             capturing = true;
         }
-    } else if (page == Page::Achievements) {
-        // A list to read: nothing to change.
-    } else {
-        AdjustGraphics(row, direction == 0 ? 1 : direction);
+    } else if (row == graphics_count + actions) {
+        // Language, the line after the graphics ones in the old Graphics page.
+        AdjustGraphics(graphics_count, direction == 0 ? 1 : direction);
+    } else if (direction == 0) {
+        ActivateTop(label, row);
     }
+}
+
+/// A press that moves the selection down: Down, the keys bound to D-pad Down or to moving
+/// back, the pad's D-pad Down, or the left stick leaving the centre downwards.
+bool IsDownPress(const SDL_Event& event) {
+    switch (event.type) {
+    case SDL_EVENT_KEY_DOWN: {
+        if (event.key.repeat) {
+            return false;
+        }
+        if (event.key.key == SDLK_DOWN) {
+            return true;
+        }
+        const std::string name = NameOf(event);
+        if (name.empty()) {
+            return false;
+        }
+        for (const auto& line : ReadLines()) {
+            const auto [pad, value] = SplitLine(line);
+            if ((pad == "pad_down" || pad == "axis_left_y_plus") && value == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        return event.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+        if (event.gaxis.axis != SDL_GAMEPAD_AXIS_LEFTY) {
+            return false;
+        }
+        const int direction = event.gaxis.value < -20000 ? -1 : event.gaxis.value > 20000 ? 1 : 0;
+        const bool down = direction == 1 && closed_stick_direction != 1;
+        closed_stick_direction = direction;
+        return down;
+    }
+    default:
+        return false;
+    }
+}
+
+/// Down on the last line of the game's Options screen: the PC sections open on their first line.
+bool EnterPcSections(const SDL_Event& event) {
+    static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
+    if (!enabled || start_state == StartState::Showing || !probe_last_row.load() ||
+        SDL_GetTicks() - probe_seen_ms.load() > 300 || !IsDownPress(event)) {
+        return false;
+    }
+    page = Page::Pc;
+    home = Page::Pc;
+    selected = 0;
+    capturing = false;
+    quit_armed = false;
+    opened_ms = SDL_GetTicks();
+    open = true;
+    LOG_INFO(Input, "PC sections opened from the game's Options screen");
+    return true;
 }
 
 ImFont* MenuFont() {
@@ -1014,26 +1009,22 @@ std::string SectionOf(Page of, const std::string& label, int index) {
     }
     switch (of) {
     case Page::Start:
-    case Page::Main:
-        return index == 0 ? "GAME" : label == "OPTIONS" ? "SETUP" : label == "QUIT" ||
-                                                                      label == "RETURN TO MAIN MENU"
-                                                                      ? "EXIT"
-                                                                      : "";
-    case Page::Options:
-        return label == "GRAPHICS" ? "PC" : label == "GAMEPLAY" ? "GAME"
-                                          : label == "SAVE AND LOAD" ? "SAVE DATA" : "";
-    case Page::Graphics:
-        return index == 0 ? "DISPLAY"
-               : label == "Upscaling (FSR)" ? "IMAGE"
-               : label == "Effects Preset" ? "EFFECTS"
-               : label == "Game Frame Limit" ? "FRAME RATE"
-               : label == "Shadow Preset" ? "SHADOWS"
-               : label == "Language" ? "LANGUAGE" : "";
-    case Page::Controls:
-        return index == 0 ? "ACTIONS"
-               : label == "L3" ? "BUTTONS"
-               : label == "Move Forward" ? "MOVEMENT"
-               : label == "Hold Controller Sideways (Spray Can)" ? "MOTION AND TOUCHPAD" : "";
+        return index == 0 ? "GAME" : label == "OPTIONS" ? "SETUP" : label == "QUIT" ? "EXIT" : "";
+    case Page::Pc:
+        // Continuing the game's list (its last section is VIDEO).
+        return index == 0                                    ? "DISPLAY"
+               : label == "Upscaling (FSR)"                  ? "IMAGE"
+               : label == "Effects Preset"                   ? "EFFECTS"
+               : label == "Game Frame Limit"                 ? "FRAME RATE"
+               : label == "Shadow Preset"                    ? "SHADOWS"
+               : index == graphics_count                     ? "CONTROLS"
+               : label == "L3"                               ? "BUTTONS"
+               : label == "Move Forward"                     ? "MOVEMENT"
+               : label == "Hold Controller Sideways (Spray Can)" ? "MOTION AND TOUCHPAD"
+               : label == "Language"                         ? "LANGUAGE"
+               : label == "ACHIEVEMENTS"                     ? "ACHIEVEMENTS"
+               : label == "RETURN TO MAIN MENU"              ? "EXIT"
+                                                             : "";
     case Page::Achievements:
         return index == 0 ? "TROPHIES" : "";
     }
@@ -1087,14 +1078,9 @@ void Toggle() {
     if (start_state == StartState::Showing) {
         return; // the start screen closes through its own rows
     }
-    if (!open) {
-        page = Page::Main;
-        home = Page::Main;
-        selected = 0;
-        opened_ms = SDL_GetTicks();
-    }
+    // Only closes: the PC sections open from the game's own Options screen.
     capturing = false;
-    open = !open;
+    open = false;
 }
 
 bool OnOptionsButton(bool pressed) {
@@ -1105,16 +1091,10 @@ bool OnOptionsButton(bool pressed) {
     if (FirstRun::IntroActive() || start_state == StartState::Showing) {
         return true;
     }
-    if (pressed) {
-        Toggle();
-        options_consumed = true;
-        return true;
-    }
-    if (options_consumed) {
-        options_consumed = false;
-        return true;
-    }
-    return false;
+    // The game's own pause and Options screens open as on the console. While the PC sections
+    // hold the input, the button is theirs (it goes back, see Draw).
+    (void)pressed;
+    return open.load();
 }
 
 bool IsOpen() {
@@ -1128,19 +1108,12 @@ bool OnEvent(const SDL_Event& event) {
                event.type != SDL_EVENT_GAMEPAD_BUTTON_UP && event.type != SDL_EVENT_QUIT;
     }
     if (!open) {
-        return false;
+        return EnterPcSections(event);
     }
     switch (event.type) {
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_WHEEL:
-        // The key that opened the overlay closes it; it does not reach the hotkey layer while
-        // the overlay holds the input.
-        if (!capturing && event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F2 &&
-            !event.key.repeat) {
-            Toggle();
-            return true;
-        }
         if (capturing) {
             capturing = false;
             // Escape leaves the binding as it was.
@@ -1148,9 +1121,10 @@ bool OnEvent(const SDL_Event& event) {
                 return true;
             }
             const std::string name = NameOf(event);
-            if (!name.empty() && page == Page::Controls && selected >= 0 &&
-                selected < static_cast<int>(Actions.size())) {
-                Bind(Actions[selected].pad, name);
+            const int action = selected - graphics_count;
+            if (!name.empty() && page == Page::Pc && action >= 0 &&
+                action < static_cast<int>(Actions.size())) {
+                Bind(Actions[action].pad, name);
             }
         }
         return true;
@@ -1238,12 +1212,6 @@ void Draw() {
             pending_game_row = -1;
         }
     }
-    const bool pad_combo =
-        (IsKeyDown(ImGuiKey_GamepadL3) && IsKeyPressed(ImGuiKey_GamepadR3, false)) ||
-        (IsKeyDown(ImGuiKey_GamepadR3) && IsKeyPressed(ImGuiKey_GamepadL3, false));
-    if (pad_combo) {
-        Toggle();
-    }
     HoldGame(open);
     if (!open) {
         return;
@@ -1252,11 +1220,13 @@ void Draw() {
     const std::vector<Row> rows = BuildRows();
     const int count = static_cast<int>(rows.size());
     selected = std::clamp(selected, 0, count - 1);
-    if (quit_armed && ((page != Page::Main && page != Page::Start) || selected != quit_armed_row)) {
+    if (quit_armed && (page == Page::Achievements || selected != quit_armed_row)) {
         quit_armed = false;
     }
     int activate_row = -1, activate_direction = 0;
     bool back = false;
+    // Up on the first PC line: back to the game's own lines, where its selection still is.
+    bool leave_up = false;
     // While a key is being captured the keys below must not act on the menu as well.
     static bool was_capturing = false;
     // The key press that opened the menu must not act on it as well.
@@ -1266,11 +1236,18 @@ void Draw() {
     if (!skip_input) {
         if (IsKeyPressed(ImGuiKey_DownArrow) || IsKeyPressed(ImGuiKey_GamepadDpadDown) ||
             IsKeyPressed(ImGuiKey_S) || (nav & NavDown)) {
-            selected = (selected + 1) % count;
+            // The PC sections continue the game's list, which does not wrap around either.
+            if (page != Page::Pc || selected < count - 1) {
+                selected = (selected + 1) % count;
+            }
         }
         if (IsKeyPressed(ImGuiKey_UpArrow) || IsKeyPressed(ImGuiKey_GamepadDpadUp) ||
             IsKeyPressed(ImGuiKey_W) || (nav & NavUp)) {
-            selected = (selected + count - 1) % count;
+            if (page == Page::Pc && selected == 0) {
+                leave_up = true;
+            } else {
+                selected = (selected + count - 1) % count;
+            }
         }
         if (IsKeyPressed(ImGuiKey_Enter, false) || IsKeyPressed(ImGuiKey_Space, false) ||
             IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || (nav & NavConfirm)) {
@@ -1301,15 +1278,18 @@ void Draw() {
         draw->AddRectFilledMultiColor({0.0f, 0.0f}, display, IM_COL32(46, 42, 40, 255),
                                       IM_COL32(30, 28, 27, 255), IM_COL32(6, 6, 6, 255),
                                       IM_COL32(12, 11, 11, 255));
-    } else {
-        // The game's own screen greys and blurs the picture; this one greys it with a veil.
-        draw->AddRectFilled({0.0f, 0.0f}, display, IM_COL32(34, 30, 30, 168));
+    } else if (page == Page::Achievements) {
+        // Over the game's Options screen, which greys and blurs the picture itself: the trophy
+        // list darkens the rest a little more.
+        draw->AddRectFilled({0.0f, 0.0f}, display, IM_COL32(20, 18, 18, 120));
     }
     const ImVec2 panel_min{ox + 316.0f * scale, 92.0f * scale};
     const ImVec2 panel_max{ox + 1057.0f * scale, 988.0f * scale};
     draw->AddRectFilled({panel_max.x + 3.0f * scale, panel_min.y + 3.0f * scale},
                         {panel_max.x + 16.0f * scale, panel_max.y}, IM_COL32(120, 120, 120, 70));
-    draw->AddRectFilled(panel_min, panel_max, IM_COL32(17, 17, 17, 240));
+    // Opaque over the game's own panel, whose lines would show through otherwise.
+    draw->AddRectFilled(panel_min, panel_max,
+                        IM_COL32(17, 17, 17, page == Page::Start ? 240 : 255));
     for (float x = panel_min.x + 12.0f * scale; x < panel_max.x; x += 12.0f * scale) {
         draw->AddLine({x, panel_min.y}, {x, panel_max.y}, IM_COL32(255, 255, 255, 7));
     }
@@ -1325,12 +1305,10 @@ void Draw() {
                         {panel_max.x, panel_min.y - 7.0f * scale}, {panel_max.x, panel_min.y},
                         White);
 
-    const char* title = page == Page::Main           ? "PAUSED"
-                        : page == Page::Start        ? "inFAMOUS SECOND SON"
-                        : page == Page::Options      ? "OPTIONS"
-                        : page == Page::Controls     ? "CONTROLS"
+    // The PC sections are the rest of the game's Options screen and keep its title.
+    const char* title = page == Page::Start          ? "inFAMOUS SECOND SON"
                         : page == Page::Achievements ? "ACHIEVEMENTS"
-                                                     : "GRAPHICS";
+                                                     : "OPTIONS";
     Narrow(draw, 94.0f * scale, {panel_min.x + 32.0f * scale, panel_min.y + 24.0f * scale}, Yellow,
            Heading(title), TitleSqueeze);
 
@@ -1429,6 +1407,12 @@ void Draw() {
     const float note_x = panel_max.x + 52.0f * scale;
     const float note_right = std::min(display.x - 60.0f * scale, note_x + 700.0f * scale);
     float note_y = 400.0f * scale;
+    if (page != Page::Start) {
+        // Where the game shows its controller picture for its own lines.
+        draw->AddRectFilled({note_x - 24.0f * scale, 360.0f * scale},
+                            {note_right + 24.0f * scale, 720.0f * scale},
+                            IM_COL32(14, 14, 14, 255));
+    }
     // In capitals, through the language's own letters (std::toupper only knows ASCII).
     const std::string note_title = Lang::Upper(Tr(current_row.label));
     Narrow(draw, 34.0f * scale, {note_x, note_y}, White, note_title, HeadingSqueeze);
@@ -1442,7 +1426,7 @@ void Draw() {
     draw->AddText(MenuFont(), note_size, {note_x, note_y}, White, note.c_str(), nullptr,
                   note_right - note_x);
     note_y += MenuFont()->CalcTextSizeA(note_size, FLT_MAX, note_right - note_x, note.c_str()).y;
-    if (restart_note && page == Page::Graphics) {
+    if (restart_note && page == Page::Pc && selected < graphics_count) {
         draw->AddText(MenuFont(), note_size, {note_x, note_y + 18.0f * scale}, Yellow,
                       Tr("Frame rate cap and VSync changes take effect the next time the game "
                          "starts."),
@@ -1451,13 +1435,11 @@ void Draw() {
 
     // Key hints on a dark strip at the bottom right, as on the game's screen.
     const float hint_y = 952.0f * scale;
-    const bool on_top = page == Page::Main || page == Page::Start || page == Page::Options;
-    const char* back_label = page == Page::Main ? Tr("Resume") : Tr("Back");
+    const char* back_label = Tr("Back");
     const bool show_back = page != Page::Start;
     const char* act_label = current_row.adjustable ? Tr("Change") : Tr("Select");
     const char* act_keys = current_row.adjustable ? "A  D" : "ENTER";
     const char* act_pad = current_row.adjustable ? "D-PAD" : "X";
-    (void)on_top;
     float strip = 40.0f * scale + HintWidth(scale, act_keys, act_pad, act_label);
     if (show_back) {
         strip += HintWidth(scale, "ESC", "O", back_label);
@@ -1471,22 +1453,112 @@ void Draw() {
     }
     Hint(draw, hint_x, hint_y, scale, act_keys, act_pad, act_label);
 
-    if (activate_row >= 0) {
-        if (page == Page::Main || page == Page::Start || page == Page::Options) {
+    if (leave_up) {
+        open = false;
+    } else if (activate_row >= 0) {
+        if (page == Page::Start) {
             if (activate_direction == 0) {
                 ActivateTop(rows[activate_row].label, activate_row);
             }
         } else {
-            Activate(activate_row, activate_direction, count);
+            Activate(activate_row, activate_direction, count, rows[activate_row].label);
         }
     } else if (back) {
-        if (page == Page::Main) {
+        if (page == Page::Pc) {
+            // Back leaves the Options screen, as it does on the game's own lines.
             open = false;
+            Press(80, Libraries::Pad::OrbisPadButtonDataOffset::Circle);
         } else if (page != Page::Start) {
             page = ParentOf(page);
             selected = 0;
         }
     }
+}
+
+Probe WantsProbe() {
+    static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                                std::getenv("I3_NO_OPTIONS_PROBE") == nullptr;
+    if (!enabled || open || start_state != StartState::Done) {
+        return Probe::None;
+    }
+    // The whole panel every frame while the game's Options screen was seen in the last second
+    // (a press on its last line has to find the latest picture); during play only the title,
+    // every fourth frame.
+    const u64 now = SDL_GetTicks();
+    if (now - probe_seen_ms.load() < 1000 || now - probe_title_ms.load() < 1000) {
+        return Probe::Panel;
+    }
+    const u32 n = probe_count.fetch_add(1, std::memory_order_relaxed);
+    return n % 4 == 0 ? Probe::Title : Probe::None;
+}
+
+// The game's Options screen on a 1080-line frame (measured on captures of it): a panel framed
+// by two-pixel white lines at x 315 and 1056, the title OPTIONS in yellow at the top left, and
+// its lines in white text from x 405, the selected one in yellow. The list scrolls; once the
+// selected line is the last, nothing is drawn under it.
+void OnProbe(const u8* rgba, const ProbeArea& area) {
+    const auto pixel = [&](float x, float y) -> const u8* {
+        const int px = static_cast<int>(area.left + x * area.scale) - static_cast<int>(area.x);
+        const int py = static_cast<int>(y * area.scale) - static_cast<int>(area.y);
+        if (px < 0 || py < 0 || px >= static_cast<int>(area.width) ||
+            py >= static_cast<int>(area.height)) {
+            return nullptr;
+        }
+        return rgba + (size_t(py) * area.width + size_t(px)) * 4;
+    };
+    const auto white = [&](float x, float y) {
+        const u8* p = pixel(x, y);
+        return p && p[0] > 200 && p[1] > 200 && p[2] > 200;
+    };
+    const auto yellow = [&](float x, float y) {
+        const u8* p = pixel(x, y);
+        return p && p[0] > 180 && p[1] > 130 && p[1] < 215 && p[2] < 90;
+    };
+    int frame_hits = 0, frame_samples = 0;
+    for (float y = 200.0f; y < 900.0f; y += 10.0f) {
+        frame_samples++;
+        frame_hits += (white(315, y) || white(316, y)) && (white(1056, y) || white(1057, y));
+    }
+    int title = 0;
+    for (float y = 120.0f; y < 195.0f; y += 2.0f) {
+        for (float x = 405.0f; x < 540.0f; x += 2.0f) {
+            title += yellow(x, y);
+        }
+    }
+    if (area.kind == Probe::Title) {
+        if (title >= 80) {
+            probe_title_ms = SDL_GetTicks();
+        }
+        return;
+    }
+    if (frame_hits * 100 < frame_samples * 85 || title < 80) {
+        probe_last_row = false;
+        return;
+    }
+    // The selected line: the first band of yellow text in the label column.
+    int selected_end = -1;
+    bool in_selected = false;
+    bool text_below = false;
+    for (float y = 200.0f; y < 978.0f; y += 1.0f) {
+        int yellow_count = 0, text_count = 0;
+        for (float x = 405.0f; x < 720.0f; x += 3.0f) {
+            const bool is_yellow = yellow(x, y);
+            yellow_count += is_yellow;
+            text_count += is_yellow || white(x, y);
+        }
+        if (selected_end < 0) {
+            if (yellow_count > 1) {
+                in_selected = true;
+            } else if (in_selected) {
+                selected_end = static_cast<int>(y);
+            }
+        } else if (y > selected_end + 6 && text_count > 1) {
+            text_below = true;
+            break;
+        }
+    }
+    probe_seen_ms = SDL_GetTicks();
+    probe_last_row = selected_end >= 0 && !text_below;
 }
 
 } // namespace I3::Menu

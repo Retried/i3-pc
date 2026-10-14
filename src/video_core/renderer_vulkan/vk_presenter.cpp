@@ -23,6 +23,7 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
+#include "core/i3/menu.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/texture_cache/image.h"
 
@@ -779,6 +780,41 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         }
     }
 
+    // inFAMOUS: the area of the game's Options panel, so that the PC sections can continue its
+    // list (see I3::Menu::OnProbe). Read back from the guest output, under the overlay.
+    std::optional<ScreenshotReadback> probe;
+    I3::Menu::ProbeArea probe_area{};
+    if (const auto kind = I3::Menu::WantsProbe(); kind != I3::Menu::Probe::None) {
+        const bool panel = kind == I3::Menu::Probe::Panel;
+        const float scale = static_cast<float>(image_size.height) / 1080.0f;
+        const float left = (static_cast<float>(image_size.width) - 1920.0f * scale) * 0.5f;
+        const auto at = [&](float x, float y) {
+            return std::pair<u32, u32>{
+                static_cast<u32>(std::clamp(left + x * scale, 0.0f, float(image_size.width))),
+                static_cast<u32>(std::clamp(y * scale, 0.0f, float(image_size.height)))};
+        };
+        const auto [x0, y0] = panel ? at(I3::Menu::ProbeLeft, I3::Menu::ProbeTop)
+                                    : at(I3::Menu::TitleLeft, I3::Menu::TitleTop);
+        const auto [x1, y1] = panel ? at(I3::Menu::ProbeRight, I3::Menu::ProbeBottom)
+                                    : at(I3::Menu::TitleRight, I3::Menu::TitleBottom);
+        if (x1 > x0 && y1 > y0) {
+            probe_area = {x0, y0, x1 - x0, y1 - y0, scale, left, kind};
+            auto& readback = probe.emplace(instance, ScreenshotKind::GameOnly,
+                                           std::vector<std::filesystem::path>{},
+                                           probe_area.width, probe_area.height, view_info.format,
+                                           false);
+            const vk::BufferImageCopy copy_region = {
+                .imageSubresource{.aspectMask = vk::ImageAspectFlagBits::eColor,
+                                  .mipLevel = 0,
+                                  .baseArrayLayer = 0,
+                                  .layerCount = 1},
+                .imageOffset = {static_cast<s32>(x0), static_cast<s32>(y0), 0},
+                .imageExtent = {probe_area.width, probe_area.height, 1},
+            };
+            runtime.DownloadImage(&image, &readback.buffer, std::span{&copy_region, 1});
+        }
+    }
+
     // Capture the guest output before any host-side scaling (FSR/PP) is applied.
     if (capture_game_only_count > 0) {
         const bool hdr_encoded =
@@ -821,6 +857,15 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     DebugState.game_resolution = {image_size.width, image_size.height};
     DebugState.output_resolution = {frame->width, frame->height};
 
+    if (probe) {
+        draw_scheduler.DeferPriorityOperation(
+            [deferred_probe = std::move(probe), probe_area]() {
+                std::vector<u8> rgba;
+                if (ConvertReadbackToRgba8(deferred_probe.value(), rgba)) {
+                    I3::Menu::OnProbe(rgba.data(), probe_area);
+                }
+            });
+    }
     if (recorded_frame) {
         draw_scheduler.DeferPriorityOperation([deferred_frame = std::move(recorded_frame)]() {
             SaveRecordedFrame(deferred_frame.value());

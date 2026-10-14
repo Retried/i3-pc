@@ -3,20 +3,18 @@ inFAMOUS Second Son - PC build (work in progress)
 
 Start:     the Desktop or Start menu shortcut, or "inFAMOUS Second Son.exe" here
 Shortcuts: Install.bat creates them again (Install.bat -Remove deletes them)
-Settings:  Settings.bat  (frame rate cap, VSync, fullscreen, window size, FSR upscaling,
-                          language)
 At start:  a start screen: Continue, New Game, Load Game, Options, Achievements, Quit. The
            game itself has no main menu and always loads your last save first; New Game and
            Load Game then open the game's own Options screen on that line for you.
-In game:   Esc (Options on a controller) pauses and opens one menu: Resume, Options,
-           Achievements, Return to Main Menu. Returning asks first: progress since the last
-           checkpoint is lost and the game loads again (about 40 seconds), because the game
-           cannot go back by itself. Quit is on the start screen.
+In game:   Esc (Options on a controller) opens the game's own pause screen, as on the
+           console (in Seattle the map; Triangle / Tab there opens "Options and Saves").
 Menus:     arrow keys or W S, Enter, Esc; the mouse; or a controller (D-pad or left stick,
            cross to select, circle to go back). Left and right change a value.
-Options:   Graphics and Controls are this build's own pages. Gameplay, Sound, Interface and
-           Save and Load (in the pause menu) open the game's own Options screen on that
-           section: difficulty, volume, subtitles, save, new game, load game.
+Options:   this build's settings are the last sections of the game's own Options screen:
+           go down past its last line (Video > HDR Rendering) and the list goes on with
+           Display, Image, Effects, Frame Rate, Shadows, Controls, Language, Achievements
+           and Exit (Return to Main Menu, Quit; both ask first). Up from the first of them
+           goes back to the game's lines. There is no separate settings window.
              CONTROLS  every action; confirm, then press the key or mouse button to use.
                        Applies at once, and the button icons are redrawn to match.
              GRAPHICS  frame rate cap and VSync (take effect at the next start); fullscreen,
@@ -33,7 +31,6 @@ Options:   Graphics and Controls are this build's own pages. Gameplay, Sound, In
                        saved in user\i3_achievements. Names show as "Trophy 1" to "Trophy 48"
                        unless user\i3_achievements\names.txt lists them (id, tab, name, tab,
                        description, one per line).
-Keys:      Keys.bat      the same key bindings from outside the game
 Game data: D:\Games\CUSA00004 (read only, never modified; path in game_path.txt)
 Saves:     user\home\1000\savedata\CUSA00004
 Bindings:  user\input_config\CUSA00004.ini  (F8 reloads it while the game runs)
@@ -77,7 +74,7 @@ Status (2026-10-10)
 -------------------
 Verified: boot, title, new game, intro, spray tutorial (60 FPS), cutscenes and the cannery
 interior (about 32 FPS) with correct graphics; autosave and Continue; sideways, shake and spray
-aim from the keyboard; walking, mouse camera, jump, pause menu; sound output measured clean.
+aim from the keyboard; walking, mouse camera, jump, pause; sound output measured clean.
 Frame rate: 60 FPS cap by default; light scenes reach 107-120 FPS with the 120 cap, heavy
 scenes (interiors, the crash site) sit at the game's own 30 FPS lock.
 Played and verified from the keyboard up to "Find Betty" inside the fish cannery: tutorial,

@@ -31,8 +31,9 @@ What the runtime changes against upstream, in short:
   shaders are copied back to the game's memory where the game reads them, garbage arguments of
   indirect draws are caught, the game's large geometry heaps are uploaded ahead of their first
   use, and repeated per-draw work is cut down (see `docs/BENCHMARK.md`).
-- A PC front end drawn by the runtime: start screen, pause menu, Graphics and Controls pages,
-  key rebinding, shadow and effects presets, an achievements page, first-run settings.
+- A start screen, and the PC settings as extra sections at the end of the game's own Options
+  screen (graphics, shadow and effects presets, key rebinding, language, achievements),
+  first-run settings.
 - Keyboard and mouse as a full input device, with key caps instead of controller pictures in
   the game's button prompts.
 - Its own program name, window title and settings folder, so that it does not touch an
@@ -150,7 +151,8 @@ Go back with Esc or Circle. The mouse works too.
 
 ### 6. Controls
 
-Keyboard and mouse (the defaults; change them under Options > Controls):
+Keyboard and mouse (the defaults; change them in the Controls section at the end of the game's
+Options screen):
 
 | Action | Key |
 |---|---|
@@ -181,20 +183,31 @@ PlayStation pictures once you touch a controller.
 Other keys: F11 fullscreen, F10 frame rate counter, F12 screenshot, F7 frees or captures the
 mouse.
 
-### 7. Pause menu
+### 7. Options
 
-Press Esc (Options on a controller) during play: Resume, Options, Achievements, Return to Main
-Menu.
+Esc (Options on a controller) during play opens the game's own pause screen, as on the
+console: in the village its Options screen, in Seattle the map, where Triangle (Tab) opens
+"Options and Saves".
 
-- **Options** holds Graphics and Controls (this program's settings) and Gameplay, Sound,
-  Interface and Save and Load, which open the game's own Options screen at that section.
-- **Return to Main Menu** asks once more. Progress since the last checkpoint is lost, and the
-  game loads again (about 40 seconds), because the game has no main menu of its own to go back
-  to. Quit is on the start screen.
+The settings this program adds are the last sections of that Options screen. Go down past the
+game's last line (Video > HDR Rendering) and the list goes on:
+
+- **Display, Image, Effects, Frame Rate, Shadows**: this program's graphics settings.
+- **Controls**: the keyboard and mouse bindings. Confirm a line, then press the key or mouse
+  button to use.
+- **Language**.
+- **Achievements**: the trophy list.
+- **Exit**: Return to Main Menu and Quit. Both ask once more. Return to Main Menu loses the
+  progress since the last checkpoint and loads the game again (about 40 seconds), because the
+  game has no main menu of its own to go back to.
+
+Up from the first of these lines goes back to the game's own lines; Back closes the screen.
+There is no separate settings window.
 
 ### 8. Graphics settings
 
-Options > Graphics. Start with these and change one thing at a time:
+The Display to Shadows sections at the end of the game's Options screen. Start with these and
+change one thing at a time:
 
 | Your PC | Shadow Preset | Frame Rate Cap |
 |---|---|---|
@@ -218,8 +231,9 @@ Options > Graphics. Start with these and change one thing at a time:
 ### 9. Language
 
 The game follows the console language of its settings, and the screens this program adds
-(start screen, pause menu, Options, key bindings, achievements) follow it too. Change it under
-Options > Graphics > Language; it applies the next time the game starts. English, French,
+(start screen, the added Options sections, achievements) follow it too. Change it under
+Options > Language, near the end of the game's Options screen; it applies the next time the
+game starts. English, French,
 Spanish, German, Italian, Dutch, Portuguese, Russian, Finnish, Swedish, Danish, Norwegian,
 Polish and Turkish are there, the languages this release of the game ships. The texts of this
 program's own screens are machine translations that no native speaker has checked; where one is
@@ -228,7 +242,8 @@ missing, English is shown.
 ### 10. Saving
 
 - The game saves by itself at checkpoints (a small icon shows in a corner).
-- To save by hand: pause, Options > Save and Load, then "Save Game" on the game's screen.
+- To save by hand: "Save Game", the first line of the game's Options screen (in Seattle:
+  "Options and Saves" on the map).
 - Saves are in `dist\user\home\1000\savedata\CUSA00004`. Copy that folder to back them up.
 
 ### Known problems

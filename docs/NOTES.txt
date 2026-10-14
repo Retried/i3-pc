@@ -9,15 +9,18 @@ Files
   01_in_game_after_boot.png      about 40 s after starting the program, no input given
   02_outdoors_crash_site.png     the user's save: crash site, objective prompt
   03_exploring.png               after walking around with W A S D, mouse, jump
-  04_options_keyboard_icons.png  pause menu; prompts drawn as key caps ("Press [SPC]", "[SHF] Back")
+  04_options_keyboard_icons.png  the game's pause screen; prompts drawn as key caps ("Press [SPC]", "[SHF] Back")
   05_load_dialog.png             Options > Load Game: confirm dialog
   06_load_game_list.png          the slot list that follows, with the user's three saves
-  07_keys_menu.png               the Keys.bat menu (rendered from its text output)
+  07_keys_menu.png               the Keys.bat menu of the time (rendered from its text output;
+                                 removed 2026-10-14, bindings are changed in the game)
   08_lift_wreckage_swipe_key.png "Lift Wreckage": the touchpad swipe-up prompt answered with the I key
   09_after_gaining_power.png     free roaming after the cutscenes in which Delsin gains his power
   10_smoke_dash.png              first power: Smoke Dash through the fallen trees (Shift)
-  11_ingame_menu_controls.png    in-game PC OPTIONS (F2): key bindings
-  12_ingame_menu_graphics.png    in-game PC OPTIONS (F2): graphics
+  11_ingame_menu_controls.png    key bindings, then a page of their own (since 2026-10-14 a
+                                 section at the end of the game's Options screen)
+  12_ingame_menu_graphics.png    graphics, then a page of their own (since 2026-10-14 sections
+                                 at the end of the game's Options screen)
   gameplay.mp4                   36 s, 1280x720, H.264 + AAC, recorded in-process at 30 FPS with the
                                  game's own sound (peak -7.7 dB, mean -31.6 dB)
 

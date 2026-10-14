@@ -1,7 +1,6 @@
 # inFAMOUS Second Son - key bindings.
-# Shows and changes the keyboard/mouse bindings in user\input_config\CUSA00004.ini and redraws
+# Lists and changes the keyboard/mouse bindings in user\input_config\CUSA00004.ini and redraws
 # the in-game button icons as key caps to match.
-#   Keys.bat                      interactive menu
 #   pwsh -File Keys.ps1 -List     print the bindings
 #   pwsh -File Keys.ps1 -Set jump=space,melee=f      change bindings without the menu
 #   pwsh -File Keys.ps1 -Icons    only redraw the icons from the current bindings
@@ -487,20 +486,8 @@ if ($Set.Count) {
     exit 0
 }
 
-while ($true) {
-    Write-Host ""
-    Write-Host "inFAMOUS Second Son - key bindings"
-    Show-Bindings
-    Write-Host ""
-    $choice = Read-Host "Number to change, or Enter to finish"
-    if (-not $choice) { break }
-    if ($choice -notmatch '^\d+$' -or [int]$choice -lt 1 -or [int]$choice -gt $actions.Count) { continue }
-    $action = $actions[[int]$choice - 1]
-    Write-Host "Keys for '$($action.Text)': letters, digits, or names such as space, lshift, lctrl, tab,"
-    Write-Host "leftbutton, rightbutton, middlebutton, mousewheelup, up, f1... Several keys: separate with spaces."
-    $keys = Read-Host "New key(s), or Enter to keep"
-    if ($keys) { [void](Apply-Change $action.Name $keys) }
-}
-Update-Icons keyboard
-Update-Icons xbox
-Write-Host "Done. In a running game press F8 to reload bindings; icons change on the next start."
+# No menu of its own: the bindings are changed in the game, in the Controls section at the end
+# of its Options screen. Without switches this only lists them.
+Show-Bindings
+Write-Host ""
+Write-Host "To change them: in the game, Options, then down past the game's own lines to Controls."

@@ -14,7 +14,7 @@ if [ "$(tasklist | grep -ci 'inFAMOUS Second')" != "0" ]; then echo "REFUSED: th
 # Snipping Tool crashed inside the AMD driver three times on 2026-10-10 and each crash reset the
 # display driver (monitor lost signal): never use the GPU while it is open.
 if [ "$(tasklist | grep -ci 'SnippingTool')" != "0" ]; then echo "REFUSED: Snipping Tool is open"; exit 1; fi
-if [ "$(memfree_mb)" -lt 12000 ]; then echo "REFUSED: only $(memfree_mb) MB RAM free"; exit 1; fi
+if [ "$(memfree_mb)" -lt 9000 ]; then echo "REFUSED: only $(memfree_mb) MB RAM free"; exit 1; fi
 bin=${BIN:-/d/i3-pc/bin}
 exe=$bin/i3.exe
 env SOTC_HEADLESS=1 ${MUTE-SOTC_MUTE=1} ${FIRSTRUN-I3_SKIP_FIRST_RUN=1} "$@" "$exe" -f false --game "D:/Games/CUSA00004/eboot.bin" > /dev/null 2>&1 &

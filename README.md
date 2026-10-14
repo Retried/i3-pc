@@ -202,8 +202,10 @@ Options > Graphics. Start with these and change one thing at a time:
 | Mid-range CPU | Fast | 60 |
 | Older or laptop CPU | Off | 30 or 60 |
 
-- **Shadow Preset** is the setting that changes the frame rate most. Original is the game's
-  picture; Balanced looks the same when standing still; Fast and Off remove shadows.
+- **Shadow Preset**: Original is the game's picture. Balanced and Fast leave small objects
+  out of the sun's shadows and draw lamp shadows less often (Fast: not at all); the sun's
+  shadows themselves are drawn every frame in every preset, since a kept shadow map flashed
+  dark while the camera moved. Off removes shadows and saves the most.
 - **Frame Rate Cap** is the game's frame clock. At 60 a frame that needs 18 ms is shown after
   33 ms; at 120 or 144 it is shown after 25 ms or less, which is smoother in heavy scenes
   whatever your display's rate (measured at the crash site: frames over 34 ms fell from 226 to

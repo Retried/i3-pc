@@ -126,6 +126,14 @@ struct ShadowMaps {
         // Off still lets the game's clear of the map through: an empty map casts no shadow, while
         // one that is never cleared would keep the shadows of the last frame drawn into it.
         bool skip = rate == 2 ? !clear : (rate == 1 && ((frame + kind) & 1) != 0);
+        // The sun's map is redrawn every frame even at half rate. It follows the camera, so a
+        // map kept from the frame before does not fit a frame in which the camera has moved:
+        // the scene flashed dark with the Balanced and Fast presets. Keeping it only while the
+        // camera rests was tried (by the constants of the first draw into the map) and flashed
+        // more, because those constants also change for other reasons.
+        if (kind == 0 && rate == 1) {
+            skip = false;
+        }
         // Shadow Detail: small objects are left out of the sun's map (never the clear).
         skip |= kind == 0 && !clear &&
                 indices < Common::g_shadow_min_indices.load(std::memory_order_relaxed);
@@ -326,6 +334,7 @@ struct DrawStats {
     // still waited for their copy back, and how many outputs waited in all.
     u32 unflushed_signal[6]{};
     u32 forced_flushes{};
+    u32 deferred_waits{};
     u64 unflushed_outputs{};
     u32 same_pipeline{}, same_inputs{};
     u64 ns_stage[8]{};
@@ -443,6 +452,8 @@ struct DrawStats {
                   unflushed_signal[0], unflushed_signal[2], unflushed_signal[4],
                   unflushed_outputs, forced_flushes);
         forced_flushes = 0;
+        LOG_ERROR(Render, "deferred labels: blocking completions {}", deferred_waits);
+        deferred_waits = 0;
         for (auto& v : unflushed_signal) {
             v = 0;
         }
@@ -1859,10 +1870,10 @@ void Rasterizer::OnSubmit() {
 // thread goes on, and the label is written by a deferred operation once the GPU has run the
 // copy and the results are in guest memory: the game is told only when it is true, as on the
 // console. Labels written while one is still waiting queue up behind it, so their order holds.
-// I3_ASYNC_LABELS=1 switches this on (test).
+// I3_NO_ASYNC_LABELS=1 switches this off (the results are then fetched with a blocking wait).
 bool Rasterizer::DeferLabel(void* address, const void* data, u32 size) {
     static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
-                                std::getenv("I3_ASYNC_LABELS") != nullptr;
+                                std::getenv("I3_NO_ASYNC_LABELS") == nullptr;
     if (!enabled || size > 32) {
         return false;
     }
@@ -1899,6 +1910,7 @@ void Rasterizer::CompleteDeferred(bool wait) {
         return;
     }
     if (wait) {
+        ++g_stats.deferred_waits;
         scheduler.Finish();
     }
     scheduler.PopPendingOperations();

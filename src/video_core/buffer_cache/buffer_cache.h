@@ -183,6 +183,8 @@ private:
     /// Counts full copy backs; a deferred partial one from before the last full one has
     /// nothing left to write.
     u64 mirror_generation = 0;
+    /// GPU ticks of the copy backs still on their way, oldest first.
+    std::deque<u64> inflight_ticks;
     u32 mirrors_in_flight = 0;
     /// Ranges added since the last copy was issued, and the ranges of each copy still on its
     /// way: together they are what pending_mirror_ranges has to keep protecting when one

@@ -255,6 +255,62 @@ void BufferCache::AddPendingMirror(VAddr device_addr, u32 size) {
     memory->CopySparseMemory(device_addr, mirror_snapshot_data.data() + offset, size);
 }
 
+// Writes a compute result into guest memory where the GPU changed it and the game has not
+// written since the dispatch (`then` is the guest memory as it was at the dispatch).
+/// Returns whether the game has written into the range since the dispatch.
+static bool WriteChangedWords(Core::MemoryManager* memory, VAddr addr, u32 size, const u8* gpu,
+                              const u8* then) {
+    static thread_local std::vector<u8> current;
+    if (current.size() < size) {
+        current.resize(size);
+    }
+    memory->CopySparseMemory(addr, current.data(), size);
+    const u8* held = current.data();
+    const bool rewritten_any = std::memcmp(held, then, size) != 0;
+    // Most outputs come back unchanged; this runs for several hundred of them a frame.
+    if (std::memcmp(gpu, then, size) == 0) {
+        return rewritten_any;
+    }
+    u32 start = size;
+    u32 end = 0;
+    const auto write_stretch = [&] {
+        if (start != size) {
+            memory->TryWriteBacking(std::bit_cast<u8*>(addr + start), gpu + start, end - start);
+            NoteMirrorWrite(addr + start, end - start, addr, size);
+            start = size;
+        }
+    };
+    for (u32 at = 0; at < size; at += 4) {
+        const u32 step = std::min(4u, size - at);
+        bool changed;
+        bool rewritten;
+        if (step == 4) {
+            u32 a;
+            u32 b;
+            u32 c;
+            std::memcpy(&a, gpu + at, 4);
+            std::memcpy(&b, then + at, 4);
+            std::memcpy(&c, held + at, 4);
+            changed = a != b;
+            rewritten = c != b;
+        } else {
+            changed = std::memcmp(gpu + at, then + at, step) != 0;
+            rewritten = std::memcmp(held + at, then + at, step) != 0;
+        }
+        if (rewritten || !changed) {
+            write_stretch();
+            mirror_words_kept += rewritten && changed;
+            continue;
+        }
+        if (start == size) {
+            start = at;
+        }
+        end = at + step;
+    }
+    write_stretch();
+    return rewritten_any;
+}
+
 void BufferCache::MirrorUrgentAsync(std::span<const std::pair<VAddr, u32>> ranges,
                                     Common::UniqueFunction<void>&& done) {
     u64 total = 0;
@@ -277,40 +333,50 @@ void BufferCache::MirrorUrgentAsync(std::span<const std::pair<VAddr, u32>> range
         runtime.CopyBuffer(buffer, mirror_buffer.get(), std::span{&copy, 1});
         cursor += Common::AlignUp(size, 64);
     }
-    scheduler.DeferOperation([this, base, total, generation = mirror_generation,
+    // The memory as it was at the dispatch, kept with the request: a full copy back issued in
+    // the meantime takes the shared snapshots with it.
+    std::vector<u8> thens(total);
+    std::vector<u8> known(ranges.size());
+    cursor = 0;
+    for (size_t n = 0; n < ranges.size(); ++n) {
+        const auto& [addr, size] = ranges[n];
+        if (size < MirrorSnapshotMaxSize) {
+            if (const auto snapshot = mirror_snapshots.find(MirrorSnapshotKey(addr, size));
+                snapshot != mirror_snapshots.end()) {
+                std::memcpy(thens.data() + cursor, mirror_snapshot_data.data() + snapshot->second,
+                            size);
+                known[n] = 1;
+            }
+        }
+        cursor += Common::AlignUp(size, 64);
+    }
+    scheduler.DeferOperation([this, base, total, thens = std::move(thens),
+                              known = std::move(known),
                               list = std::vector(ranges.begin(), ranges.end()),
                               done = std::move(done)]() mutable {
         mirror_buffer->Invalidate(base, total);
         const u8* gpu = mirror_buffer->mapped_data.data() + base;
-        for (const auto& [addr, size] : list) {
-            const u8* result = gpu;
-            gpu += Common::AlignUp(size, 64);
-            // A full copy back since then has already brought this result over.
-            if (generation != mirror_generation || size >= MirrorSnapshotMaxSize ||
-                !memory->IsValidMapping(addr, size)) {
+        u64 at = 0;
+        for (size_t n = 0; n < list.size(); ++n) {
+            const auto& [addr, size] = list[n];
+            const u8* result = gpu + at;
+            const u8* then = thens.data() + at;
+            at += Common::AlignUp(size, 64);
+            if (!known[n] || !memory->IsValidMapping(addr, size)) {
                 continue;
             }
-            const auto snapshot = mirror_snapshots.find(MirrorSnapshotKey(addr, size));
-            if (snapshot == mirror_snapshots.end()) {
-                continue;
-            }
-            u8* before = mirror_snapshot_data.data() + snapshot->second;
-            // Word by word: what the GPU changed, where the game has not written since.
-            for (u32 at = 0; at + 4 <= size; at += 4) {
-                u32 now;
-                u32 then;
-                u32 held;
-                std::memcpy(&now, result + at, 4);
-                std::memcpy(&then, before + at, 4);
-                if (now == then) {
-                    continue;
-                }
-                memory->CopySparseMemory(addr + at, reinterpret_cast<u8*>(&held), 4);
-                if (held == then) {
-                    memory->TryWriteBacking(std::bit_cast<u8*>(addr + at), result + at, 4);
+            WriteChangedWords(memory, addr, size, result, then);
+            // The shared snapshot, if this frame's is still there, now is the result, so that
+            // the copy back at the end of the frame sees these words as untouched by the game.
+            if (const auto snapshot = mirror_snapshots.find(MirrorSnapshotKey(addr, size));
+                snapshot != mirror_snapshots.end()) {
+                u8* shared = mirror_snapshot_data.data() + snapshot->second;
+                for (u32 w = 0; w + 4 <= size; w += 4) {
+                    if (std::memcmp(shared + w, then + w, 4) == 0) {
+                        std::memcpy(shared + w, result + w, 4);
+                    }
                 }
             }
-            std::memcpy(before, result, size);
         }
         ++g_stream_epoch;
         done();
@@ -346,13 +412,30 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges, b
     for (const auto& [addr, size] : ranges) {
         total += Common::AlignUp(size, 64);
     }
-    // The copy back to guest memory waits for the GPU. A version that did not wait (the copy
-    // was written back when the GPU reached it, a frame later) saved 1.5 to 2 ms per frame in
-    // inFAMOUS Second Son but wrote results over memory the game had already reused: garbage
-    // particle draw arguments, and an access violation after minutes of sustained shooting.
-    // I3_ASYNC_MIRROR=1 turns it on again for experiments only.
+    // For inFAMOUS Second Son the copy back does not wait for the GPU: the copy is submitted
+    // and written to guest memory when the GPU has run it. Waiting cost about 5 ms a frame at
+    // the crash site (the wait is for the whole frame). An earlier version that did not wait
+    // crashed in long fire fights; that was the five small outputs the game reads right after
+    // its completion signal arriving late, and those now go back with the signal itself (see
+    // Rasterizer::DeferLabel). What lands late here is written only where the GPU changed it
+    // and the game has not written since. I3_SYNC_MIRROR=1 waits again.
     static const bool async = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
-                              std::getenv("I3_ASYNC_MIRROR") != nullptr;
+                              std::getenv("I3_SYNC_MIRROR") == nullptr;
+    if (async && !partial) {
+        // The command thread may run at most two frames ahead of the GPU. Without a limit it
+        // ran six ahead and then stood still until all six had been drawn: frames came in
+        // bursts with a pause of 40 ms after each. Waiting here for the oldest copy back alone
+        // keeps the pace even.
+        static const u32 max_ahead = [] {
+            const char* value = std::getenv("I3_MIRRORS_AHEAD");
+            return value ? u32(std::atoi(value)) : 2u;
+        }();
+        for (int tries = 0; mirrors_in_flight >= max_ahead && !inflight_ticks.empty() && tries < 8;
+             ++tries) {
+            scheduler.Wait(inflight_ticks.front());
+            scheduler.PopPendingOperations();
+        }
+    }
     if (async && !partial && total <= MIRROR_BUFFER_SIZE / 8 && mirrors_in_flight < 6) {
         if (!mirror_buffer) {
             mirror_buffer = std::make_unique<Buffer>(instance, 0, MIRROR_BUFFER_SIZE,
@@ -372,20 +455,53 @@ void BufferCache::MirrorToGuest(std::span<const std::pair<VAddr, u32>> ranges, b
         }
         const u64 batch = ++mirror_batch;
         ++mirrors_in_flight;
+        inflight_ticks.push_back(scheduler.CurrentTick());
         inflight_mirrors.emplace_back(batch, std::vector(ranges.begin(), ranges.end()));
         unissued_mirrors.clear();
+        // This batch takes the snapshots and the skipped uploads of its frame with it.
+        ++mirror_generation;
+        ++g_stream_epoch;
         scheduler.DeferOperation(
-            [this, base, total, batch, list = std::vector(ranges.begin(), ranges.end())] {
+            [this, base, total, batch, list = std::vector(ranges.begin(), ranges.end()),
+             snapshots = std::exchange(mirror_snapshots, {}),
+             snapshot_data = std::exchange(mirror_snapshot_data, {}),
+             skipped = std::exchange(skipped_uploads, {})] {
                 mirror_buffer->Invalidate(base, total);
                 const u8* data = mirror_buffer->mapped_data.data() + base;
                 for (const auto& [addr, size] : list) {
                     // The game may have unmapped the range in the meantime (level reload).
                     if (memory->IsValidMapping(addr, size)) {
-                        memory->TryWriteBacking(std::bit_cast<u8*>(addr), data, size);
+                        const auto snapshot = size < MirrorSnapshotMaxSize
+                                                  ? snapshots.find(MirrorSnapshotKey(addr, size))
+                                                  : snapshots.end();
+                        static const bool whole = std::getenv("I3_WHOLE_ASYNC") != nullptr;
+                        if (whole || snapshot == snapshots.end()) {
+                            memory->TryWriteBacking(std::bit_cast<u8*>(addr), data, size);
+                            NoteMirrorWrite(addr, size, addr, size);
+                        } else if (WriteChangedWords(memory, addr, size, data,
+                                                     snapshot_data.data() + snapshot->second)) {
+                            // The game wrote into the range while its upload was held back:
+                            // that is what the GPU side still lacks.
+                            memory_tracker->MarkRegionAsCpuModified(addr, size);
+                        }
                     }
                     data += Common::AlignUp(size, 64);
                 }
+                ++g_stream_epoch;
+                // Marking every upload that was held back as written again cost about 7 FPS in a
+                // fire fight (page protection for several hundred ranges a frame); only the
+                // ranges the game really wrote into are marked, above. I3_REMARK_ALL=1 marks
+                // them all again; I3_WHOLE_ASYNC=1 writes whole results (both for tests).
+                static const bool remark = std::getenv("I3_REMARK_ALL") != nullptr;
+                if (remark) {
+                    for (const auto& [addr, size] : skipped) {
+                        memory_tracker->MarkRegionAsCpuModified(addr, size);
+                    }
+                }
                 --mirrors_in_flight;
+                if (!inflight_ticks.empty()) {
+                    inflight_ticks.pop_front();
+                }
                 // This copy's ranges may be uploaded from guest memory again. Outputs written
                 // since it was issued, and those of copies still on their way, are newer on
                 // the GPU than in guest memory and stay protected.

@@ -94,6 +94,9 @@ public:
     /// the label is written only once they have landed. Returns false when the caller has
     /// to write it itself.
     bool DeferLabel(void* address, const void* data, u32 size);
+    /// The same for a completion signal (end-of-shader or release-memory event): `signal` runs
+    /// once the results have landed. Returns false when the caller has to signal itself.
+    bool DeferSignal(Common::UniqueFunction<void>&& signal);
     /// Runs deferred work the GPU has finished; with `wait`, waits for all of it.
     void CompleteDeferred(bool wait);
     u32 deferred_labels{};

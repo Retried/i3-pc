@@ -335,6 +335,7 @@ struct DrawStats {
     u32 unflushed_signal[6]{};
     u32 forced_flushes{};
     u32 fast_draws{};
+    std::array<u32, 6> blocking_urgent{}; // by signal source bit
     u32 last_good_args{};
     u32 deferred_waits{};
     u64 unflushed_outputs{};
@@ -456,6 +457,9 @@ struct DrawStats {
         forced_flushes = 0;
         LOG_ERROR(Render, "direct draws that kept the state of the draw before: {}", fast_draws);
         fast_draws = 0;
+        LOG_WARNING(Render, "blocking urgent copy backs: eos {} release {} fence {}",
+                    blocking_urgent[0], blocking_urgent[2], blocking_urgent[4]);
+        blocking_urgent = {};
         if (last_good_args != 0) {
             LOG_WARNING(Render, "indirect draws issued with their slot's last sane arguments: {}",
                         last_good_args);
@@ -1819,6 +1823,7 @@ void Rasterizer::FlushMirrors(u32 source) {
     if (forced && !(mask & source) && !g_urgent_mirrors.empty()) {
         // Only what the game is about to read goes back now; the several hundred other pending
         // outputs keep waiting for the end of the frame.
+        ++g_stats.blocking_urgent[std::countr_zero(source)];
         ScopedNs timer{g_stats.ns_mirror};
         std::ranges::sort(g_urgent_mirrors);
         const auto dup = std::ranges::unique(g_urgent_mirrors);
@@ -2063,6 +2068,45 @@ bool Rasterizer::DeferLabel(void* address, const void* data, u32 size) {
         ++deferred_labels;
         scheduler.DeferOperation([this, address, bytes, size] {
             std::memcpy(address, bytes.data(), size);
+            --deferred_labels;
+        });
+        scheduler.Flush();
+        return true;
+    }
+    return false;
+}
+
+bool Rasterizer::DeferSignal(Common::UniqueFunction<void>&& signal) {
+    // End-of-shader and release-memory events with results the game reads next used to copy
+    // them back with a blocking wait for the GPU (about 180 and 280 times in 3 s at the Seattle
+    // pier). Now the copy is submitted and the event is signalled when it has landed, as the
+    // label writes are. I3_NO_ASYNC_SIGNALS=1 waits as before.
+    static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                                std::getenv("I3_NO_ASYNC_LABELS") == nullptr &&
+                                std::getenv("I3_NO_ASYNC_SIGNALS") == nullptr;
+    if (!enabled) {
+        return false;
+    }
+    if (g_arg_windows.urgent && !g_urgent_mirrors.empty()) {
+        std::ranges::sort(g_urgent_mirrors);
+        const auto dup = std::ranges::unique(g_urgent_mirrors);
+        g_urgent_mirrors.erase(dup.begin(), dup.end());
+        ++deferred_labels;
+        ++g_stats.forced_flushes;
+        buffer_cache.MirrorUrgentAsync(g_urgent_mirrors,
+                                       [this, signal = std::move(signal)]() mutable {
+                                           signal();
+                                           --deferred_labels;
+                                       });
+        g_urgent_mirrors.clear();
+        g_arg_windows.urgent = false;
+        return true;
+    }
+    if (deferred_labels != 0) {
+        // Earlier writes are still held back: this one comes after them.
+        ++deferred_labels;
+        scheduler.DeferOperation([this, signal = std::move(signal)]() mutable {
+            signal();
             --deferred_labels;
         });
         scheduler.Flush();

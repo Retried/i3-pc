@@ -727,11 +727,33 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 break;
             }
             case PM4ItOpcode::EventWriteEos: {
+                const auto* event_eos = reinterpret_cast<const PM4CmdEventWriteEos*>(header);
+                // With results the game reads next still on their way, the event is signalled
+                // once they have landed (the packet is copied: the game reuses its buffer).
+                if (rasterizer &&
+                    event_eos->command != PM4CmdEventWriteEos::Command::GdsStore) {
+                    // Ahead of OnFence, which would copy them back with a blocking wait.
+                    if (rasterizer->DeferSignal([packet = *event_eos] {
+                            packet.SignalFence([](void* address, u64 data, u32 num_bytes) {
+                                auto* memory = Core::Memory::Instance();
+                                ASSERT(memory->TryWriteBacking(address, &data, num_bytes));
+                            });
+                        })) {
+                        rasterizer->OnFence();
+                        break;
+                    }
+                    rasterizer->FlushMirrors(1);
+                    rasterizer->OnFence();
+                    event_eos->SignalFence([](void* address, u64 data, u32 num_bytes) {
+                        auto* memory = Core::Memory::Instance();
+                        ASSERT(memory->TryWriteBacking(address, &data, num_bytes));
+                    });
+                    break;
+                }
                 // The game may read compute results once this event fires.
                 if (rasterizer) {
                     rasterizer->FlushMirrors(1);
                 }
-                const auto* event_eos = reinterpret_cast<const PM4CmdEventWriteEos*>(header);
                 if (rasterizer) {
                     rasterizer->OnFence();
                 }
@@ -1193,11 +1215,34 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
             break;
         }
         case PM4ItOpcode::ReleaseMem: {
+            const auto* release_mem = reinterpret_cast<const PM4CmdReleaseMem*>(header);
+            // As at end-of-shader events: signalled once the results have landed.
+            if (rasterizer && release_mem->data_sel.Value() != DataSelect::GdsMemStore) {
+                // Ahead of OnFence, which would copy them back with a blocking wait.
+                if (rasterizer->DeferSignal([packet = *release_mem, pipe_id = queue.pipe_id] {
+                        packet.SignalFence(
+                            [pipe_id] {
+                                Platform::IrqC::Instance()->Signal(
+                                    static_cast<Platform::InterruptId>(pipe_id));
+                            },
+                            [](VAddr, u16, u16) {});
+                    })) {
+                    rasterizer->OnFence();
+                    break;
+                }
+                rasterizer->FlushMirrors(4);
+                rasterizer->OnFence();
+                release_mem->SignalFence(
+                    [pipe_id = queue.pipe_id] {
+                        Platform::IrqC::Instance()->Signal(static_cast<Platform::InterruptId>(pipe_id));
+                    },
+                    [](VAddr, u16, u16) {});
+                break;
+            }
             // The game may read compute results once this event fires.
             if (rasterizer) {
                 rasterizer->FlushMirrors(4);
             }
-            const auto* release_mem = reinterpret_cast<const PM4CmdReleaseMem*>(header);
             if (rasterizer) {
                 rasterizer->OnFence();
             }

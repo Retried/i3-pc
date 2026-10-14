@@ -335,6 +335,7 @@ struct DrawStats {
     u32 unflushed_signal[6]{};
     u32 forced_flushes{};
     u32 fast_draws{};
+    u32 last_good_args{};
     u32 deferred_waits{};
     u64 unflushed_outputs{};
     u32 same_pipeline{}, same_inputs{};
@@ -455,6 +456,11 @@ struct DrawStats {
         forced_flushes = 0;
         LOG_ERROR(Render, "direct draws that kept the state of the draw before: {}", fast_draws);
         fast_draws = 0;
+        if (last_good_args != 0) {
+            LOG_WARNING(Render, "indirect draws issued with their slot's last sane arguments: {}",
+                        last_good_args);
+            last_good_args = 0;
+        }
         LOG_ERROR(Render, "deferred labels: blocking completions {}", deferred_waits);
         deferred_waits = 0;
         for (auto& v : unflushed_signal) {
@@ -753,8 +759,10 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     }
 
     stage_start = __rdtsc();
+    // Measured at the slow Seattle pier view, on and off in one session: 28.7 against 26.9 FPS,
+    // pictures alike; bridge and fire-fight soaks alive. I3_NO_DRAW_FASTPATH=1 turns it off.
     static const bool fast_path_on = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
-                                     std::getenv("I3_DRAW_FASTPATH") != nullptr; // test: not measured yet
+                                     std::getenv("I3_NO_DRAW_FASTPATH") == nullptr;
     // Only constants (vertex and pixel user data), uconfig, index and instance commands ran
     // since the last direct draw, with the same pipeline, topology and index type.
     bool fast = fast_path_on && Common::g_draw_fastpath.load(std::memory_order_relaxed) &&
@@ -985,6 +993,28 @@ u64 WriterOfGuestMemoryLocal(u64 address, u64* base, u32* size) {
     return 0;
 }
 
+// The last sane arguments of each indirect draw slot, by the slot's address and the draw's
+// shaders. A slot whose result comes back late holds garbage; its draw used to be dropped, and
+// the particles it draws vanished for that frame (dozens to hundreds of times in a three-minute
+// soak on the Seattle bridge). With the same slot, the same shaders and a sane draw there in
+// the last half second, the draw is issued with those arguments instead: particles a frame
+// old rather than none. I3_NO_LAST_GOOD_ARGS=1 drops such draws as before.
+struct LastGoodArgs {
+    std::array<u32, 5> args;
+    u64 ms;
+};
+static std::unordered_map<u64, LastGoodArgs> g_last_good_args;
+
+static u64 NowMs() {
+    return u64(std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+                   .count());
+}
+
+static u64 LastGoodKey(VAddr slot, u64 vs, u64 ps) {
+    return slot ^ (vs * 0x9E3779B97F4A7C15ull) ^ (ps * 0xC2B2AE3D27D4EB4Full);
+}
+
 static bool is_infamous_args_mirror() {
     return Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
            std::getenv("I3_NO_ARG_MIRROR") == nullptr;
@@ -1044,6 +1074,24 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                 memory->CopySparseMemory(arg_address + offset + u64(slot) * stride,
                                          reinterpret_cast<u8*>(args.data()),
                                          std::min<u64>(stride, sizeof(args)));
+                const u64 good_key =
+                    LastGoodKey(arg_address + offset + u64(slot) * stride,
+                                liverpool->regs.vs_program.Address<u64>(),
+                                liverpool->regs.ps_program.Address<u64>());
+                static const bool use_last_good =
+                    Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                    std::getenv("I3_NO_LAST_GOOD_ARGS") == nullptr;
+                if (args[0] > max_elements || args[1] > max_instances) {
+                    if (use_last_good && direct) {
+                        const auto it = g_last_good_args.find(good_key);
+                        const u64 now = NowMs();
+                        if (it != g_last_good_args.end() && now - it->second.ms < 500) {
+                            ++g_stats.last_good_args;
+                            checked_args.push_back(it->second.args);
+                            continue;
+                        }
+                    }
+                }
                 if (args[0] > max_elements || args[1] > max_instances) {
                     static const bool learn = std::getenv("I3_NO_LEARN_READERS") == nullptr;
                     if (learn && g_learned.hashes.size() < 128) {
@@ -1107,6 +1155,12 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                 }
                 if (direct) {
                     checked_args.push_back(args);
+                    if (use_last_good) {
+                        if (g_last_good_args.size() > 16384) {
+                            g_last_good_args.clear();
+                        }
+                        g_last_good_args[good_key] = {args, NowMs()};
+                    }
                 }
             }
         }

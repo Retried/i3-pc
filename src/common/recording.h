@@ -20,6 +20,8 @@ inline std::atomic<bool> g_unlock_flip_rate{false};
 /// Benchmark capture (script actions "bench=on" / "bench=off"): while set, the time between
 /// presented frames is appended, in milliseconds, to bench_frametimes.txt.
 inline std::atomic<bool> g_bench{false};
+// Test switch (script action "fastpath=on|off"): the short path for repeated draws.
+inline std::atomic<bool> g_draw_fastpath{true};
 
 /// Shadow map updates of the inFAMOUS Second Son build, set by its PC options: 0 every frame,
 /// 1 every second frame (the map of the frame before is reused in between), 2 never (no

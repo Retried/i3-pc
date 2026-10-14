@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <array>
+#include <cstdlib>
+#include <cstring>
 #include <fmt/format.h>
+#include "common/elf_info.h"
 #include "common/alignment.h"
 #include "common/arch.h"
 #include "common/assert.h"
@@ -103,6 +107,34 @@ s32 Module::Start(u64 args, const void* argp, void* param) {
     LOG_INFO(Core_Linker, "Module started : {}", name);
     const VAddr addr = dynamic_info.init_virtual_addr + GetBaseAddress();
     return reinterpret_cast<EntryFunc>(addr)(args, argp, param);
+}
+
+// inFAMOUS Second Son: the function at text offset 0x16df30 takes the next slot of a particle
+// array, index [this+0x154], and clamps it to the capacity [this+0x158] with a signed compare.
+// The index is fed from a particle counter that a compute shader writes; when that result comes
+// back late the field holds an unrelated float (0xbc30c009 in the crashes), a negative index
+// passes the signed compare and the slot is cleared 2 GB before the array: the crash after a
+// few minutes on the Seattle bridge or in a long fire fight. The compare is made unsigned (jl
+// to jb), so such an index is clamped to the last slot like any other overflow. Copying every
+// small compute result back in time instead cost half the frame rate in fire fights.
+static void PatchInfamousParticleCount(VAddr base, u64 size) {
+    if (Common::ElfInfo::Instance().GameSerial() != "CUSA00004" ||
+        std::getenv("I3_NO_COUNT_PATCH") != nullptr) {
+        return;
+    }
+    constexpr u64 offset = 0x16df3d;
+    constexpr std::array<u8, 16> expected{0x8b, 0x8f, 0x54, 0x01, 0x00, 0x00, 0x8b, 0x87,
+                                          0x58, 0x01, 0x00, 0x00, 0x39, 0xc1, 0x7c, 0x0a};
+    if (size < offset + expected.size()) {
+        return;
+    }
+    u8* const code = reinterpret_cast<u8*>(base + offset);
+    if (std::memcmp(code, expected.data(), expected.size()) != 0) {
+        LOG_WARNING(Core_Linker, "inFAMOUS particle count check not found; not patched");
+        return;
+    }
+    code[14] = 0x72; // jb
+    LOG_INFO(Core_Linker, "inFAMOUS particle count check made unsigned");
 }
 
 void Module::LoadModuleToMemory(u32& max_tls_index) {
@@ -293,6 +325,7 @@ void Module::LoadModuleToMemory(u32& max_tls_index) {
             MemoryPatcher::g_eboot_image_size = base_size;
             MemoryPatcher::g_eboot_name = name;
             MemoryPatcher::OnGameLoaded();
+            PatchInfamousParticleCount(base_virtual_addr, base_size);
         }
     }
 

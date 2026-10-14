@@ -334,6 +334,7 @@ struct DrawStats {
     // still waited for their copy back, and how many outputs waited in all.
     u32 unflushed_signal[6]{};
     u32 forced_flushes{};
+    u32 fast_draws{};
     u32 deferred_waits{};
     u64 unflushed_outputs{};
     u32 same_pipeline{}, same_inputs{};
@@ -452,6 +453,8 @@ struct DrawStats {
                   unflushed_signal[0], unflushed_signal[2], unflushed_signal[4],
                   unflushed_outputs, forced_flushes);
         forced_flushes = 0;
+        LOG_ERROR(Render, "direct draws that kept the state of the draw before: {}", fast_draws);
+        fast_draws = 0;
         LOG_ERROR(Render, "deferred labels: blocking completions {}", deferred_waits);
         deferred_waits = 0;
         for (auto& v : unflushed_signal) {
@@ -570,6 +573,20 @@ static void SubmitPeriodically(Scheduler& scheduler) {
         scheduler.Flush();
     }
 }
+
+// The last direct draw, for draws that follow it with nothing but new constants, index data
+// and instance count in between (about nine in ten in the heaviest Seattle view, where one
+// shader pair draws 5,450 small meshes a frame). Such a draw keeps the render targets, the
+// render pass and the dynamic state of the draw before; only its resources are bound anew.
+struct LastDraw {
+    bool valid{};
+    const GraphicsPipeline* pipeline{};
+    bool indexed{};
+    u32 primitive{};
+    u32 index_type{};
+    RenderState state{};
+};
+static LastDraw g_last_draw;
 
 void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     RENDERER_TRACE;
@@ -736,13 +753,48 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     }
 
     stage_start = __rdtsc();
-    PrepareRenderState(pipeline);
+    static const bool fast_path_on = Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
+                                     std::getenv("I3_DRAW_FASTPATH") != nullptr; // test: not measured yet
+    // Only constants (vertex and pixel user data), uconfig, index and instance commands ran
+    // since the last direct draw, with the same pipeline, topology and index type.
+    bool fast = fast_path_on && Common::g_draw_fastpath.load(std::memory_order_relaxed) &&
+                g_last_draw.valid && (change_mask & ~(4u | 8u | 16u | 32u)) == 0 &&
+                pipeline == g_last_draw.pipeline && is_indexed == g_last_draw.indexed &&
+                u32(regs.primitive_type) == g_last_draw.primitive &&
+                u32(regs.index_buffer_type.index_type) == g_last_draw.index_type;
+    if (fast) {
+        // The targets of the draw before, marked as targets again (the reset after each draw
+        // clears that mark, and texture binding needs it to spot feedback loops).
+        for (u32 cb = 0; cb < g_last_draw.state.num_color_attachments; ++cb) {
+            if (const auto image_id = cb_descs[cb].image_id) {
+                texture_cache.GetImage(bound_images.emplace_back(image_id)).binding.is_target = 1u;
+            }
+        }
+        if (const auto image_id = db_desc.image_id) {
+            texture_cache.GetImage(bound_images.emplace_back(image_id)).binding.is_target = 1u;
+        }
+    } else {
+        PrepareRenderState(pipeline);
+    }
     stage_done(2);
     const bool bound = BindResources(pipeline);
     stage_done(3);
     if (!bound) {
         ++g_stats.bind_failed;
+        g_last_draw.valid = false;
         return;
+    }
+    if (fast) {
+        // A texture of this draw that is also one of its targets needs the full setup.
+        for (u32 cb = 0; cb < g_last_draw.state.num_color_attachments && fast; ++cb) {
+            if (const auto image_id = cb_descs[cb].image_id) {
+                fast = !texture_cache.GetImage(image_id).binding.is_bound;
+            }
+        }
+        if (const auto image_id = db_desc.image_id; image_id && fast) {
+            fast = !texture_cache.GetImage(image_id).binding.is_bound;
+        }
+        ++g_stats.fast_draws;
     }
     ++g_stats.drawn;
     g_stats.verts_max = std::max<u32>(g_stats.verts_max, regs.num_indices);
@@ -768,7 +820,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
                   regs.viewports[0].yscale);
     }
     stage_start = __rdtsc();
-    const auto state = BeginRendering(pipeline);
+    const auto state = fast ? g_last_draw.state : BeginRendering(pipeline);
     stage_done(4);
 
     BindVertexBuffers(pipeline);
@@ -784,8 +836,12 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
 
     pipeline->BindResources(set_writes, push_data);
     stage_done(6);
-    UpdateDynamicState(pipeline, is_indexed);
+    if (!fast) {
+        UpdateDynamicState(pipeline, is_indexed);
+    }
     stage_done(7);
+    g_last_draw = {true, pipeline, is_indexed, u32(regs.primitive_type),
+                   u32(regs.index_buffer_type.index_type), state};
     scheduler.BeginRendering(state);
     stage_done(8);
 
@@ -901,6 +957,34 @@ static void NoteCsOutput(u64 hash, VAddr base, u32 size) {
     g_cs_output_count.store(total + 1, std::memory_order_relaxed);
 }
 
+// Compute shaders learned as read by the game. Each scene has its own particle systems, so
+// the list of shaders whose small outputs the game reads (see DispatchDirect) cannot be
+// complete: a draw slot that holds garbage when its draw comes means its writer's result came
+// back too late. The newest compute output over that slot names the writer, which then joins
+// the list for the rest of the session (I3_NO_LEARN_READERS=1 turns this off). Learning by
+// address in a later dispatch instead taught the wrong shaders (the game hands its memory out
+// anew every frame): 55 in one fire fight, at a third of its frame rate; with those addresses
+// kept only 50 ms it learned almost nothing. Listing the 38 shaders learned that way on the
+// Seattle bridge from the start cost fire fights as much (34.8 FPS against 48).
+struct LearnedReaders {
+    std::vector<u64> hashes;
+};
+static LearnedReaders g_learned;
+u64 WriterOfGuestMemoryLocal(u64 address, u64* base, u32* size);
+
+u64 WriterOfGuestMemoryLocal(u64 address, u64* base, u32* size) {
+    const u32 total = g_cs_output_count.load(std::memory_order_relaxed);
+    for (u32 i = 0; i < std::min<u32>(total, 8192); ++i) {
+        const auto& e = g_cs_outputs[(total - 1 - i) % 8192];
+        if (address >= e.base && address < e.base + e.size) {
+            *base = e.base;
+            *size = e.size;
+            return e.hash;
+        }
+    }
+    return 0;
+}
+
 static bool is_infamous_args_mirror() {
     return Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
            std::getenv("I3_NO_ARG_MIRROR") == nullptr;
@@ -961,6 +1045,20 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                                          reinterpret_cast<u8*>(args.data()),
                                          std::min<u64>(stride, sizeof(args)));
                 if (args[0] > max_elements || args[1] > max_instances) {
+                    static const bool learn = std::getenv("I3_NO_LEARN_READERS") == nullptr;
+                    if (learn && g_learned.hashes.size() < 128) {
+                        u64 base = 0;
+                        u32 size = 0;
+                        const u64 at = arg_address + offset + u64(slot) * stride;
+                        const u64 hash = WriterOfGuestMemoryLocal(at, &base, &size);
+                        if (hash != 0 && size <= 0x40 &&
+                            std::ranges::find(g_learned.hashes, hash) == g_learned.hashes.end()) {
+                            g_learned.hashes.push_back(hash);
+                            LOG_WARNING(Render, "compute shader {:#x} learned as read by the game "
+                                                "(output {:#x} size {:#x} held a dropped draw's "
+                                                "arguments)", hash, base, size);
+                        }
+                    }
                     LOG_WARNING(Render,
                                 "Dropped indirect draw at {:#x}: count {:#x}, instances {:#x}, "
                                 "gpu-written {}, slots {}, stride {}, indexed {}",
@@ -1513,13 +1611,27 @@ void Rasterizer::DispatchDirect() {
         static const bool known_title = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
         static const bool flush_at_signal = std::getenv("I3_NO_READ_URGENT") == nullptr;
         static const bool predict = std::getenv("I3_PREDICT") != nullptr;
-        constexpr std::array<u64, 5> cpu_read{0x2c6b674a, 0x63e538c1, 0x47a670fd, 0x3ea96db0,
-                                              0xa8b68717};
-        if (known_title && !mirrors.empty() &&
-            std::ranges::find(cpu_read, u64(cs.pgm_hash)) != cpu_read.end()) {
+        // The first five from the fire fight, the next three from the Seattle bridge (48-byte
+        // particle counters like four of the first five). Treating every 48-byte output as read
+        // by the game cost half the frame rate in a fire fight (52.9 to 24-26 FPS), so the list
+        // stays a list. The last two wrote the arguments of draws still dropped on the bridge.
+        constexpr std::array<u64, 10> cpu_read{0x2c6b674a, 0x63e538c1, 0x47a670fd, 0x3ea96db0,
+                                               0xa8b68717, 0x187e6faf, 0x5563ea54, 0x19db0e65,
+                                               0x21e3c997, 0x29fd81d8};
+        const bool listed = std::ranges::find(cpu_read, u64(cs.pgm_hash)) != cpu_read.end() ||
+                            std::ranges::find(g_learned.hashes, u64(cs.pgm_hash)) !=
+                                g_learned.hashes.end();
+        boost::container::small_vector<std::pair<VAddr, u32>, 4> read_by_game;
+        for (const auto& range : mirrors) {
+            if (listed) {
+                read_by_game.push_back(range);
+            }
+        }
+        if (known_title && !read_by_game.empty()) {
             if (flush_at_signal) {
                 g_arg_windows.urgent = true;
-                g_urgent_mirrors.insert(g_urgent_mirrors.end(), mirrors.begin(), mirrors.end());
+                g_urgent_mirrors.insert(g_urgent_mirrors.end(), read_by_game.begin(),
+                                        read_by_game.end());
             } else if (predict) {
                 for (const auto& [address, size] : mirrors) {
                     if (size > 4096) {

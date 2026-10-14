@@ -310,6 +310,8 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
             } else if (action == "resume" && DebugState.IsGuestThreadsPaused()) {
                 DebugState.ResumeGuestThreads();
             }
+        } else if (action == "fastpath=on" || action == "fastpath=off") {
+            Common::g_draw_fastpath.store(action == "fastpath=on", std::memory_order_relaxed);
         } else if (action == "bench=on" || action == "bench=off") {
             Common::g_bench.store(action == "bench=on", std::memory_order_relaxed);
         } else if (action == "rec=on" || action == "rec=off") {

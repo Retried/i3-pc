@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
+#include <mutex>
+#include <unordered_map>
 #include <utility>
 #include "common/adaptive_mutex.h"
 #include "common/assert.h"
@@ -495,11 +497,20 @@ struct SignalImpl : public PageManager::Impl {
             static std::atomic<u32> logged{0};
             static std::atomic<u64> total{0};
             const u64 n = ++total;
-            if (logged.load(std::memory_order_relaxed) < 600 || n % 4096 == 0) {
+            // The first 600 reads are mostly of a few shaders; a shader read rarely would be
+            // missed, so the first three reads of every shader are logged as well.
+            static std::mutex seen_mutex;
+            static std::unordered_map<u64, u32> seen;
+            u64 base = 0;
+            u32 out_size = 0;
+            const u64 hash = WriterOfGuestMemory(addr, &base, &out_size);
+            bool first_of_shader = false;
+            {
+                std::scoped_lock lk{seen_mutex};
+                first_of_shader = ++seen[hash] <= 3;
+            }
+            if (logged.load(std::memory_order_relaxed) < 600 || n % 4096 == 0 || first_of_shader) {
                 ++logged;
-                u64 base = 0;
-                u32 out_size = 0;
-                const u64 hash = WriterOfGuestMemory(addr, &base, &out_size);
                 LOG_ERROR(Render, "cpu read of gpu-written memory at {:#x}: shader {:#x} output "
                                   "{:#x} size {:#x} ({} reads so far)",
                           addr, hash, base, out_size, n);

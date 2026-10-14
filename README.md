@@ -242,12 +242,14 @@ missing, English is shown.
   of 2 to 3 seconds there is gone with the copy-back changes of 2026-10-13).
 - On the road to Seattle the game loads its city geometry in one step: a pause of about half a
   second there (it was 2 to 3 seconds before runtime f3481a25).
-- Earlier builds crashed after about two minutes of sustained firing in the first boss arena
-  (one test run in three). The cause is found and fixed in the runtime of 2026-10-13: the
-  game reads a few small results of GPU compute work right after it is told they are done,
-  and they used to arrive a frame late. Ten test runs in a row have stayed alive since. The
-  fix waits for the graphics card about three times a frame and costs 4 to 8 FPS where fire
-  and particles are on screen.
+- Earlier builds crashed after a few minutes of sustained firing in the first boss arena, and
+  on the wrecked bridge in Seattle. The game takes the next slot of a particle array from a
+  counter the graphics card computes; when that result came back late the counter held
+  garbage, and a bounds check in the game let a negative index through. The runtime of
+  2026-10-14 makes that one check unsigned as the game loads (one byte; the game files are
+  not changed), so such an index is clamped like any other overflow. Since then: 9 of 9
+  three-minute test runs alive on the bridge and in fire fights, 4 of them with the results
+  made late on purpose. Some particles can still be missing for a frame on the bridge.
 - New Game and Load Game on the start screen open the game's Options screen for you once the
   last save has loaded. If that save opens in a cutscene, the game shows "Paused" instead:
   continue the cutscene, then open Options yourself (in Seattle: Options, then Triangle / R).

@@ -24,4 +24,4 @@ read w h rate < testrun/user/capture/frames.txt
 ffmpeg -y -loglevel error -f rawvideo -pix_fmt rgb24 -s ${w}x${h} -r $rate -i testrun/user/capture/frames.rgb \
     -vf "fps=${FPS:-2},scale=${TW:-320}:-1,tile=${TILE:-6x4}" tools/try_${label}_%d.png
 ls tools/try_${label}_*.png
-rm -rf testrun/user/capture
+[ -n "$KEEP" ] || rm -rf testrun/user/capture

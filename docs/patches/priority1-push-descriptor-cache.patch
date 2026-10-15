@@ -1,0 +1,209 @@
+diff --git a/src/video_core/renderer_vulkan/vk_command_stream.cpp b/src/video_core/renderer_vulkan/vk_command_stream.cpp
+index 9b87ec5..9060da7 100644
+--- a/src/video_core/renderer_vulkan/vk_command_stream.cpp
++++ b/src/video_core/renderer_vulkan/vk_command_stream.cpp
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include <algorithm>
+ #include <cstdlib>
+ #include <immintrin.h>
+ 
+@@ -10,6 +11,7 @@
+ namespace Vulkan {
+ 
+ CommandStream::CommandStream() {
++    descriptor_cache_enabled = std::getenv("SHAD_DISABLE_PUSH_DESCRIPTOR_CACHE") == nullptr;
+     const char* setting = std::getenv("SOTC_WORKER_RECORD");
+     async = setting == nullptr || std::atoi(setting) != 0;
+     if (async) {
+@@ -17,6 +19,71 @@ CommandStream::CommandStream() {
+     }
+ }
+ 
++void CommandStream::InvalidateDescriptorCache() {
++    for (auto& cache : descriptor_caches) {
++        cache.layout = nullptr;
++    }
++}
++
++bool CommandStream::CachedDescriptor::Update(const vk::WriteDescriptorSet& write) {
++    bool same = valid && type == write.descriptorType;
++    switch (write.descriptorType) {
++    case vk::DescriptorType::eSampler:
++        same &= image.sampler == write.pImageInfo->sampler;
++        image.sampler = write.pImageInfo->sampler;
++        break;
++    case vk::DescriptorType::eCombinedImageSampler:
++        same &= image == *write.pImageInfo;
++        image = *write.pImageInfo;
++        break;
++    case vk::DescriptorType::eSampledImage:
++    case vk::DescriptorType::eStorageImage:
++    case vk::DescriptorType::eInputAttachment:
++        same &= image.imageView == write.pImageInfo->imageView &&
++                image.imageLayout == write.pImageInfo->imageLayout;
++        image.imageView = write.pImageInfo->imageView;
++        image.imageLayout = write.pImageInfo->imageLayout;
++        break;
++    case vk::DescriptorType::eUniformBuffer:
++    case vk::DescriptorType::eStorageBuffer:
++        same &= buffer == *write.pBufferInfo;
++        buffer = *write.pBufferInfo;
++        break;
++    case vk::DescriptorType::eUniformTexelBuffer:
++    case vk::DescriptorType::eStorageTexelBuffer:
++        same &= texel == *write.pTexelBufferView;
++        texel = *write.pTexelBufferView;
++        break;
++    default:
++        return false;
++    }
++    type = write.descriptorType;
++    valid = true;
++    return same;
++}
++
++static bool CanCacheDescriptor(const vk::WriteDescriptorSet& write) {
++    if (write.pNext || write.descriptorCount != 1 || write.dstArrayElement != 0) {
++        return false;
++    }
++    switch (write.descriptorType) {
++    case vk::DescriptorType::eSampler:
++    case vk::DescriptorType::eCombinedImageSampler:
++    case vk::DescriptorType::eSampledImage:
++    case vk::DescriptorType::eStorageImage:
++    case vk::DescriptorType::eInputAttachment:
++        return write.pImageInfo != nullptr;
++    case vk::DescriptorType::eUniformBuffer:
++    case vk::DescriptorType::eStorageBuffer:
++        return write.pBufferInfo != nullptr;
++    case vk::DescriptorType::eUniformTexelBuffer:
++    case vk::DescriptorType::eStorageTexelBuffer:
++        return write.pTexelBufferView != nullptr;
++    default:
++        return false;
++    }
++}
++
+ CommandStream::~CommandStream() {
+     if (async) {
+         Drain();
+@@ -115,6 +182,36 @@ void CommandStream::WorkerLoop(std::stop_token stop) {
+ 
+ void CommandStream::pushDescriptorSetKHR(vk::PipelineBindPoint point, vk::PipelineLayout layout,
+                                          u32 set, std::span<const vk::WriteDescriptorSet> writes) {
++    auto& changed = changed_descriptor_writes;
++    const bool cacheable = descriptor_cache_enabled && set == 0 &&
++                           (point == vk::PipelineBindPoint::eGraphics ||
++                            point == vk::PipelineBindPoint::eCompute) &&
++                           writes.size() <= changed.size() &&
++                           std::ranges::all_of(writes, [](const auto& write) {
++                               return write.dstBinding < MaxCachedDescriptorBindings &&
++                                      CanCacheDescriptor(write);
++                           });
++    if (cacheable) {
++        auto& cache = descriptor_caches[point == vk::PipelineBindPoint::eCompute ? 1 : 0];
++        if (cache.layout != layout) {
++            cache.layout = layout;
++            for (auto& binding : cache.bindings) {
++                binding.valid = false;
++            }
++        }
++        size_t count = 0;
++        for (const auto& write : writes) {
++            if (!cache.bindings[write.dstBinding].Update(write)) {
++                changed[count++] = write;
++            }
++        }
++        if (count == 0) {
++            return;
++        }
++        writes = std::span{changed}.first(count);
++    } else {
++        InvalidateDescriptorCache();
++    }
+     if (!async) {
+         target.pushDescriptorSetKHR(point, layout, set, static_cast<u32>(writes.size()),
+                                     writes.data());
+diff --git a/src/video_core/renderer_vulkan/vk_command_stream.h b/src/video_core/renderer_vulkan/vk_command_stream.h
+index 00e27b8..2960748 100644
+--- a/src/video_core/renderer_vulkan/vk_command_stream.h
++++ b/src/video_core/renderer_vulkan/vk_command_stream.h
+@@ -31,9 +31,14 @@ public:
+ 
+     /// The command buffer the following calls go to. Changing it requires a Drain() first.
+     void SetTarget(vk::CommandBuffer cmdbuf) {
++        if (target != cmdbuf) {
++            InvalidateDescriptorCache();
++        }
+         target = cmdbuf;
+     }
+ 
++    void InvalidateDescriptorCache();
++
+     /// Returns once every queued command has been recorded into its command buffer.
+     void Drain();
+ 
+@@ -121,6 +126,7 @@ public:
+                               std::span<const vk::WriteDescriptorSet> writes);
+     void bindDescriptorSets(vk::PipelineBindPoint point, vk::PipelineLayout layout, u32 first,
+                             vk::DescriptorSet set) {
++        InvalidateDescriptorCache();
+         Push(0, [=](vk::CommandBuffer c) { c.bindDescriptorSets(point, layout, first, set, {}); });
+     }
+     void beginRendering(const vk::RenderingInfo& info);
+@@ -228,10 +234,29 @@ public:
+     /// Any other state setter that takes plain values: stream.Set([=](auto c) { c.setX(v); }).
+     template <typename F>
+     void Set(F&& func) {
++        InvalidateDescriptorCache();
+         Push(0, std::forward<F>(func));
+     }
+ 
+ private:
++    static constexpr size_t MaxCachedDescriptorBindings = 64;
++    struct CachedDescriptor {
++        vk::DescriptorType type{};
++        vk::DescriptorImageInfo image{};
++        vk::DescriptorBufferInfo buffer{};
++        vk::BufferView texel{};
++        bool valid{};
++
++        bool Update(const vk::WriteDescriptorSet& write);
++    };
++    struct DescriptorCache {
++        vk::PipelineLayout layout{};
++        std::array<CachedDescriptor, MaxCachedDescriptorBindings> bindings{};
++    };
++    std::array<DescriptorCache, 2> descriptor_caches;
++    std::array<vk::WriteDescriptorSet, MaxCachedDescriptorBindings> changed_descriptor_writes;
++    bool descriptor_cache_enabled{};
++
+     struct Record {
+         void (*invoke)(const void* closure, vk::CommandBuffer cmdbuf);
+         u32 size; // of the whole record, aligned
+diff --git a/src/video_core/renderer_vulkan/vk_scheduler.cpp b/src/video_core/renderer_vulkan/vk_scheduler.cpp
+index 1384080..4b0c968 100644
+--- a/src/video_core/renderer_vulkan/vk_scheduler.cpp
++++ b/src/video_core/renderer_vulkan/vk_scheduler.cpp
+@@ -163,6 +163,7 @@ void Scheduler::BeginSession() {
+ 
+     // Invalidate dynamic state so it gets applied to the new command buffer.
+     dynamic_state.Invalidate();
++    stream.InvalidateDescriptorCache();
+ 
+ #if TRACY_GPU_ENABLED
+     auto* profiler_ctx = instance.GetProfilerContext();
+diff --git a/src/video_core/renderer_vulkan/vk_scheduler.h b/src/video_core/renderer_vulkan/vk_scheduler.h
+index c1a99e4..16bca6a 100644
+--- a/src/video_core/renderer_vulkan/vk_scheduler.h
++++ b/src/video_core/renderer_vulkan/vk_scheduler.h
+@@ -414,6 +414,7 @@ public:
+     /// recorded first, so commands issued through the returned handle keep their place.
+     vk::CommandBuffer CommandBuffer() const {
+         stream.Drain();
++        stream.InvalidateDescriptorCache();
+         return sessions.back().primary;
+     }
+ 

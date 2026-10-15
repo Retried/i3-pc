@@ -5,6 +5,8 @@ przegląd eksperymentalnego patcha priorytetu 1 i plan dalszej walidacji.
 W pierwotnym etapie nie wdrażano patcha ani pozostałych priorytetów.
 Późniejszą implementację priorytetu 2 opisano w sekcji aktualizacji poniżej;
 tabela porównawcza zachowuje stan bazowy sprzed tej zmiany.
+Plan rozszerzono także o etapy W1–W4 dla Windows, procesorów AMD Ryzen i GPU
+NVIDIA. Ich numeracja jest odrębna od dotychczasowych priorytetów renderera 1–7.
 
 ## Podstawa i znaczenie statusów
 
@@ -190,3 +192,109 @@ Walidacja tej aktualizacji:
   się od Clanga 23 wskazanego w repozytoryjnym `build.bat`.
 - Nie wykonano testów w grze ani benchmarków. Poprawność działania podczas
   rozgrywki, oszczędności CPU i wpływ na FPS nadal wymagają weryfikacji.
+
+## Rozszerzenie planu: Windows / AMD CPU / NVIDIA GPU
+
+Źródło wymagań: przekazany dokument „Optymalizacja i rozwój i3-pc — Windows /
+AMD CPU / NVIDIA GPU”. Poniżej zapisano jego zakres jako propozycje dalszych
+prac; polecenie uzupełnienia dokumentacji nie rozpoczyna ich implementacji.
+
+### Środowisko i cele
+
+- Windows 10/11 x86-64, procesory AMD Ryzen i karty NVIDIA obsługujące Vulkan.
+  Samo wsparcie Vulkan nie potwierdza dostępności wszystkich funkcji wymaganych
+  przez emulator; trzeba sprawdzić konkretny model i sterownik.
+- Europejska wersja inFAMOUS Second Son: CUSA00004, aktualizacja v1.07.
+- Dwa komputery o różnych konfiguracjach. Ich modele CPU/GPU, pamięć, system
+  i sterowniki należy zapisać przed pomiarami; nie zakładać identycznego
+  ograniczenia wydajności na obu maszynach.
+- Cel: poprawa średniego FPS, 1% low i frametime, mniej przycięć oraz większa
+  stabilność przy zachowaniu poprawnego obrazu. Są to kryteria przyszłej oceny,
+  a nie potwierdzone efekty zmian.
+
+Projekt bazuje na `SotC-project/i3-pc`, natomiast bieżącym repozytorium prac
+jest fork `Retried/i3-pc`. Implementacja dotychczasowego priorytetu 2 została
+opublikowana w commicie `9a719c45` na gałęzi `runtime`; commit `887e3e9c`
+gałęzi `main` zawiera roadmapę oraz adres i wskaźnik podmodułu forka.
+Zaliczony build tej zmiany nie stanowi testu działania na docelowych GPU NVIDIA.
+
+### Lista nowych etapów i stan po krótkim przeglądzie
+
+| Etap | Proponowane zmiany | Co już istnieje / pliki do wykorzystania | Stan i rezultat do weryfikacji |
+| --- | --- | --- | --- |
+| W1 — automatyzacja kompilacji i uruchamiania | Przenośny proces wykrywania narzędzi, budowania, uruchamiania i przygotowania paczki portable; opcjonalne LTO. | `build.bat` i `build-lto.bat` korzystają z presetów CMake, ale mają sztywne ścieżki do Visual Studio Enterprise i LLVM. `install.sh` również ma lokalne ścieżki. Istnieją `runtime/CMakePresets.json`, `runtime/cmake/CMakeWindowsPresets.json`, katalog `dist/` i instrukcje w `README.md`. | **Częściowo wdrożone**: istnieje proces budowania i wariant LTO. Automatyczne wykrywanie narzędzi oraz kompletność i przenośność paczki wymagają implementacji lub weryfikacji. Rezultat: powtarzalny build i uruchomienie tej samej paczki na drugim komputerze bez kompilacji. |
+| W2 — kompatybilność i diagnostyka NVIDIA | Audyt wymaganych funkcji Vulkan, shaderów, synchronizacji i readbacku; uzupełnienie brakującej diagnostyki i uzasadnionych fallbacków. | `Instance::CollectDeviceParameters` w `vk_instance.cpp` już loguje producenta, model, sterownik, wersję Vulkan i dostępne rozszerzenia. `GetDriverVersionName` rozpoznaje format wersji NVIDIA; istnieje wykrywanie i włączanie rozszerzeń oraz wymagania dla funkcji. `vk_pipeline_cache.cpp` zawiera także wybory profilu zależne od sterownika. | **Diagnostyka podstawowa wdrożona; cały etap częściowo wdrożony i wymaga testów sprzętowych**. Nie powielać istniejących logów. Rezultat: odtwarzalne zgłoszenia błędów oraz potwierdzona poprawność na docelowych NVIDIA, bez regresji na pozostałych GPU. |
+| W3 — automatyczne benchmarki i profilowanie | Ujednolicony zapis wyników i metadanych, porównanie A/B oraz wykrywanie regresji na obu komputerach. | `bench.sh` zapisuje CSV i liczy FPS oraz lows z frametime; ponawianie przy zajętym środowisku nie zastępuje niezależnych powtórzeń pomiaru. Istnieją `abtest.sh`, `abtest2.sh`, `cityprof.sh`, `tools/perfsample.ps1`, `tools/symprof.py`, sampler `SOTC_PROFILE` i zapis `bench_frametimes.txt` w sterowniku videoout. Skrypty nadal zawierają lokalne ścieżki. | **Częściowo wdrożone; wymaga rozszerzenia i pomiarów**. Rezultat: raporty A/B z pełnym pochodzeniem danych, cold/warm cache i rozrzutem 3–5 przebiegów każdej konfiguracji na każdej maszynie. |
+| W4 — optymalizacja CPU i draw calli | Wybrać kosztowne operacje na podstawie profilu, ograniczać redundantne stany i lookupy, rozważać bezpieczny cache i batching. | Dotychczasowe priorytety 1–7 obejmują ten zakres. Istnieją `DrawStats`, szybkie ścieżki w `vk_rasterizer.cpp`, worker w `vk_command_stream.cpp`, mechanizmy synchronizacji i cache pipeline'ów. Priorytet 2 ma już implementację i zaliczony build, lecz nie ma wyników z gry. | **Częściowo wdrożone; skuteczność wymaga pomiarów**. W4 jest etapem nadrzędnym dla istniejącej listy, nie dodatkową kopią tych optymalizacji. Rezultat: powtarzalna poprawa względem baseline'u, zweryfikowana na obu komputerach bez regresji obrazu lub stabilności. |
+
+### Konkretny zakres przyszłych zmian
+
+**W1:** wykrywać Visual Studio Build Tools/MSVC, CMake, Ninja i LLVM;
+wybierać 64-bitowy proces kompilatora i właściwy target. Weryfikować dostępność
+Pythona i pozostałych zależności projektu oraz zgodność wersji narzędzi.
+Ścieżki wyznaczać względem repozytorium, instalacji narzędzi lub jawnych
+parametrów. Zachować opcję LTO po sprawdzeniu wsparcia kompilatora i linkera.
+Zwracać czytelne komunikaty i kody błędów. Paczka portable powinna zawierać
+potrzebne pliki wykonywalne, biblioteki i zasoby; określić wymagania środowiska
+uruchomieniowego, konfigurację startową i sposób uruchomienia na drugim PC.
+Nie dołączać danych gry ani prywatnej konfiguracji użytkownika.
+
+**W2:** sprawdzić wymagane i opcjonalne funkcje oraz ich inicjalizację w
+`vk_instance.cpp` i wykorzystanie przez pipeline'y, scheduler oraz buffer cache.
+Przeanalizować kompilację shaderów, synchronizację i GPU→CPU readback, w tym
+założenia zależne od producenta lub sterownika. Dopisywać diagnostykę tam,
+gdzie obecne dane nie wystarczają; unikać logowania każdego draw calla.
+Fallback wprowadzać wyłącznie dla potwierdzonego braku funkcji lub błędu,
+z zachowaniem poprawności i porównaniem z innymi GPU. Nie traktować samej
+obecności ścieżek NVIDIA jako dowodu zgodności całego renderera.
+
+**W3:** rozszerzać istniejące skrypty zamiast tworzyć równoległy system od zera.
+Zachowywać surowe czasy klatek i statystyki CPU/GPU dostępne w danej konfiguracji;
+brakujące wartości oznaczać jako niedostępne. Raport CSV lub JSON powinien
+zawierać identyfikatory commitów `main` i `runtime`, stan lokalnych zmian,
+konfigurację buildu, sprzęt, system, sterownik, ustawienia emulatora, scenę,
+czas pomiaru, zmienne środowiskowe oraz stan cache shaderów.
+Automatyczne porównanie powinno uwzględniać średni FPS, 1% low, rozkład
+frametime i rozrzut wyników; progi regresji ustalić po zebraniu baseline'u.
+Cold cache i warm cache muszą stanowić osobne serie, każda po 3–5 przebiegów.
+
+**W4:** profilować koszt tłumaczenia draw calli, przygotowania zasobów,
+wyboru pipeline'u, deskryptorów, nagrywania komend i synchronizacji. Najpierw
+ocenić już istniejące optymalizacje, w tym commit `9a719c45` i osobny patch
+push descriptors. Nie sumować nakładających się przewidywanych korzyści.
+Cache, batching i wielowątkowość wymagają analizy zależności i zachowania
+semantyki renderowania. Nie wprowadzać agresywnej wielowątkowości przed
+profilowaniem ani wyjątków dla konkretnej gry lub shadera.
+
+### Kolejność, kryteria etapów i ręczna weryfikacja
+
+Nowy cykl planować w kolejności **W1 → W2 → W3 → W4**. Nie zmienia to
+historycznej numeracji priorytetów 1–7 ani statusu już zapisanej implementacji.
+Przed rozpoczęciem W1 przygotować audyt struktury, dokumentacji, systemu
+kompilacji, profilera i renderera oraz krótką listę zmian z plikami i funkcjami.
+Powyższy przegląd jest punktem wyjścia, nie kompletnym audytem zgodności NVIDIA.
+
+Przed każdą większą zmianą opisać problem, rozwiązanie, ryzyko regresji i sposób
+weryfikacji. Wprowadzać małe, wydzielone zmiany, zachowywać CUSA00004 v1.07,
+styl projektu oraz istniejące optymalizacje, dopóki pomiary nie uzasadnią ich
+zastąpienia. W nowych skryptach i komentarzach kodu używać tekstu bez polskich
+znaków. Sukces kompilacji nie oznacza poprawności gry, a wzrost FPS kosztem
+obrazu lub stabilności nie spełnia kryteriów przyjęcia.
+
+| Etap | Weryfikacja wymagająca uruchomienia / sprzętu | Warunek zamknięcia |
+| --- | --- | --- |
+| W1 | Zbudować projekt i wariant LTO, jeśli wspierany; utworzyć paczkę i uruchomić ją na drugim komputerze bez środowiska kompilacji. | Instrukcja budowania i pakowania, lista zależności oraz potwierdzony start i próba działania gry na drugim PC. |
+| W2 | Zebrać logi obu konfiguracji, sprawdzić renderowanie, shadery, efekty, readback, zmiany scen i dłuższą rozgrywkę. Uruchomienia z walidacją Vulkan oddzielić od pomiarów wydajności; zakres kontroli innych GPU jawnie opisać. | Udokumentowana macierz sprzętu/sterowników, wyniki prób, brak wykrytych regresji w sprawdzonym zakresie i lista nieweryfikowanych konfiguracji. |
+| W3 | Powtórzyć te same sceny i ustawienia 3–5 razy na każdym PC, osobno z zimnym i rozgrzanym cache; sprawdzić surowe dane i raport porównawczy. | Powtarzalny raport A/B, kompletne metadane i jawna metoda obliczania metryk oraz wykrywania regresji. |
+| W4 | Porównać każdą optymalizację z baseline'em na obu PC; ocenić obraz, stabilność, FPS, lows i frametime. | Korzyść poparta pomiarami, z rozrzutem wyników i kontrolą regresji. Bez danych nie deklarować przyspieszenia. |
+
+Po każdym etapie przedstawić zmienione pliki z uzasadnieniem, instrukcję
+odtworzenia, wyniki wykonanych sprawdzeń, ograniczenia i ryzyka oraz propozycję
+dalszych prac. Dla W1 dołączyć instrukcję kompilacji i paczki portable.
+Jawnie wskazać próby wymagające dostępu do gry, docelowego GPU lub drugiego PC.
+Nie rozpoczynać automatycznie kolejnego etapu; każdy powinien dać się osobno
+sprawdzić i zatwierdzić.
+
+Status tego rozszerzenia: **plan prac**. W ramach uzupełnienia dokumentacji
+nie zmieniono skryptów ani renderera i nie wykonano nowych buildów, benchmarków
+lub testów w grze na docelowych konfiguracjach.

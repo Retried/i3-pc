@@ -1,0 +1,2 @@
+# Preserve supplied patch artifacts byte-for-byte, including line endings.
+docs/patches/*.patch -text

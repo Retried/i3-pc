@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <memory>
 #include <variant>
 #include <tsl/robin_map.h>
 #include "shader_recompiler/profile.h"
@@ -55,14 +57,39 @@ struct Program {
         : info{stage, l_stage, params} {}
 
     void AddPermut(vk::ShaderModule module, Shader::StageSpecialization&& spec, u64 key) {
+        last_specialization.reset();
         modules.emplace_back(module, std::move(spec), key);
     }
 
     void InsertPermut(vk::ShaderModule module, Shader::StageSpecialization&& spec,
                       size_t perm_idx) {
+        last_specialization.reset();
         modules.resize(std::max(modules.size(), perm_idx + 1)); // <-- beware of realloc
         modules[perm_idx] = {module, std::move(spec)};
     }
+
+    size_t FindPermutation(const Shader::StageSpecialization& spec) {
+        // Matching ignores resources absent from the request, so its mask must also match.
+        if (last_specialization && last_specialization->bitset == spec.bitset &&
+            *last_specialization == spec) {
+            return last_permutation;
+        }
+        const auto it = std::ranges::find(modules, spec, &Module::spec);
+        const size_t index = std::distance(modules.begin(), it);
+        if (it != modules.end() && modules.size() > 1) {
+            if (last_specialization) {
+                *last_specialization = spec;
+            } else {
+                last_specialization = std::make_unique<Shader::StageSpecialization>(spec);
+            }
+            last_permutation = index;
+        }
+        return index;
+    }
+
+private:
+    std::unique_ptr<Shader::StageSpecialization> last_specialization;
+    size_t last_permutation{};
 };
 
 struct DrawIndirectParams {
@@ -122,6 +149,8 @@ private:
     }
 
 private:
+    struct GraphicsState;
+
     const Instance& instance;
     Scheduler& scheduler;
     AmdGpu::Liverpool* liverpool;
@@ -139,6 +168,9 @@ private:
     std::array<vk::ShaderModule, MaxShaderStages> modules{};
     Shader::Gcn::FetchShaderData* fetch_shader{};
     GraphicsPipelineKey graphics_key{};
+    std::unique_ptr<GraphicsState> graphics_state;
+    GraphicsPipelineKey last_key{};
+    const GraphicsPipeline* last_pipeline{};
     ComputePipelineKey compute_key{};
     u32 num_new_pipelines{}; // new pipelines added to the cache since the game start
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "common/recording.h"
+#include <cstddef>
 #include <cstring>
 #include <ranges>
 
@@ -271,10 +272,65 @@ const Shader::RuntimeInfo& PipelineCache::BuildRuntimeInfo(HwStage stage, SwStag
     return info;
 }
 
+static constexpr std::array GraphicsStateRanges = {
+    std::pair{offsetof(AmdGpu::Regs, depth_buffer), sizeof(AmdGpu::Regs::depth_buffer)},
+    std::pair{offsetof(AmdGpu::Regs, depth_render_override),
+              sizeof(AmdGpu::Regs::depth_render_override)},
+    std::pair{offsetof(AmdGpu::Regs, clipper_control), sizeof(AmdGpu::Regs::clipper_control)},
+    std::pair{offsetof(AmdGpu::Regs, polygon_control), sizeof(AmdGpu::Regs::polygon_control)},
+    std::pair{offsetof(AmdGpu::Regs, primitive_type), sizeof(AmdGpu::Regs::primitive_type)},
+    std::pair{offsetof(AmdGpu::Regs, stage_enable), sizeof(AmdGpu::Regs::stage_enable)},
+    std::pair{offsetof(AmdGpu::Regs, ls_hs_config), sizeof(AmdGpu::Regs::ls_hs_config)},
+    std::pair{offsetof(AmdGpu::Regs, color_control), sizeof(AmdGpu::Regs::color_control)},
+    std::pair{offsetof(AmdGpu::Regs, color_shader_mask), sizeof(AmdGpu::Regs::color_shader_mask)},
+    std::pair{offsetof(AmdGpu::Regs, color_target_mask), sizeof(AmdGpu::Regs::color_target_mask)},
+    std::pair{offsetof(AmdGpu::Regs, color_export_format),
+              sizeof(AmdGpu::Regs::color_export_format)},
+    std::pair{offsetof(AmdGpu::Regs, color_buffers), sizeof(AmdGpu::Regs::color_buffers)},
+    std::pair{offsetof(AmdGpu::Regs, blend_control), sizeof(AmdGpu::Regs::blend_control)},
+};
+
+struct PipelineCache::GraphicsState {
+    static constexpr size_t RegisterBytes = [] {
+        size_t size = 0;
+        for (const auto& [offset, bytes] : GraphicsStateRanges) {
+            size += bytes;
+        }
+        return size;
+    }();
+
+    bool Update(const AmdGpu::Regs& regs) {
+        const auto* data = reinterpret_cast<const u8*>(&regs);
+        size_t at = 0;
+        bool changed = !valid;
+        for (const auto& [offset, bytes] : GraphicsStateRanges) {
+            changed |= std::memcmp(registers.data() + at, data + offset, bytes) != 0;
+            at += bytes;
+        }
+        if (changed) {
+            at = 0;
+            for (const auto& [offset, bytes] : GraphicsStateRanges) {
+                std::memcpy(registers.data() + at, data + offset, bytes);
+                at += bytes;
+            }
+            valid = true;
+            targets_valid = false;
+        }
+        return changed;
+    }
+
+    std::array<u8, RegisterBytes> registers{};
+    GraphicsPipelineKey base_key{};
+    GraphicsPipelineKey target_key{};
+    bool valid{};
+    bool targets_valid{};
+};
+
 PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
                              AmdGpu::Liverpool* liverpool_, u32 sparse_page_shift)
     : instance{instance_}, scheduler{scheduler_}, liverpool{liverpool_},
-      desc_heap{instance, scheduler.GetWorkSemaphore(), DescriptorHeapSizes} {
+      desc_heap{instance, scheduler.GetWorkSemaphore(), DescriptorHeapSizes},
+      graphics_state{std::make_unique<GraphicsState>()} {
     const auto& vk12_props = instance.GetVk12Properties();
     profile = Shader::Profile{
         .max_viewport_width = instance.GetMaxViewportWidth(),
@@ -344,11 +400,6 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
 
 PipelineCache::~PipelineCache() = default;
 
-// Previous graphics pipeline lookup (GPU command thread only); cleared when a pipeline is
-// removed.
-static GraphicsPipelineKey last_key{};
-static const GraphicsPipeline* last_pipeline = nullptr;
-
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params) {
     draw_indirect_params = params;
     if (!RefreshGraphicsKey()) {
@@ -412,61 +463,76 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
 }
 
 bool PipelineCache::RefreshGraphicsKey() {
-    std::memset(&graphics_key, 0, sizeof(GraphicsPipelineKey));
     const auto& regs = liverpool->regs;
     auto& key = graphics_key;
-
-    const bool db_enabled = regs.depth_buffer.DepthValid() || regs.depth_buffer.StencilValid();
-
-    key.z_format = regs.depth_buffer.DepthValid() ? regs.depth_buffer.z_info.format
-                                                  : AmdGpu::DepthBuffer::ZFormat::Invalid;
-    key.stencil_format = regs.depth_buffer.StencilValid()
-                             ? regs.depth_buffer.stencil_info.format
-                             : AmdGpu::DepthBuffer::StencilFormat::Invalid;
-    key.depth_clamp_enable = !regs.depth_render_override.disable_viewport_clamp;
-    key.depth_clip_enable = regs.clipper_control.ZclipEnable();
-    key.clip_space = regs.clipper_control.clip_space;
-    key.provoking_vtx_last = regs.polygon_control.provoking_vtx_last;
-    key.prim_type = regs.primitive_type;
-    key.polygon_mode = regs.polygon_control.PolyMode();
-    key.patch_control_points =
-        regs.stage_enable.hs_en ? regs.ls_hs_config.hs_input_control_points : 0;
-    key.logic_op = regs.color_control.rop3;
-    key.depth_samples = db_enabled ? regs.depth_buffer.NumSamples() : 1;
-    key.num_samples = key.depth_samples;
-    key.cb_shader_mask = regs.color_shader_mask;
-
+    auto& state = *graphics_state;
+    const bool state_changed = state.Update(regs);
     const bool skip_cb_binding =
         regs.color_control.mode == AmdGpu::ColorControl::OperationMode::Disable;
+    const bool db_enabled = regs.depth_buffer.DepthValid() || regs.depth_buffer.StencilValid();
 
-    // First pass to fill render target information needed by shader recompiler
-    for (s32 cb = 0; cb < AmdGpu::NUM_COLOR_BUFFERS && !skip_cb_binding; ++cb) {
-        const auto& col_buf = regs.color_buffers[cb];
-        if (!col_buf || !regs.color_target_mask.GetMask(cb)) {
-            // No attachment bound or writing to it is disabled.
-            continue;
+    if (state_changed) {
+        std::memset(&key, 0, sizeof(key));
+
+        key.z_format = regs.depth_buffer.DepthValid() ? regs.depth_buffer.z_info.format
+                                                      : AmdGpu::DepthBuffer::ZFormat::Invalid;
+        key.stencil_format = regs.depth_buffer.StencilValid()
+                                 ? regs.depth_buffer.stencil_info.format
+                                 : AmdGpu::DepthBuffer::StencilFormat::Invalid;
+        key.depth_clamp_enable = !regs.depth_render_override.disable_viewport_clamp;
+        key.depth_clip_enable = regs.clipper_control.ZclipEnable();
+        key.clip_space = regs.clipper_control.clip_space;
+        key.provoking_vtx_last = regs.polygon_control.provoking_vtx_last;
+        key.prim_type = regs.primitive_type;
+        key.polygon_mode = regs.polygon_control.PolyMode();
+        key.patch_control_points =
+            regs.stage_enable.hs_en ? regs.ls_hs_config.hs_input_control_points : 0;
+        key.logic_op = regs.color_control.rop3;
+        key.depth_samples = db_enabled ? regs.depth_buffer.NumSamples() : 1;
+        key.num_samples = key.depth_samples;
+        key.cb_shader_mask = regs.color_shader_mask;
+
+        // First pass to fill render target information needed by shader recompiler
+        for (s32 cb = 0; cb < AmdGpu::NUM_COLOR_BUFFERS && !skip_cb_binding; ++cb) {
+            const auto& col_buf = regs.color_buffers[cb];
+            if (!col_buf || !regs.color_target_mask.GetMask(cb)) {
+                // No attachment bound or writing to it is disabled.
+                continue;
+            }
+
+            // Fill color target information
+            auto& color_buffer = key.color_buffers[cb];
+            color_buffer.data_format = col_buf.GetDataFmt();
+            color_buffer.num_format = col_buf.GetNumberFmt();
+            color_buffer.num_conversion = col_buf.GetNumberConversion();
+            color_buffer.export_format = regs.color_export_format.GetFormat(cb);
+            color_buffer.swizzle = col_buf.Swizzle();
+
+            const auto& bc = regs.blend_control[cb];
+            color_buffer.blend_self_scale =
+                bc.enable && !col_buf.info.blend_bypass &&
+                (bc.color_func == AmdGpu::BlendControl::BlendFunc::Min ||
+                 bc.color_func == AmdGpu::BlendControl::BlendFunc::Max) &&
+                bc.color_src_factor == AmdGpu::BlendControl::BlendFactor::SrcColor &&
+                bc.color_dst_factor == AmdGpu::BlendControl::BlendFactor::DstColor;
         }
-
-        // Fill color target information
-        auto& color_buffer = key.color_buffers[cb];
-        color_buffer.data_format = col_buf.GetDataFmt();
-        color_buffer.num_format = col_buf.GetNumberFmt();
-        color_buffer.num_conversion = col_buf.GetNumberConversion();
-        color_buffer.export_format = regs.color_export_format.GetFormat(cb);
-        color_buffer.swizzle = col_buf.Swizzle();
-
-        const auto& bc = regs.blend_control[cb];
-        color_buffer.blend_self_scale =
-            bc.enable && !col_buf.info.blend_bypass &&
-            (bc.color_func == AmdGpu::BlendControl::BlendFunc::Min ||
-             bc.color_func == AmdGpu::BlendControl::BlendFunc::Max) &&
-            bc.color_src_factor == AmdGpu::BlendControl::BlendFactor::SrcColor &&
-            bc.color_dst_factor == AmdGpu::BlendControl::BlendFactor::DstColor;
+        state.base_key = key;
+    } else {
+        key = state.base_key;
     }
 
     // Compile and bind shader stages
     if (!RefreshGraphicsStages()) {
         return false;
+    }
+
+    if (state.targets_valid && state.target_key.mrt_mask == key.mrt_mask) {
+        const auto stage_hashes = key.stage_hashes;
+        const auto vertex_buffer_formats = key.vertex_buffer_formats;
+        key = state.target_key;
+        key.stage_hashes = stage_hashes;
+        key.vertex_buffer_formats = vertex_buffer_formats;
+        return true;
     }
 
     // Second pass to mask out render targets not written by shader and fill remaining info
@@ -509,6 +575,8 @@ bool PipelineCache::RefreshGraphicsKey() {
         }
     }
 
+    state.target_key = key;
+    state.targets_valid = true;
     return true;
 }
 
@@ -715,8 +783,8 @@ PipelineCache::Result PipelineCache::GetProgram(HwStage hw_stage, SwStage sw_sta
 
     vk::ShaderModule module{};
 
-    const auto it = std::ranges::find(program->modules, spec, &Program::Module::spec);
-    if (it == program->modules.end()) {
+    const size_t found = program->FindPermutation(spec);
+    if (found == program->modules.size()) {
         auto new_info = Shader::Info(hw_stage, sw_stage, params);
         const u64 key = VariantKey(spec);
         std::vector<u32> spv;
@@ -728,9 +796,10 @@ PipelineCache::Result PipelineCache::GetProgram(HwStage hw_stage, SwStage sw_sta
         program->AddPermut(module, std::move(spec), key);
     } else {
         info.AddBindings(binding);
-        module = it->module;
-        perm_idx = std::distance(program->modules.begin(), it);
-        perm_hash = HashCombine(params.hash, it->key);
+        const auto& variant = program->modules[found];
+        module = variant.module;
+        perm_idx = found;
+        perm_hash = HashCombine(params.hash, variant.key);
     }
     if (auto& fetch = program->modules[perm_idx].spec.fetch_shader_data; !fetch.Empty()) {
         fetch_shader = &fetch;

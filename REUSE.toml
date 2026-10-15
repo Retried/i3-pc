@@ -1,5 +1,24 @@
 version = 1
 
+# Added in 2026 by i3-pc-port; original files already declare GPL-2.0-or-later.
+# Origins: d4c09444, 497bf8e4, 22bd9ed9, 1043d897, 308a2bf0, a5bf6952.
+[[annotations]]
+path = [
+    "src/core/i3/achievements.cpp",
+    "src/core/i3/achievements.h",
+    "src/core/i3/first_run.cpp",
+    "src/core/i3/first_run.h",
+    "src/core/i3/lang.cpp",
+    "src/core/i3/lang.h",
+    "src/core/i3/menu.cpp",
+    "src/core/i3/menu.h",
+    "src/video_core/pass_filter.h",
+    "src/video_core/renderer_vulkan/vk_command_stream.cpp",
+    "src/video_core/renderer_vulkan/vk_command_stream.h",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 i3-pc-port"
+
 [[annotations]]
 path = [
     "REUSE.toml",

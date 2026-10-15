@@ -1,22 +1,24 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include <set>
+#include <chrono>
+#include <cstdlib>
 #include <map>
-#include <chrono>
-#include "common/recording.h"
-#include <chrono>
-#include <intrin.h>
+#include <set>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <cstdlib>
-#include <string>
-#include "video_core/pass_filter.h"
+
+#ifdef _MSC_VER
+#include <intrin.h>
+#else
+#include <x86intrin.h>
+#endif
+
 #include "common/debug.h"
 #include "common/elf_info.h"
 #include "common/path_util.h"
-#include "video_core/op_trace.h"
-#include "video_core/thread_sampler.h"
+#include "common/recording.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
 #include "core/memory.h"
@@ -25,6 +27,8 @@
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/buffer_cache/buffer_cache.h"
+#include "video_core/op_trace.h"
+#include "video_core/pass_filter.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
@@ -34,6 +38,7 @@
 #include "video_core/renderer_vulkan/vk_shader_hle.h"
 #include "video_core/texture_cache/image_view.h"
 #include "video_core/texture_cache/texture_cache.h"
+#include "video_core/thread_sampler.h"
 
 namespace Vulkan {
 
@@ -360,10 +365,10 @@ struct DrawStats {
             double(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()) /
             double(tsc_now - last_tsc);
         last_tsc = tsc_now;
-        for (u64* value : {&ns_pipeline, &ns_bind, &ns_draw_total, &ns_dispatch_total, &ns_mirror,
-                           &ns_bind_buffers, &ns_bind_textures, &ns_stage[0], &ns_stage[1],
-                           &ns_stage[2], &ns_stage[4], &ns_stage[5], &ns_stage[6], &ns_stage[7],
-                           &tsc_stage3}) {
+        for (u64* value :
+             {&ns_pipeline, &ns_bind, &ns_draw_total, &ns_dispatch_total, &ns_mirror,
+              &ns_bind_buffers, &ns_bind_textures, &ns_stage[0], &ns_stage[1], &ns_stage[2],
+              &ns_stage[4], &ns_stage[5], &ns_stage[6], &ns_stage[7], &tsc_stage3}) {
             *value = u64(double(*value) * scale);
         }
         for (u64& value : ns_direct) {
@@ -378,7 +383,8 @@ struct DrawStats {
             static u64 last_thread = 0, last_process = 0;
             const auto total = [](HANDLE handle, bool thread) {
                 FILETIME creation, exit, kernel, user;
-                (thread ? GetThreadTimes : GetProcessTimes)(handle, &creation, &exit, &kernel, &user);
+                (thread ? GetThreadTimes : GetProcessTimes)(handle, &creation, &exit, &kernel,
+                                                            &user);
                 const auto ticks = [](const FILETIME& t) {
                     return (u64(t.dwHighDateTime) << 32) | t.dwLowDateTime;
                 };
@@ -392,15 +398,18 @@ struct DrawStats {
                       Common::g_wait_us[0].exchange(0) / 1000,
                       Common::g_wait_us[1].exchange(0) / 1000,
                       Common::g_wait_us[2].exchange(0) / 1000);
-            LOG_ERROR(Render, "shadow/3s: frames {} sun drawn {} skipped {} local drawn {} skipped {} clears {}",
-                      g_shadow_maps.frame - g_shadow_maps.logged_frame, g_shadow_maps.seen[0][0],
-                      g_shadow_maps.seen[0][1], g_shadow_maps.seen[1][0], g_shadow_maps.seen[1][1],
-                      g_shadow_maps.clears);
+            LOG_ERROR(
+                Render,
+                "shadow/3s: frames {} sun drawn {} skipped {} local drawn {} skipped {} clears {}",
+                g_shadow_maps.frame - g_shadow_maps.logged_frame, g_shadow_maps.seen[0][0],
+                g_shadow_maps.seen[0][1], g_shadow_maps.seen[1][0], g_shadow_maps.seen[1][1],
+                g_shadow_maps.clears);
             g_shadow_maps.logged_frame = g_shadow_maps.frame;
             std::memset(g_shadow_maps.seen, 0, sizeof(g_shadow_maps.seen));
             g_shadow_maps.clears = 0;
             if (g_pass_stat_on) {
-                LOG_ERROR(Render, "sunsizes/3s: <100 {} <300 {} <1000 {} <3000 {} <10000 {} more {}",
+                LOG_ERROR(Render,
+                          "sunsizes/3s: <100 {} <300 {} <1000 {} <3000 {} <10000 {} more {}",
                           g_shadow_maps.sizes[0], g_shadow_maps.sizes[1], g_shadow_maps.sizes[2],
                           g_shadow_maps.sizes[3], g_shadow_maps.sizes[4], g_shadow_maps.sizes[5]);
                 std::memset(g_shadow_maps.sizes, 0, sizeof(g_shadow_maps.sizes));
@@ -409,11 +418,14 @@ struct DrawStats {
                 std::ranges::sort(g_pass_stat, std::greater{}, &PassStat::draws);
                 for (size_t i = 0; i < std::min<size_t>(g_pass_stat.size(), 24); ++i) {
                     const auto& e = g_pass_stat[i];
-                    LOG_ERROR(Render, "pass/3s: draws {} indices {} color {:#x} {}x{} depth {:#x} {}x{} vp {},{} w{}",
+                    LOG_ERROR(Render,
+                              "pass/3s: draws {} indices {} color {:#x} {}x{} depth {:#x} {}x{} vp "
+                              "{},{} w{}",
                               e.draws, e.indices, e.color, e.cw, e.ch, e.depth, e.dw, e.dh, e.vx,
                               e.vy, e.vw);
-                    LOG_ERROR(Render, "pass/3s:    up to 36 indices {} up to 300 {} same pipeline {} "
-                                      "depth write {} depth func {} vertex shaders {}{}",
+                    LOG_ERROR(Render,
+                              "pass/3s:    up to 36 indices {} up to 300 {} same pipeline {} "
+                              "depth write {} depth func {} vertex shaders {}{}",
                               e.tiny, e.small, e.same_pipeline, e.depth_write, e.depth_func,
                               e.vs_count, e.vs_count == 8 ? "+" : "");
                 }
@@ -425,8 +437,9 @@ struct DrawStats {
                 });
                 for (size_t i = 0; i < std::min<size_t>(pairs.size(), 16); ++i) {
                     const auto& [key, e] = pairs[i];
-                    LOG_ERROR(Render, "pair/3s: draws {} indices {} up to 36 indices {} vs {:#x} "
-                                      "fs {:#x} (of {} pairs)",
+                    LOG_ERROR(Render,
+                              "pair/3s: draws {} indices {} up to 36 indices {} vs {:#x} "
+                              "fs {:#x} (of {} pairs)",
                               e.draws, e.indices, e.tiny, key.first, key.second, pairs.size());
                 }
                 g_pair_stat.clear();
@@ -439,21 +452,24 @@ struct DrawStats {
             last_process = process_ms;
         }
 #endif
-        LOG_ERROR(Render, "stats/3s: drawn {} indirect {} dispatch {} filtered {} no_pipeline {} "
-                          "bind_failed {} max_indices {} mirrors {} submits {}",
+        LOG_ERROR(Render,
+                  "stats/3s: drawn {} indirect {} dispatch {} filtered {} no_pipeline {} "
+                  "bind_failed {} max_indices {} mirrors {} submits {}",
                   drawn, indirect, dispatch, filtered, no_pipeline, bind_failed, verts_max, mirrors,
                   frames);
-        LOG_ERROR(Render, "time/3s ms: pipeline {} bind {} draws {} dispatches {} mirror {} "
-                          "flushes {}",
+        LOG_ERROR(Render,
+                  "time/3s ms: pipeline {} bind {} draws {} dispatches {} mirror {} "
+                  "flushes {}",
                   ns_pipeline / 1000000, ns_bind / 1000000, ns_draw_total / 1000000,
                   ns_dispatch_total / 1000000, ns_mirror / 1000000, flushes);
         flushes = 0;
         LOG_ERROR(Render, "flush sources: eop {} submit {} immediate {}", flush_source[1],
                   flush_source[3], flush_source[5]);
-        LOG_ERROR(Render, "signals with results pending: eos {} release {} fence {} outputs {}, "
-                          "flushes forced for argument windows {}",
-                  unflushed_signal[0], unflushed_signal[2], unflushed_signal[4],
-                  unflushed_outputs, forced_flushes);
+        LOG_ERROR(Render,
+                  "signals with results pending: eos {} release {} fence {} outputs {}, "
+                  "flushes forced for argument windows {}",
+                  unflushed_signal[0], unflushed_signal[2], unflushed_signal[4], unflushed_outputs,
+                  forced_flushes);
         forced_flushes = 0;
         LOG_ERROR(Render, "direct draws that kept the state of the draw before: {}", fast_draws);
         fast_draws = 0;
@@ -474,17 +490,19 @@ struct DrawStats {
         for (auto& v : flush_source) {
             v = 0;
         }
-        LOG_ERROR(Render, "indirect stages ms: prepare {} begin {} vertex {} args {} "
-                          "descriptors {} dynstate {} sched-begin {} draw+reset {}",
+        LOG_ERROR(Render,
+                  "indirect stages ms: prepare {} begin {} vertex {} args {} "
+                  "descriptors {} dynstate {} sched-begin {} draw+reset {}",
                   ns_stage[0] / 1000000, ns_stage[1] / 1000000, ns_stage[2] / 1000000,
                   tsc_stage3 / 1000000, ns_stage[4] / 1000000, ns_stage[5] / 1000000,
                   ns_stage[6] / 1000000, ns_stage[7] / 1000000);
         LOG_ERROR(Render, "bind split ms: buffers {} textures {} repeated {}",
                   ns_bind_buffers / 1000000, ns_bind_textures / 1000000, same_inputs);
         same_pipeline = same_inputs = 0;
-        LOG_ERROR(Render, "direct stages ms: filters {} pipeline {} state {} resources {} begin {} "
-                          "vertex {} index {} descriptors {} dynstate {} sched-begin {} draw {} "
-                          "reset {}",
+        LOG_ERROR(Render,
+                  "direct stages ms: filters {} pipeline {} state {} resources {} begin {} "
+                  "vertex {} index {} descriptors {} dynstate {} sched-begin {} draw {} "
+                  "reset {}",
                   ns_direct[0] / 1000000, ns_direct[1] / 1000000, ns_direct[2] / 1000000,
                   ns_direct[3] / 1000000, ns_direct[4] / 1000000, ns_direct[5] / 1000000,
                   ns_direct[10] / 1000000, ns_direct[6] / 1000000, ns_direct[7] / 1000000,
@@ -499,7 +517,8 @@ struct DrawStats {
         }
         tsc_stage3 = 0;
         ns_pipeline = ns_bind = ns_draw_total = ns_dispatch_total = ns_mirror = 0;
-        filtered = no_pipeline = bind_failed = drawn = indirect = dispatch = verts_max = mirrors = frames = 0;
+        filtered = no_pipeline = bind_failed = drawn = indirect = dispatch = verts_max = mirrors =
+            frames = 0;
     }
 };
 static DrawStats g_stats;
@@ -620,7 +639,8 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     }
 
     const auto& regs = liverpool->regs;
-    if (g_shadow_maps.enabled && g_shadow_maps.Skip(regs.depth_buffer, regs.depth_render_control.depth_clear_enable,
+    if (g_shadow_maps.enabled &&
+        g_shadow_maps.Skip(regs.depth_buffer, regs.depth_render_control.depth_clear_enable,
                            u64(regs.num_indices) * regs.num_instances.NumInstances())) {
         ++g_stats.filtered;
         return;
@@ -680,21 +700,27 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         if (++blended[{vs_hash, fs_hash}] == 1) {
             const auto& blend = regs.blend_control[0];
             LOG_WARNING(Render, "blended pair vs {:#x} fs {:#x} src {} dst {} prim {} indices {}",
-                        vs_hash, fs_hash, u32(blend.color_src_factor),
-                        u32(blend.color_dst_factor), u32(regs.primitive_type), regs.num_indices);
+                        vs_hash, fs_hash, u32(blend.color_src_factor), u32(blend.color_dst_factor),
+                        u32(regs.primitive_type), regs.num_indices);
         }
     }
     if (g_pass_stat_on && regs.depth_buffer.DepthAddress() == g_shadow_maps.sun) {
         // Test aid: sizes of the draws into the sun's shadow map.
         const u64 n = u64(regs.num_indices) * regs.num_instances.NumInstances();
-        ++g_shadow_maps.sizes[n < 100 ? 0 : n < 300 ? 1 : n < 1000 ? 2 : n < 3000 ? 3 : n < 10000 ? 4 : 5];
+        ++g_shadow_maps.sizes[n < 100     ? 0
+                              : n < 300   ? 1
+                              : n < 1000  ? 2
+                              : n < 3000  ? 3
+                              : n < 10000 ? 4
+                                          : 5];
     }
     if (g_pass_stat_on) {
         // Test aid: draws per render-target combination, logged with the other statistics.
         const bool color = pipeline->GetStage(Shader::SwStage::Fragment).mrt_mask != 0;
         const auto& cb = regs.color_buffers[0];
         const u64 color_addr = color ? cb.Address() : 0;
-        const u64 depth_addr = regs.depth_buffer.DepthValid() ? regs.depth_buffer.DepthAddress() : 0;
+        const u64 depth_addr =
+            regs.depth_buffer.DepthValid() ? regs.depth_buffer.DepthAddress() : 0;
         const auto& vp = regs.viewports[0];
         const int vw = int(vp.xscale * 2), vx = int(regs.depth_view.slice_start),
                   vy = int(vp.yoffset - std::abs(vp.yscale));
@@ -729,8 +755,8 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         }
         it->depth_func = u32(regs.depth_control.depth_func);
         const u64 vs_hash = pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash;
-        if (it->vs_count < 8 &&
-            std::find(it->vs_seen, it->vs_seen + it->vs_count, vs_hash) == it->vs_seen + it->vs_count) {
+        if (it->vs_count < 8 && std::find(it->vs_seen, it->vs_seen + it->vs_count, vs_hash) ==
+                                    it->vs_seen + it->vs_count) {
             it->vs_seen[it->vs_count++] = vs_hash;
         }
     }
@@ -754,9 +780,8 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
     // SOTC_OCCLUDERS=1 renders them again.
     // ponytail: recognised by shape (36 indices, depth only); match the occluder depth target
     // instead if another depth-only box pass ever turns up.
-    static const bool skip_occluders =
-        std::getenv("SOTC_OCCLUDERS") == nullptr &&
-        Common::ElfInfo::Instance().GameSerial() == "CUSA08809";
+    static const bool skip_occluders = std::getenv("SOTC_OCCLUDERS") == nullptr &&
+                                       Common::ElfInfo::Instance().GameSerial() == "CUSA08809";
     if (skip_occluders && regs.num_indices == 36 && pipeline->GetGraphicsKey().mrt_mask == 0) {
         ++g_stats.filtered;
         return;
@@ -820,8 +845,9 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
                                     sharp.GetStride(), u32(sharp.num_records));
             }
         }
-        LOG_ERROR(Render, "draw vs {:#x} fs {:#x} prim {} n {} inst {} idx {} cb0 {:#x} mrt {:#x} "
-                          "vsbuf {}",
+        LOG_ERROR(Render,
+                  "draw vs {:#x} fs {:#x} prim {} n {} inst {} idx {} cb0 {:#x} mrt {:#x} "
+                  "vsbuf {}",
                   vs.pgm_hash, 0, u32(regs.primitive_type), regs.num_indices,
                   regs.num_instances.NumInstances(), is_indexed,
                   u64(regs.color_buffers[0].Address()), pipeline->GetGraphicsKey().mrt_mask, bufs);
@@ -852,8 +878,12 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         UpdateDynamicState(pipeline, is_indexed);
     }
     stage_done(7);
-    g_last_draw = {true, pipeline, is_indexed, u32(regs.primitive_type),
-                   u32(regs.index_buffer_type.index_type), state};
+    g_last_draw = {true,
+                   pipeline,
+                   is_indexed,
+                   u32(regs.primitive_type),
+                   u32(regs.index_buffer_type.index_type),
+                   state};
     scheduler.BeginRendering(state);
     stage_done(8);
 
@@ -1051,11 +1081,11 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
             // hold garbage while guest memory, which receives compute results a frame later,
             // holds sane counts. The price is particle counts that are a frame old.
             static const bool trust_gpu_args = std::getenv("I3_TRUST_GPU_ARGS") != nullptr;
-            const bool gpu_written = buffer_cache.IsRegionGpuModified(arg_address + offset,
-                                                                      u64(stride) * max_count);
-            const u32 slots = gpu_written && trust_gpu_args
-                                  ? 0
-                                  : count_address == 0 ? std::min(max_count, max_slots) : 1;
+            const bool gpu_written =
+                buffer_cache.IsRegionGpuModified(arg_address + offset, u64(stride) * max_count);
+            const u32 slots = gpu_written && trust_gpu_args ? 0
+                              : count_address == 0          ? std::min(max_count, max_slots)
+                                                            : 1;
             const bool direct = count_address == 0 && max_count <= max_slots && stride >= 16 &&
                                 !(gpu_written && trust_gpu_args);
             // Slots a compute shader writes reach guest memory only through the copy back, and
@@ -1078,10 +1108,9 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                 memory->CopySparseMemory(arg_address + offset + u64(slot) * stride,
                                          reinterpret_cast<u8*>(args.data()),
                                          std::min<u64>(stride, sizeof(args)));
-                const u64 good_key =
-                    LastGoodKey(arg_address + offset + u64(slot) * stride,
-                                liverpool->regs.vs_program.Address<u64>(),
-                                liverpool->regs.ps_program.Address<u64>());
+                const u64 good_key = LastGoodKey(arg_address + offset + u64(slot) * stride,
+                                                 liverpool->regs.vs_program.Address<u64>(),
+                                                 liverpool->regs.ps_program.Address<u64>());
                 static const bool use_last_good =
                     Common::ElfInfo::Instance().GameSerial() == "CUSA00004" &&
                     std::getenv("I3_NO_LAST_GOOD_ARGS") == nullptr;
@@ -1106,9 +1135,11 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                         if (hash != 0 && size <= 0x40 &&
                             std::ranges::find(g_learned.hashes, hash) == g_learned.hashes.end()) {
                             g_learned.hashes.push_back(hash);
-                            LOG_WARNING(Render, "compute shader {:#x} learned as read by the game "
-                                                "(output {:#x} size {:#x} held a dropped draw's "
-                                                "arguments)", hash, base, size);
+                            LOG_WARNING(Render,
+                                        "compute shader {:#x} learned as read by the game "
+                                        "(output {:#x} size {:#x} held a dropped draw's "
+                                        "arguments)",
+                                        hash, base, size);
                         }
                     }
                     LOG_WARNING(Render,
@@ -1120,16 +1151,17 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                                 max_count, stride, is_indexed);
                     if (g_pass_stat_on) {
                         LOG_WARNING(Render, "   bad args base {:#x} off {:#x} vs {:#x} fs {:#x}",
-                                    arg_address, offset,
-                                    liverpool->regs.vs_program.Address<u64>(),
+                                    arg_address, offset, liverpool->regs.vs_program.Address<u64>(),
                                     liverpool->regs.ps_program.Address<u64>());
                         const u64 at = arg_address + offset + u64(slot) * stride;
                         auto it = g_cs_writers.upper_bound(at);
-                        if (it != g_cs_writers.begin() && (--it, at < it->first + it->second.size)) {
+                        if (it != g_cs_writers.begin() &&
+                            (--it, at < it->first + it->second.size)) {
                             u32 raw[8]{};
                             memory->CopySparseMemory(at, reinterpret_cast<u8*>(raw), sizeof(raw));
-                            LOG_WARNING(Render, "   writer cs {:#x} base {:#x} size {} groups {}x{}x{} "
-                                                "off {} guest {:08x} {:08x} {:08x} {:08x} {:08x} {:08x}",
+                            LOG_WARNING(Render,
+                                        "   writer cs {:#x} base {:#x} size {} groups {}x{}x{} "
+                                        "off {} guest {:08x} {:08x} {:08x} {:08x} {:08x} {:08x}",
                                         it->second.hash, it->first, it->second.size, it->second.x,
                                         it->second.y, it->second.z, at - it->first, raw[0], raw[1],
                                         raw[2], raw[3], raw[4], raw[5]);
@@ -1146,12 +1178,14 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                     static std::set<u64> seen;
                     const u64 at = arg_address + offset + u64(slot) * stride;
                     if (seen.size() < 40 && seen.insert(at).second) {
-                        LOG_WARNING(Render, "   good args at {:#x} base {:#x} off {:#x}: {:08x} {:08x} "
-                                            "{:08x} {:08x} {:08x} gpu-written {} indexed {}",
+                        LOG_WARNING(Render,
+                                    "   good args at {:#x} base {:#x} off {:#x}: {:08x} {:08x} "
+                                    "{:08x} {:08x} {:08x} gpu-written {} indexed {}",
                                     at, arg_address, offset, args[0], args[1], args[2], args[3],
                                     args[4], gpu_written, is_indexed);
                         auto it = g_cs_writers.upper_bound(at);
-                        if (it != g_cs_writers.begin() && (--it, at < it->first + it->second.size)) {
+                        if (it != g_cs_writers.begin() &&
+                            (--it, at < it->first + it->second.size)) {
                             LOG_WARNING(Render, "      writer cs {:#x} base {:#x} size {}",
                                         it->second.hash, it->first, it->second.size);
                         }
@@ -1254,10 +1288,10 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
             const u64 vs_hash = pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash;
             if (seen.emplace(vs_hash, fs_hash).second) {
                 const auto& blend = liverpool->regs.blend_control[0];
-                LOG_WARNING(Render, "indirect pair vs {:#x} fs {:#x} indexed {} blend {} src {} dst {}",
+                LOG_WARNING(Render,
+                            "indirect pair vs {:#x} fs {:#x} indexed {} blend {} src {} dst {}",
                             vs_hash, fs_hash, is_indexed, u32(blend.enable),
-                            u32(blend.color_src_factor),
-                            u32(blend.color_dst_factor));
+                            u32(blend.color_src_factor), u32(blend.color_dst_factor));
             }
         }
     }
@@ -1295,10 +1329,10 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
         for (const auto& desc : vs.buffers) {
             if (desc.buffer_type == Shader::BufferType::Guest) {
                 const auto sharp = desc.GetSharp(vs);
-                bufs += fmt::format("[{:#x} st{} n{:#x} gpu{}]", u64(sharp.base_address),
-                                    sharp.GetStride(), u32(sharp.num_records),
-                                    buffer_cache.IsRegionGpuModified(sharp.base_address,
-                                                                     sharp.GetSize()));
+                bufs += fmt::format(
+                    "[{:#x} st{} n{:#x} gpu{}]", u64(sharp.base_address), sharp.GetStride(),
+                    u32(sharp.num_records),
+                    buffer_cache.IsRegionGpuModified(sharp.base_address, sharp.GetSize()));
                 if (sharp.GetStride() == 128) {
                     // CPU-side view of the instance record this draw selects.
                     const u32 index = args[4] & 0xffff;
@@ -1313,10 +1347,11 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                 }
             }
         }
-        LOG_ERROR(Render, "indirect vs {:#x} fs {:#x} prim {} idx {} max {} stride {} count_addr "
-                          "{:#x} gpu_args {} args {} {} {} {} {} sgpr {} {} cb0 {:#x} vsbuf {}",
-                  vs.pgm_hash, fs.pgm_hash, u32(regs.primitive_type), is_indexed, max_count,
-                  stride, count_address,
+        LOG_ERROR(Render,
+                  "indirect vs {:#x} fs {:#x} prim {} idx {} max {} stride {} count_addr "
+                  "{:#x} gpu_args {} args {} {} {} {} {} sgpr {} {} cb0 {:#x} vsbuf {}",
+                  vs.pgm_hash, fs.pgm_hash, u32(regs.primitive_type), is_indexed, max_count, stride,
+                  count_address,
                   buffer_cache.IsRegionGpuModified(arg_address + offset, stride * max_count),
                   args[0], args[1], args[2], args[3], args[4], vertex_sgpr_offset,
                   instance_sgpr_offset, u64(regs.color_buffers[0].Address()), bufs);
@@ -1339,9 +1374,10 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                     const u64 mat = *reinterpret_cast<const u64*>(f1 + 24) & 0xffffffffffffULL;
                     if (memory->IsValidMapping(mat, 100 * 4)) {
                         const u32* m = reinterpret_cast<const u32*>(mat);
-                        LOG_ERROR(Render, "   matblock root {:#x} mat {:#x} gpu {} t0 {:08x} {:08x} "
-                                          "{:08x} {:08x} {:08x} {:08x} {:08x} {:08x} head {:08x} "
-                                          "{:08x} {:08x} {:08x}",
+                        LOG_ERROR(Render,
+                                  "   matblock root {:#x} mat {:#x} gpu {} t0 {:08x} {:08x} "
+                                  "{:08x} {:08x} {:08x} {:08x} {:08x} {:08x} head {:08x} "
+                                  "{:08x} {:08x} {:08x}",
                                   f1, mat, buffer_cache.IsRegionGpuModified(mat, 400), m[92], m[93],
                                   m[94], m[95], m[96], m[97], m[98], m[99], m[0], m[1], m[2], m[3]);
                     } else {
@@ -1357,9 +1393,10 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
                 const u64 p2 = *reinterpret_cast<const u64*>(p1 + 8) & 0xffffffffffffULL;
                 if (memory->IsValidMapping(p2, 82 * 4)) {
                     const float* c = reinterpret_cast<const float*>(p2);
-                    LOG_ERROR(Render, "   srt p1 {:#x} p2 {:#x} gpu2 {} vp [{:.3g} {:.3g} {:.3g} "
-                                      "{:.3g}] [{:.3g} {:.3g} {:.3g} {:.3g}] [{:.3g} {:.3g} {:.3g} "
-                                      "{:.3g}] [{:.3g} {:.3g} {:.3g} {:.3g}]",
+                    LOG_ERROR(Render,
+                              "   srt p1 {:#x} p2 {:#x} gpu2 {} vp [{:.3g} {:.3g} {:.3g} "
+                              "{:.3g}] [{:.3g} {:.3g} {:.3g} {:.3g}] [{:.3g} {:.3g} {:.3g} "
+                              "{:.3g}] [{:.3g} {:.3g} {:.3g} {:.3g}]",
                               p1, p2, buffer_cache.IsRegionGpuModified(p2, 328), c[32], c[33],
                               c[34], c[35], c[36], c[37], c[38], c[39], c[40], c[41], c[42], c[43],
                               c[44], c[45], c[46], c[47]);
@@ -1370,16 +1407,20 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
             const auto& vp = regs.viewports[0];
             const auto& sc = regs.screen_scissor;
             const auto& gs = regs.generic_scissor;
-            LOG_ERROR(Render, "   state mrt {:#x} cmode {} mask {:#x} depth {:#x} dctl {:#x} "
-                              "poly {:#x} clip {:#x} vpc {:#x} vp {} {} {} {} {} {} gsc {} {} {} "
-                              "{} ssc {} {} {} {}",
+            LOG_ERROR(Render,
+                      "   state mrt {:#x} cmode {} mask {:#x} depth {:#x} dctl {:#x} "
+                      "poly {:#x} clip {:#x} vpc {:#x} vp {} {} {} {} {} {} gsc {} {} {} "
+                      "{} ssc {} {} {} {}",
                       pipeline->GetGraphicsKey().mrt_mask, u32(regs.color_control.mode),
                       regs.color_target_mask.raw, u64(regs.depth_buffer.DepthAddress()),
-                      *reinterpret_cast<const u32*>(&regs.depth_control), *reinterpret_cast<const u32*>(&regs.polygon_control), *reinterpret_cast<const u32*>(&regs.clipper_control),
-                      *reinterpret_cast<const u32*>(&regs.viewport_control), vp.xscale, vp.xoffset, vp.yscale, vp.yoffset,
-                      vp.zscale, vp.zoffset, u32(gs.top_left_x), u32(gs.top_left_y),
-                      u32(gs.bottom_right_x), u32(gs.bottom_right_y), s32(sc.top_left_x),
-                      s32(sc.top_left_y), s32(sc.bottom_right_x), s32(sc.bottom_right_y));
+                      *reinterpret_cast<const u32*>(&regs.depth_control),
+                      *reinterpret_cast<const u32*>(&regs.polygon_control),
+                      *reinterpret_cast<const u32*>(&regs.clipper_control),
+                      *reinterpret_cast<const u32*>(&regs.viewport_control), vp.xscale, vp.xoffset,
+                      vp.yscale, vp.yoffset, vp.zscale, vp.zoffset, u32(gs.top_left_x),
+                      u32(gs.top_left_y), u32(gs.bottom_right_x), u32(gs.bottom_right_y),
+                      s32(sc.top_left_x), s32(sc.top_left_y), s32(sc.bottom_right_x),
+                      s32(sc.bottom_right_y));
         }
         static int compared = 0;
         if (compared < 3) {
@@ -1470,8 +1511,12 @@ void Rasterizer::DrawIndirect(bool is_indexed, VAddr arg_address, u32 offset, u3
     }
 
     ResetBindings(false);
-    repeat = {true,   is_indexed,          stride,
-              vertex_sgpr_offset, instance_sgpr_offset, scheduler.RawCommandBuffer()};
+    repeat = {true,
+              is_indexed,
+              stride,
+              vertex_sgpr_offset,
+              instance_sgpr_offset,
+              scheduler.RawCommandBuffer()};
     liverpool->state_changed_since_draw = false;
 }
 
@@ -1490,11 +1535,13 @@ void Rasterizer::DispatchDirect() {
         ~SlowDispatch() {
             const auto end = Clock::now();
             const auto ms = [](auto a, auto b) {
-                return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count() / 1000.0;
+                return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count() /
+                       1000.0;
             };
             if (ms(start, end) > 50.0) {
-                LOG_WARNING(Render, "slow dispatch {:.0f} ms, shader {:#x}: pending operations "
-                                    "{:.0f}, submit {:.0f}, pipeline {:.0f}, rest {:.0f}",
+                LOG_WARNING(Render,
+                            "slow dispatch {:.0f} ms, shader {:#x}: pending operations "
+                            "{:.0f}, submit {:.0f}, pipeline {:.0f}, rest {:.0f}",
                             ms(start, end), hash, ms(start, pending), ms(pending, submit),
                             pipeline == Clock::time_point{} ? 0.0 : ms(submit, pipeline),
                             pipeline == Clock::time_point{} ? 0.0 : ms(pipeline, end));
@@ -1547,7 +1594,8 @@ void Rasterizer::DispatchDirect() {
             last = now;
             std::vector<std::pair<u64, std::pair<u32, u64>>> top(histogram.begin(),
                                                                  histogram.end());
-            std::ranges::sort(top, [](auto& x, auto& y) { return x.second.first > y.second.first; });
+            std::ranges::sort(top,
+                              [](auto& x, auto& y) { return x.second.first > y.second.first; });
             std::string line;
             for (size_t i = 0; i < std::min<size_t>(top.size(), 10); ++i) {
                 line += fmt::format("{:#x}:{}x(groups {}) ", top[i].first, top[i].second.first,
@@ -1624,8 +1672,7 @@ void Rasterizer::DispatchDirect() {
     // I3_NO_MIRROR=1 leaves compute outputs on the GPU only (test switch).
     static const bool mirror_outputs = is_sotc || std::getenv("I3_NO_MIRROR") == nullptr;
     const bool skip_mirror =
-        !mirror_outputs ||
-        g_bisect.Skipped() == cs.pgm_hash ||
+        !mirror_outputs || g_bisect.Skipped() == cs.pgm_hash ||
         std::ranges::find(mirror_skip, u64(cs.pgm_hash)) != mirror_skip.end() ||
         (!mirror_only.empty() && !g_mirror_everything &&
          std::ranges::find(mirror_only, u64(cs.pgm_hash)) == mirror_only.end());
@@ -1668,7 +1715,8 @@ void Rasterizer::DispatchDirect() {
             std::string line;
             for (const auto& [hash, value] : mirror_histogram) {
                 if (value.first) {
-                    line += fmt::format("{:#x}:{}x{}B ", hash, value.first, value.second / value.first);
+                    line +=
+                        fmt::format("{:#x}:{}x{}B ", hash, value.first, value.second / value.first);
                 }
             }
             LOG_ERROR(Render, "mirrors/6s: {}", line);
@@ -1701,9 +1749,9 @@ void Rasterizer::DispatchDirect() {
         constexpr std::array<u64, 10> cpu_read{0x2c6b674a, 0x63e538c1, 0x47a670fd, 0x3ea96db0,
                                                0xa8b68717, 0x187e6faf, 0x5563ea54, 0x19db0e65,
                                                0x21e3c997, 0x29fd81d8};
-        const bool listed = std::ranges::find(cpu_read, u64(cs.pgm_hash)) != cpu_read.end() ||
-                            std::ranges::find(g_learned.hashes, u64(cs.pgm_hash)) !=
-                                g_learned.hashes.end();
+        const bool listed =
+            std::ranges::find(cpu_read, u64(cs.pgm_hash)) != cpu_read.end() ||
+            std::ranges::find(g_learned.hashes, u64(cs.pgm_hash)) != g_learned.hashes.end();
         boost::container::small_vector<std::pair<VAddr, u32>, 4> read_by_game;
         for (const auto& range : mirrors) {
             if (listed) {
@@ -1722,7 +1770,8 @@ void Rasterizer::DispatchDirect() {
                     }
                     // The same dispatch of the same shader a frame earlier: by its place among
                     // that shader's dispatches of the frame.
-                    const u64 key = (u64(cs.pgm_hash) << 20) | (g_predict.ordinal[cs.pgm_hash]++ & 0xfffff);
+                    const u64 key =
+                        (u64(cs.pgm_hash) << 20) | (g_predict.ordinal[cs.pgm_hash]++ & 0xfffff);
                     if (const auto it = g_predict.last.find(key);
                         it != g_predict.last.end() && it->second.size() == size) {
                         memory->TryWriteBacking(std::bit_cast<u8*>(address), it->second.data(),
@@ -1769,14 +1818,15 @@ void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
     static const bool check_args = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
     u32 groups[3]{};
     if (check_args || g_pass_stat_on) {
-        Core::Memory::Instance()->CopySparseMemory(address + offset,
-                                                   reinterpret_cast<u8*>(groups), sizeof(groups));
+        Core::Memory::Instance()->CopySparseMemory(address + offset, reinterpret_cast<u8*>(groups),
+                                                   sizeof(groups));
         if (g_pass_stat_on) {
             static u32 logged = 0;
             const bool bad = groups[0] > 0x10000 || groups[1] > 0x10000 || groups[2] > 0x10000;
             if (bad || logged++ < 20) {
-                LOG_WARNING(Render, "indirect dispatch cs {:#x} at {:#x}: groups {:#x} {:#x} {:#x} "
-                                    "gpu-written {}",
+                LOG_WARNING(Render,
+                            "indirect dispatch cs {:#x} at {:#x}: groups {:#x} {:#x} {:#x} "
+                            "gpu-written {}",
                             pipeline->GetStage(Shader::SwStage::Compute).pgm_hash, address + offset,
                             groups[0], groups[1], groups[2],
                             buffer_cache.IsRegionGpuModified(address + offset, size));
@@ -1997,16 +2047,18 @@ void Rasterizer::OnSubmit() {
         const u64 read_bytes = Common::g_file_read_bytes.load();
         const u64 wait = Common::g_wait_total_us.load();
         const auto now = std::chrono::steady_clock::now();
-        const u64 gap_us = std::chrono::duration_cast<std::chrono::microseconds>(now - last).count();
+        const u64 gap_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(now - last).count();
         u64 part[9];
         for (int i = 0; i < 9; ++i) {
             part[i] = Common::g_freeze_us[i].load();
         }
         if (freeze_log && gap_us > 80'000) {
-            LOG_ERROR(Render, "freeze {} ms: render thread cpu {} ms (gpu waits {}, image create {}, "
-                              "image upload {}, pipeline compile {}, draws {}, dispatches {}, "
-                              "buffers {} of which resident {} upload {}, shader compile {}); "
-                              "game file reads {} ms, {} KB; buffer upload {} MB",
+            LOG_ERROR(Render,
+                      "freeze {} ms: render thread cpu {} ms (gpu waits {}, image create {}, "
+                      "image upload {}, pipeline compile {}, draws {}, dispatches {}, "
+                      "buffers {} of which resident {} upload {}, shader compile {}); "
+                      "game file reads {} ms, {} KB; buffer upload {} MB",
                       gap_us / 1000, (cpu - last_cpu) / 1000, (wait - last_wait) / 1000,
                       (part[0] - last_part[0]) / 1000, (part[1] - last_part[1]) / 1000,
                       (part[2] - last_part[2]) / 1000, (part[3] - last_part[3]) / 1000,
@@ -2038,8 +2090,8 @@ void Rasterizer::OnSubmit() {
                 g_bisect.draws += g_bisect.total_draws;
             }
             if (++g_bisect.frame == 8) {
-                LOG_ERROR(Render, "bisect: {:#x} indirect/frame {}", g_bisect.hashes[g_bisect.index],
-                          g_bisect.draws / 3);
+                LOG_ERROR(Render, "bisect: {:#x} indirect/frame {}",
+                          g_bisect.hashes[g_bisect.index], g_bisect.draws / 3);
                 ++g_bisect.index;
                 g_bisect.frame = 0;
                 g_bisect.draws = 0;
@@ -2214,8 +2266,8 @@ void Rasterizer::BindVertexBuffers(const GraphicsPipeline* pipeline) {
     if (DrawLogActive()) {
         std::string vbs;
         for (const auto& buffer : guest_buffers) {
-            vbs += fmt::format("[{:#x} st{} n{:#x}]", u64(buffer.base_address),
-                               buffer.GetStride(), u32(buffer.num_records));
+            vbs += fmt::format("[{:#x} st{} n{:#x}]", u64(buffer.base_address), buffer.GetStride(),
+                               u32(buffer.num_records));
         }
         LOG_ERROR(Render, "   vertex bindings {} attrs {} {}", bindings.size(), attributes.size(),
                   vbs);
@@ -2573,8 +2625,9 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                 }();
                 static const auto start = std::chrono::steady_clock::now();
                 static u32 logged = 0;
-                if (only && desc.is_written && (vsharp.GetStride() == 68 || vsharp.GetStride() == 80 ||
-                                                vsharp.GetStride() == 288)) {
+                if (only && desc.is_written &&
+                    (vsharp.GetStride() == 68 || vsharp.GetStride() == 80 ||
+                     vsharp.GetStride() == 288)) {
                     static std::unordered_set<u64> writers;
                     if (writers.insert(stage.pgm_hash ^ (u64(vsharp.GetStride()) << 40)).second) {
                         LOG_ERROR(Render, "bufwriter shader {:#x} addr {:#x} size {:#x} stride {}",
@@ -2593,16 +2646,19 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                     const u64 bad = valid && !desc.is_written
                                         ? buffer_cache.DebugMismatch(vsharp.base_address, check)
                                         : 0;
-                    LOG_ERROR(Render, "buflog addr {:#x} size {:#x} clamp {:#x} stride {} written "
-                                      "{} gpumod {} valid {} mismatch {} of {}",
-                              u64(vsharp.base_address), vsharp.GetSize(), full,
-                              vsharp.GetStride(), desc.is_written, gpu, valid, bad, check);
+                    LOG_ERROR(Render,
+                              "buflog addr {:#x} size {:#x} clamp {:#x} stride {} written "
+                              "{} gpumod {} valid {} mismatch {} of {}",
+                              u64(vsharp.base_address), vsharp.GetSize(), full, vsharp.GetStride(),
+                              desc.is_written, gpu, valid, bad, check);
                     if (valid && !desc.is_written) {
                         std::vector<u8> data(check);
                         memory->CopySparseMemory(vsharp.base_address, data.data(), check);
-                        if (FILE* f = std::fopen(fmt::format("buflog_{:x}_{}.raw",
-                                                             u64(vsharp.base_address),
-                                                             vsharp.GetStride()).c_str(), "wb")) {
+                        if (FILE* f =
+                                std::fopen(fmt::format("buflog_{:x}_{}.raw",
+                                                       u64(vsharp.base_address), vsharp.GetStride())
+                                               .c_str(),
+                                           "wb")) {
                             std::fwrite(data.data(), 1, data.size(), f);
                             std::fclose(f);
                         }
@@ -2633,8 +2689,9 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                 static int bind_traced = 0;
                 if (desc.is_written && CoversViewBlock(vsharp.base_address, size) &&
                     bind_traced++ < 12) {
-                    LOG_ERROR(Render, "viewblock written bind by {:#x} base {:#x} size {:#x} "
-                                      "declared {:#x} stride {}",
+                    LOG_ERROR(Render,
+                              "viewblock written bind by {:#x} base {:#x} size {:#x} "
+                              "declared {:#x} stride {}",
                               stage.pgm_hash, u64(vsharp.base_address), size, vsharp.GetSize(),
                               vsharp.GetStride());
                 }
@@ -2777,31 +2834,36 @@ void Rasterizer::BindTextures(const Shader::Info& stage, Shader::Backend::Bindin
                         std::vector<u8> data(ii.guest_size);
                         memory->CopySparseMemory(ii.guest_address, data.data(), data.size());
                         const auto zeros = std::ranges::count(data, u8{0});
-                        LOG_ERROR(Render, "probearr {:#x} size {:#x} layers {} hash {:#x} zero "
-                                          "bytes {} tick {} tile {}",
-                                  ii.guest_address, ii.guest_size, ii.resources.layers, hash,
-                                  zeros, scheduler.CurrentTick(), u32(ii.tile_mode));
-                        if (FILE* f = std::fopen(
-                                fmt::format("probearr_{:x}_{}_{}.raw", ii.guest_address,
-                                            ii.resources.layers, logged).c_str(), "wb")) {
+                        LOG_ERROR(Render,
+                                  "probearr {:#x} size {:#x} layers {} hash {:#x} zero "
+                                  "bytes {} tick {} tile {}",
+                                  ii.guest_address, ii.guest_size, ii.resources.layers, hash, zeros,
+                                  scheduler.CurrentTick(), u32(ii.tile_mode));
+                        if (FILE* f =
+                                std::fopen(fmt::format("probearr_{:x}_{}_{}.raw", ii.guest_address,
+                                                       ii.resources.layers, logged)
+                                               .c_str(),
+                                           "wb")) {
                             std::fwrite(data.data(), 1, data.size(), f);
                             std::fclose(f);
                         }
                     }
                 }
                 if (on && (only == 1 ? image.info.size.width == 8192 : stage.pgm_hash == only) &&
-                    seen.insert(stage.pgm_hash ^ (u64(desc.type) << 60) ^ image.info.guest_address ^ (u64(image.flags) << 44) ^ (u64(image.info.pixel_format) << 20))
+                    seen.insert(stage.pgm_hash ^ (u64(desc.type) << 60) ^ image.info.guest_address ^
+                                (u64(image.flags) << 44) ^ (u64(image.info.pixel_format) << 20))
                         .second) {
-                    LOG_ERROR(Render, "atlaslog shader {:#x} stage {} addr {:#x} storage {} fmt {} "
-                                      "view fmt {} levels {} base {} n {} dims {}x{}x{} layers {} flags {:#x}",
-                              stage.pgm_hash, u32(stage.sw_stage), image.info.guest_address,
-                              desc.type == VideoCore::TextureCache::BindingType::Storage,
-                              vk::to_string(image.info.pixel_format),
-                              vk::to_string(desc.view_info.format), image.info.resources.levels,
-                              desc.view_info.range.base.level,
-                              desc.view_info.range.extent.levels, image.info.size.width,
-                              image.info.size.height, image.info.size.depth,
-                              image.info.resources.layers, u32(image.flags));
+                    LOG_ERROR(
+                        Render,
+                        "atlaslog shader {:#x} stage {} addr {:#x} storage {} fmt {} "
+                        "view fmt {} levels {} base {} n {} dims {}x{}x{} layers {} flags {:#x}",
+                        stage.pgm_hash, u32(stage.sw_stage), image.info.guest_address,
+                        desc.type == VideoCore::TextureCache::BindingType::Storage,
+                        vk::to_string(image.info.pixel_format),
+                        vk::to_string(desc.view_info.format), image.info.resources.levels,
+                        desc.view_info.range.base.level, desc.view_info.range.extent.levels,
+                        image.info.size.width, image.info.size.height, image.info.size.depth,
+                        image.info.resources.layers, u32(image.flags));
                 }
             }
             const auto binding = image.binding;
@@ -3115,8 +3177,9 @@ void Rasterizer::CopyBuffer(VAddr dst, VAddr src, u32 num_bytes, bool dst_gds, b
     }
     static int copy_traced = 0;
     if (!dst_gds && CoversViewBlock(dst, num_bytes) && copy_traced++ < 6) {
-        LOG_ERROR(Render, "viewblock CopyBuffer dst {:#x} src {:#x} n {:#x} src_gds {} src_gpu {} "
-                          "src_img {}",
+        LOG_ERROR(Render,
+                  "viewblock CopyBuffer dst {:#x} src {:#x} n {:#x} src_gds {} src_gpu {} "
+                  "src_img {}",
                   dst, src, num_bytes, src_gds, buffer_cache.IsRegionGpuModified(src, num_bytes),
                   bool(texture_cache.FindImageFromRange(src, num_bytes)));
     }
@@ -3564,4 +3627,3 @@ u64 WriterOfGuestMemory(u64 address, u64* base, u32* size) {
     return 0;
 }
 } // namespace VideoCore
-

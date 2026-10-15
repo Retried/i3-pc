@@ -26,6 +26,29 @@ extern u64 g_stream_epoch; // buffer_cache.cpp
 
 namespace AmdGpu {
 
+// Packets that write guest memory on this thread. Stream copies still queued on the command
+// recorder (BufferCache::ObtainBuffer) read that memory for earlier draws: they finish first.
+static void FinishQueuedReads(Vulkan::Rasterizer* rasterizer, PM4ItOpcode opcode) {
+    switch (opcode) {
+    case PM4ItOpcode::DumpConstRam:
+    case PM4ItOpcode::EventWriteEos:
+    case PM4ItOpcode::EventWriteEop:
+    case PM4ItOpcode::ReleaseMem:
+    case PM4ItOpcode::DmaData:
+    case PM4ItOpcode::WriteData:
+    case PM4ItOpcode::CopyData:
+    case PM4ItOpcode::AtomicGds:
+    case PM4ItOpcode::MemSemaphore:
+    case PM4ItOpcode::CondWrite:
+        if (rasterizer) {
+            rasterizer->GetScheduler().Stream().DrainHostWork();
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 static const char* dcb_task_name{"DCB_TASK"};
 static const char* ccb_task_name{"CCB_TASK"};
 
@@ -180,6 +203,7 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
         }
 
         const PM4ItOpcode opcode = header->type3.opcode;
+        FinishQueuedReads(rasterizer, opcode);
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         state_changed_since_draw = true;
         ++VideoCore::g_stream_epoch;
@@ -273,6 +297,7 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
         case 3:
             const u32 count = header->type3.NumWords();
             const PM4ItOpcode opcode = header->type3.opcode;
+            FinishQueuedReads(rasterizer, opcode);
             switch (opcode) {
             case PM4ItOpcode::Nop:
             case PM4ItOpcode::SetBase:
@@ -1028,6 +1053,7 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
         }
 
         const PM4ItOpcode opcode = header->type3.opcode;
+        FinishQueuedReads(rasterizer, opcode);
 
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         state_changed_since_draw = true;

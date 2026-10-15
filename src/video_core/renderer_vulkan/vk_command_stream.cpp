@@ -66,6 +66,7 @@ void CommandStream::Drain() {
     if (!async) {
         return;
     }
+    host_work_pending = false;
     Publish();
     const u64 goal = published.load(std::memory_order_relaxed);
     if (completed.load(std::memory_order_acquire) == goal) {

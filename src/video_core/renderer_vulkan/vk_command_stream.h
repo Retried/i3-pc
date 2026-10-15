@@ -40,6 +40,19 @@ public:
     [[nodiscard]] bool IsAsync() const {
         return async;
     }
+    /// Runs host work (a trivially copyable callable) on the worker, in order with the commands.
+    template <typename F>
+    void RunInOrder(F&& func) {
+        host_work_pending = async;
+        Push(0, [func](vk::CommandBuffer) { func(); });
+    }
+    /// Drains only when host work was queued since the last drain.
+    void DrainHostWork() {
+        if (host_work_pending) {
+            Drain();
+        }
+    }
+    bool host_work_pending{};
     /// Counters for the periodic statistics line: commands queued and drains that had to wait.
     u64 queued_commands{};
     u64 waited_drains{};

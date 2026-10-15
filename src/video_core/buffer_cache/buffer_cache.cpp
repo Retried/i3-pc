@@ -732,7 +732,19 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
             }
         }
         const auto [data, offset] = stream_buffer.Map(size, instance.UniformMinAlignment());
-        memory->CopySparseMemory(device_addr, data, size);
+        // The copy runs on the command recorder thread, queued before the commands that read
+        // it; every submit drains that thread first. The console's GPU also reads this memory
+        // after the draw is issued. Coherent memory only: Commit's flush would come before the
+        // data. I3_NO_ASYNC_UPLOAD=1 copies here.
+        static const bool async_upload = std::getenv("I3_NO_ASYNC_UPLOAD") == nullptr;
+        if (auto& stream = scheduler.Stream();
+            async_upload && stream.IsAsync() && stream_buffer.is_coherent) {
+            stream.RunInOrder([mem = memory, device_addr, data, size] {
+                mem->CopySparseMemory(device_addr, data, size);
+            });
+        } else {
+            memory->CopySparseMemory(device_addr, data, size);
+        }
         stream_buffer.Commit();
         if (slot) {
             if (offset < reuse_last_offset) {

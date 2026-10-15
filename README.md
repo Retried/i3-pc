@@ -265,6 +265,10 @@ missing, English is shown.
   not changed), so such an index is clamped like any other overflow. Since then: 9 of 9
   three-minute test runs alive on the bridge and in fire fights, 4 of them with the results
   made late on purpose. Some particles can still be missing for a frame on the bridge.
+  The same late counters caused two rarer crashes after 10 to 25 minutes in Seattle: a copy
+  whose size was the counter times an element size, and a graphics copy to an address outside
+  the console's memory. The runtime of 2026-10-15 skips both kinds of copy. Since then: three
+  25-minute sessions in Seattle and four fire fights, all alive.
 - New Game and Load Game on the start screen open the game's Options screen for you once the
   last save has loaded. If that save opens in a cutscene, the game shows "Paused" instead:
   continue the cutscene, then open Options yourself (in Seattle: Options, then Triangle / R).

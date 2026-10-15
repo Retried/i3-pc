@@ -9,6 +9,12 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <time.h>
+#endif
+
 #ifdef _MSC_VER
 #include <intrin.h>
 #else
@@ -2037,12 +2043,21 @@ void Rasterizer::OnSubmit() {
         static u64 last_upload = 0;
         const u64 upload = Common::g_upload_bytes.load();
         static u64 last_part[9]{};
+        u64 cpu = last_cpu;
+#ifdef _WIN32
         FILETIME creation, exit, kernel, user;
-        GetThreadTimes(GetCurrentThread(), &creation, &exit, &kernel, &user);
         const auto ticks = [](const FILETIME& t) {
             return (u64(t.dwHighDateTime) << 32) | t.dwLowDateTime;
         };
-        const u64 cpu = (ticks(kernel) + ticks(user)) / 10;
+        if (GetThreadTimes(GetCurrentThread(), &creation, &exit, &kernel, &user)) {
+            cpu = (ticks(kernel) + ticks(user)) / 10;
+        }
+#else
+        timespec thread_time{};
+        if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_time) == 0) {
+            cpu = u64(thread_time.tv_sec) * 1'000'000 + u64(thread_time.tv_nsec) / 1000;
+        }
+#endif
         const u64 read_us = Common::g_file_read_us.load();
         const u64 read_bytes = Common::g_file_read_bytes.load();
         const u64 wait = Common::g_wait_total_us.load();

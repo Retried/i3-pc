@@ -50,12 +50,14 @@ log. Read [DECISIONS.md](DECISIONS.md) before changing the cache or build workfl
 
 ## Remaining work
 
-- Verify the new remote CI run. The analyzed failed run was
-  [38766554875](https://github.com/Retried/i3-pc/actions/runs/38766554875), at
-  `9a719c45`, before the portability fix. The push of `1e2a7566` triggered
-  [38805748119](https://github.com/Retried/i3-pc/actions/runs/38805748119),
-  which was in progress when this handoff was prepared. Check its live status;
-  no successful remote result is claimed here.
+- Run [38805748119](https://github.com/Retried/i3-pc/actions/runs/38805748119)
+  completed: Windows emulator, all three C++ test jobs and REUSE passed.
+  Linux GCC, Linux Clang and macOS emulator builds exposed an additional
+  unguarded Windows thread-time API in the rasterizer. Published runtime `340d9afa`
+  preserves Windows timing and uses POSIX thread CPU timing elsewhere.
+  Its full Windows x64 emulator build and affected-file format check passed;
+  cross-platform CI verification remains pending. See
+  [CI_RUN_38805748119.md](CI_RUN_38805748119.md).
 - The 44 inherited clang-format findings remain. Do not disable the check or
   perform a repository-wide formatting sweep without a task that calls for it.
 - W1 portable Windows build and packaging remains planned; the scripts still

@@ -39,3 +39,29 @@ emulator target. Validate the test configuration and the full emulator build
 separately. Preserve existing tests and workflow checks, and report exclusions
 and skips explicitly. Neither build nor test success replaces target-GPU or
 gameplay validation.
+
+## 2026-10-15: Explicit Python interpreter for the LTO script
+
+`build-lto.bat` accepts `PYTHON3_EXECUTABLE` as an optional environment override,
+checks that it runs Python 3, and passes it to CMake as `Python3_EXECUTABLE`.
+Without the override, CMake keeps its normal interpreter discovery. Do not commit
+a developer-specific Python installation path. For example, in PowerShell:
+
+```powershell
+$env:PYTHON3_EXECUTABLE = 'C:\Path\To\Python\python.exe'
+.\build-lto.bat
+```
+
+Release/LTO configuration and target listing passed with Python 3.12.14 on
+Windows x64. This check did not compile or run the LTO emulator. A CPU model
+string containing Radeon 780M during configuration does not identify the Vulkan
+device selected by the emulator at launch.
+
+## 2026-10-15: Platform-specific freeze-log CPU timing
+
+Preserve the Windows `GetThreadTimes` path and use POSIX
+`clock_gettime(CLOCK_THREAD_CPUTIME_ID)` on Linux and macOS for the renderer's
+freeze-log counter. Both return microseconds to the existing diagnostics.
+Retain the previous counter if the OS query fails. This portability fix does
+not alter GPU synchronization or rendering. See
+[CI_RUN_38805748119.md](CI_RUN_38805748119.md) for the failed run and validation.

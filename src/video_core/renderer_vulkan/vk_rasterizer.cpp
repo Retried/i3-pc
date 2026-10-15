@@ -1481,14 +1481,39 @@ void Rasterizer::DispatchDirect() {
     ScopedNs total_timer{g_stats.ns_dispatch_total};
     Common::FreezeTimer freeze_timer{4};
 
+    // Test aid for the freezes of up to 2 s that the freeze log puts in dispatches: a single
+    // dispatch over 50 ms is logged with its shader and where its time went.
+    struct SlowDispatch {
+        using Clock = std::chrono::steady_clock;
+        Clock::time_point start = Clock::now(), pending, submit, pipeline;
+        u64 hash{};
+        ~SlowDispatch() {
+            const auto end = Clock::now();
+            const auto ms = [](auto a, auto b) {
+                return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count() / 1000.0;
+            };
+            if (ms(start, end) > 50.0) {
+                LOG_WARNING(Render, "slow dispatch {:.0f} ms, shader {:#x}: pending operations "
+                                    "{:.0f}, submit {:.0f}, pipeline {:.0f}, rest {:.0f}",
+                            ms(start, end), hash, ms(start, pending), ms(pending, submit),
+                            pipeline == Clock::time_point{} ? 0.0 : ms(submit, pipeline),
+                            pipeline == Clock::time_point{} ? 0.0 : ms(pipeline, end));
+            }
+        }
+    } slow;
+
     scheduler.PopPendingOperations();
+    slow.pending = SlowDispatch::Clock::now();
     SubmitPeriodically(scheduler);
+    slow.submit = SlowDispatch::Clock::now();
 
     const auto& cs_program = liverpool->GetCsRegs();
     const ComputePipeline* pipeline = pipeline_cache.GetComputePipeline();
+    slow.pipeline = SlowDispatch::Clock::now();
     if (!pipeline) {
         return;
     }
+    slow.hash = pipeline->GetStage(Shader::SwStage::Compute).pgm_hash;
 
     const auto& cs = pipeline->GetStage(Shader::SwStage::Compute);
     {
@@ -3076,6 +3101,18 @@ void Rasterizer::FillBuffer(VAddr address, u32 num_bytes, u32 value, bool is_gds
 }
 
 void Rasterizer::CopyBuffer(VAddr dst, VAddr src, u32 num_bytes, bool dst_gds, bool src_gds) {
+    // inFAMOUS now and then builds a DMA copy from a late counter, with an address outside the
+    // GPU's 40-bit range (0xffffffd4c85795e0 in a 25-minute soak); the page walk then faulted.
+    // Such a copy reaches nothing on the console either: it is left out.
+    if ((!dst_gds && !memory->IsValidGpuMapping(dst, num_bytes)) ||
+        (!src_gds && !memory->IsValidGpuMapping(src, num_bytes))) {
+        static int skipped = 0;
+        if (skipped++ < 16) {
+            LOG_WARNING(Render, "DMA copy outside GPU memory left out: dst {:#x} src {:#x} n {:#x}",
+                        dst, src, num_bytes);
+        }
+        return;
+    }
     static int copy_traced = 0;
     if (!dst_gds && CoversViewBlock(dst, num_bytes) && copy_traced++ < 6) {
         LOG_ERROR(Render, "viewblock CopyBuffer dst {:#x} src {:#x} n {:#x} src_gds {} src_gpu {} "

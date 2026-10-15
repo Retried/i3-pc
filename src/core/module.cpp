@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <cstring>
@@ -135,6 +136,39 @@ static void PatchInfamousParticleCount(VAddr base, u64 size) {
     }
     code[14] = 0x72; // jb
     LOG_INFO(Core_Linker, "inFAMOUS particle count check made unsigned");
+
+    // The second crash of long sessions: the function at text offset 0x3fed00 allocates
+    // count * element size bytes (count in r12d) and copies them without checking the
+    // allocation. A late counter gives a float as count (0x4060161e = 3.5f in the crash), the
+    // 32-bit product is hundreds of MB, the allocation fails and memcpy writes to null (fault
+    // in libc.prx at 0x809d83ae). The function already returns early for a count of 0; a call
+    // at its count test now goes to a check in padding after the code that also takes that
+    // early return for counts over 2^20.
+    constexpr u64 test_at = 0x3fed2b;
+    constexpr u64 cave_at = 0xb1441a;
+    constexpr std::array<u8, 6> test_bytes{0x45, 0x85, 0xe4, 0x49, 0x8b, 0x00};
+    constexpr std::array<u8, 20> check{
+        0x49, 0x8b, 0x00,                         // mov rax, [r8] (moved here from the call site)
+        0x41, 0x81, 0xfc, 0x00, 0x00, 0x10, 0x00, // cmp r12d, 0x100000
+        0x77, 0x04,                               // ja bad
+        0x45, 0x85, 0xe4,                         // test r12d, r12d (ZF: count 0)
+        0xc3,                                     // ret
+        0x45, 0x39, 0xe4,                         // bad: cmp r12d, r12d (ZF set: early return)
+        0xc3};                                    // ret
+    u8* const test_code = reinterpret_cast<u8*>(base + test_at);
+    u8* const cave = reinterpret_cast<u8*>(base + cave_at);
+    if (size < cave_at + check.size() ||
+        std::memcmp(test_code, test_bytes.data(), test_bytes.size()) != 0 ||
+        std::any_of(cave, cave + check.size(), [](u8 b) { return b != 0xcc; })) {
+        LOG_WARNING(Core_Linker, "inFAMOUS copy size check not found; not patched");
+        return;
+    }
+    std::memcpy(cave, check.data(), check.size());
+    const s32 rel = static_cast<s32>(cave_at - (test_at + 5));
+    test_code[0] = 0xe8; // call cave
+    std::memcpy(test_code + 1, &rel, sizeof(rel));
+    test_code[5] = 0x90;
+    LOG_INFO(Core_Linker, "inFAMOUS copy size check added");
 }
 
 void Module::LoadModuleToMemory(u32& max_tls_index) {

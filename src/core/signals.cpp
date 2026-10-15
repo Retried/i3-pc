@@ -172,6 +172,20 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                                 "[rdi+0x158] {:#x} [rdi+0x330] {:#x}",
                          ctx->Rdi, ctx->Rcx, ctx->Rdx, ctx->Rax, fields[0], fields[1], array);
             VideoCore::LogMirrorWritesNear(ctx->Rdi, 0x400, 0x800);
+            // The guest stack: return addresses into the game's code name the caller of a
+            // fault inside a library (such as the null read in libc.prx).
+            u64 stack[48]{};
+            ReadProcessMemory(self, reinterpret_cast<void*>(ctx->Rsp), stack, sizeof(stack),
+                              &got);
+            std::string words;
+            for (u32 i = 0; i < 48; ++i) {
+                words += fmt::format("{:x} ", stack[i]);
+            }
+            LOG_CRITICAL(Debug, "guest stack: {}", words);
+            LOG_CRITICAL(Debug, "rbx {:#x} rsi {:#x} rbp {:#x} r8 {:#x} r9 {:#x} r12 {:#x} "
+                                "r13 {:#x} r14 {:#x} r15 {:#x}",
+                         ctx->Rbx, ctx->Rsi, ctx->Rbp, ctx->R8, ctx->R9, ctx->R12, ctx->R13,
+                         ctx->R14, ctx->R15);
         }
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }

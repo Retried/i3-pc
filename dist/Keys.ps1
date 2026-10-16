@@ -70,11 +70,6 @@ $caps = @{ leftbutton = 'mouse:L'; rightbutton = 'mouse:R'; middlebutton = 'mous
     pageup = 'PgUp'; pagedown = 'PgDn'; delete = 'Del'; insert = 'Ins'; home = 'Home';
     end = 'End' }
 
-# What an Xbox controller calls each PlayStation control (the icon sheet shown for Xbox pads).
-$xboxNames = @{ r2 = 'RT'; l2 = 'LT'; r1 = 'RB'; l1 = 'LB'; r3 = 'RS'; l3 = 'LS'; cross = 'A';
-    circle = 'B'; square = 'X'; triangle = 'Y'; options = 'MENU'; touchpad_center = 'VIEW';
-    '=WASD' = 'LS'; '=MSE' = 'RS' }
-
 function Test-Key($key) { return ($key -match '^[a-z0-9]$') -or ($named -contains $key) }
 
 # A line binding a keyboard or mouse input: "<pad> = <key>" where the key is not a pad name.
@@ -308,6 +303,10 @@ function Update-Diagram {
 
 # Redraws the game's 512x512 button-icon sheet with key caps in place of the pad buttons.
 function Update-Icons([string]$Style = 'keyboard') {
+    if ($Style -eq 'xbox') {
+        & (Join-Path $PSScriptRoot 'XboxPrompts.ps1')
+        return
+    }
     # The diagram needs nothing from the game, so it is drawn even without the icon sheet.
     if ($Style -eq 'keyboard') { Update-Diagram }
     if (-not (Test-Path $atlasSource)) {
@@ -358,8 +357,7 @@ function Update-Icons([string]$Style = 'keyboard') {
     )
     foreach ($cell in $cells) {
         $x = $cell[0]; $y = $cell[1]; $w = $cell[2] - $cell[0] + 1; $h = $cell[3] - $cell[1] + 1
-        $text = if ($Style -eq 'xbox') { $xboxNames[$cell[4]] }
-                elseif ($cell[4] -eq '=MSE') { 'mouse:' }
+        $text = if ($cell[4] -eq '=MSE') { 'mouse:' }
                 elseif ($cell[4].StartsWith('=')) { $cell[4].Substring(1) }
                 else { Get-Cap $cell[4] $map }
         # Wipe the old icon, then a white key cap with the label cut out of it.

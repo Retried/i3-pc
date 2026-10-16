@@ -48,3 +48,5 @@
   Vulkan/gameplay/readback validation and cache on/off comparisons
   with both worker modes remain pending. Coverage and lifetime cases are in
   [ROADMAP8_PUSH_DESCRIPTORS_20261017.md](ROADMAP8_PUSH_DESCRIPTORS_20261017.md).
+- Xbox prompts: game/controller/persistence/GPU validation and incomplete artwork coverage are
+  recorded in [XBOX_PROMPTS_20261017.md](XBOX_PROMPTS_20261017.md).

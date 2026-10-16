@@ -35,9 +35,15 @@ Game data: your own CUSA00004 v1.07 folder (read only; path in game_path.txt)
 Saves:     user\home\1000\savedata\CUSA00004
 Bindings:  user\input_config\CUSA00004.ini  (F8 reloads it while the game runs)
 
-Button icons follow the device in use: key caps while you play on keyboard and mouse (also
-the default when no controller is connected), the PlayStation icons when you touch a
-controller. Caps show what the key prints: the Shift arrow, a space-bar mark, a small mouse
+Options > Controls > Button Prompts selects Auto, PlayStation, Xbox or Keyboard/Mouse.
+Auto follows the active device: key caps for keyboard/mouse (also the default without a
+controller), Xbox symbols for SDL-recognized Xbox controllers, original prompts otherwise.
+The setting is saved in user\sotc_textures\force.txt and takes effect while playing.
+Xbox symbols cover the known button atlas cells. Touchpad, motion, D-pad and unrecognized
+artwork retain the game's originals; no touchpad gesture is relabeled as an Xbox button.
+Input mappings are unchanged. Generate Xbox assets with pwsh -File XboxPrompts.ps1 when
+using an unpackaged build; Windows packages include them. Caps show what the key prints:
+the Shift arrow, a space-bar mark, a small mouse
 with the pressed button filled. The game's Options screen shows a keyboard-and-mouse diagram
 with your bound keys in place of its controller picture. Both are redrawn when you rebind.
 

@@ -351,3 +351,20 @@ Keep same-binary cache disable and optional cumulative diagnostics for coverage,
 hit runs and invalidation reasons; do not version unrelated shader cache data.
 Evidence and pending OpenOrbis/A-B cases:
 [ROADMAP8_PUSH_DESCRIPTORS_20261017.md](ROADMAP8_PUSH_DESCRIPTORS_20261017.md).
+
+## 2026-10-17: Xbox prompt style through the existing texture pack
+
+Reuse the existing prompt sets and texture upload path. Persist the live Controls
+selection in the existing force.txt, preserving legacy values and defaulting to
+Auto. Recognize Xbox devices explicitly; unknown controllers retain original
+artwork unless the user forces Xbox. Observe device activity before menu input
+is consumed without changing input processing or guest pad mappings.
+
+Generate sparse procedural patches for documented atlas cells instead of shipping
+or depending on a copied game atlas. Preserve touchpad/motion and unverified
+artwork, including D-pad and separate glyph textures. Do not guess their cells or
+map touchpad press to View. Keep normal unknown-glyph GPU readback disabled unless
+diagnostic capture is requested. Track style application at cache invalidation,
+not at an individual image upload, so one image cannot suppress other refreshes.
+Coverage, file format, evidence and pending validation:
+[XBOX_PROMPTS_20261017.md](XBOX_PROMPTS_20261017.md).

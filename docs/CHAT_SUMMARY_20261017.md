@@ -1,7 +1,13 @@
-# Chat delivery: roadmap items 1-8
+# Delivery summary: roadmap items 1-8 and Xbox prompts
 
-This delivery contains the changes requested in this chat, including visible
-Windows build consoles. Independent Xbox prompt work is excluded.
+## Roadmap integration
+
+The existing `codex/roadmap-1-8` and `codex/roadmap-1-8-runtime` branches
+contain the completed source work below. This publication adds the independent
+Xbox prompt changes and integrates the combined result into `main` (wrapper)
+and `runtime` (emulator). Both branch families share the existing origin
+repository; their histories and roles remain separate. The wrapper submodule
+pins the integrated runtime commit.
 
 | Item | Delivered change | Detailed report |
 | --- | --- | --- |
@@ -18,25 +24,44 @@ Build workers remain detached with durable logs/status; agent-launched builds
 open a separate native console without desktop input or activation automation.
 The launcher, log viewer, project rules and Windows build guide reflect this.
 
-## Verification and limits
+## Xbox prompt changes from this chat
 
-All eight local Windows x64 Release/LTO builds completed with exit 0; targeted
-clang-cl, formatting and source-preservation checks are recorded in the reports.
-The last build's executable SHA-256 is
-`3F25A8F008C39BEECF7E986A6E727D63D399D3F9EE1DE9C966C2F981667F3565`.
-Committed runtime files match that build's recorded source snapshot. Two files
-also edited by independent Xbox work were recovered and hash-verified against
-the pre-Xbox snapshot without changing working files.
+- Reuse the existing hash-based texture pack, image cache and upload path.
+  Guest UVs, layout, animation and shaders remain responsible for rendering.
+- Add Auto, PlayStation, Xbox and Keyboard/Mouse to the in-game Controls section.
+  Preserve legacy force.txt values and persist live selection changes.
+- Detect recognized Xbox controllers at startup and from meaningful input before
+  overlays consume events; retain original artwork for unknown devices unless
+  the user selects Xbox. Controller input mappings and gameplay are unchanged.
+- Generate original procedural A/B/X/Y, LB/RB, LT/RT, LS/RS and Menu symbols as
+  cached sparse atlas patches. Generate them during Windows packaging and through
+  Keys.ps1 without requiring or distributing game artwork.
+- Preserve unsupported touchpad/motion artwork. D-pad, separate glyph textures,
+  the controller diagram and atlas mips beyond level zero retain their originals.
+- Correct style invalidation so refreshing one image cannot suppress updates of
+  other resident prompt images. Make unknown-glyph diagnostic readback opt-in.
 
-Gameplay, OpenOrbis references, Vulkan layer validation, save/load/readback
-acceptance and matching performance A/B runs remain pending. No FPS gain is
-claimed. HANDOFF retains these checks and links to their detailed procedures.
+Architecture, modified files, patch format and manual acceptance procedure:
+[Xbox prompts](XBOX_PROMPTS_20261017.md).
 
-## Publication
+## Validation and limits
 
-Runtime commit: `b3ecc05347ed363f2bb2c8f6ea60dbb8ae5d567f`.
-Wrapper branch: `codex/roadmap-1-8`; runtime branch:
-`codex/roadmap-1-8-runtime`. The wrapper pins the published runtime commit.
-Separate indexes allow publication without changing the checkout, user index
-or HEAD used by the independent Xbox build. The current checkout is deliberately
-left in place. Both branches use the existing origin repository.
+All eight roadmap Windows x64 Release/LTO builds completed with exit 0. The
+combined roadmap-plus-Xbox build also passed, with matching executable SHA256
+`5454EF744091890C7DCB59ED3166369ADF3D27A4D8711C4AC96F8E2C7966EC2C`.
+Its durable launch/status records are in `runtime/Build/xbox-20261017/`.
+The worker confirmed unchanged source during compilation; the pre-merge runtime
+working files are the tested source. Merge commits do not add runtime source edits.
+
+PowerShell parsing and changed C++ formatting checks passed. Offline checks
+verified 21 disjoint Xbox patch regions and preserved touchpad bounds. Keyboard
+atlas and Controls diagram generation matched the pre-change outputs byte for
+byte using identical bindings and a synthetic atlas. Deployment without game
+artwork generated the same Xbox patch, retired the legacy generated Xbox atlas,
+and left input configuration and the saved prompt style unchanged.
+
+No game was launched for the Xbox feature. Actual controller switching, UI
+persistence/restart, guest texture restoration, Vulkan validation and complete
+prompt coverage still require in-game acceptance. Roadmap hardware references,
+save/load/readback acceptance, second-PC checks and matching performance A/B
+measurements also remain pending. No FPS gain or full artwork coverage is claimed.

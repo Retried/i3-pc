@@ -1,0 +1,16 @@
+{
+  "scenes": [
+    {
+      "name": "title-control",
+      "description": "Existing direct-draw fast path A/B in a static control scene; no gameplay conclusion",
+      "warmup_seconds": 35,
+      "duration_seconds": 30,
+      "boot": [],
+      "route": []
+    }
+  ],
+  "variants": [
+    {"name": "off", "environment": {"I3_NO_DRAW_FASTPATH": "1"}},
+    {"name": "on", "environment": {}}
+  ]
+}

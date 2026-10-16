@@ -1,0 +1,13 @@
+{
+  "scenes": [
+    {
+      "name": "title-control",
+      "description": "Static title/Continue screen; control workload, not gameplay",
+      "warmup_seconds": 35,
+      "duration_seconds": 30,
+      "boot": [],
+      "route": []
+    }
+  ],
+  "variants": [{"name": "baseline", "environment": {}}]
+}

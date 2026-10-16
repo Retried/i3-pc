@@ -34,8 +34,9 @@ ft_at = np.cumsum(ft) / 1000.0  # seconds since the capture began, at the end of
 samples = []
 for line in open(os.path.join(run, 'perf_samples.csv')).read().split('\n')[1:]:
     p = line.split(',')
-    if len(p) == 6:
-        samples.append([float(x) if x else 0.0 for x in p])
+    if len(p) in (6, 8):
+        # The current sampler appends power/temperature after the original columns.
+        samples.append([float(x) if x else 0.0 for x in p[:6]])
 samples = np.array(samples) if samples else np.zeros((1, 6))
 samples[:, 0] -= rec_start
 

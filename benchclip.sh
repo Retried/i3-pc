@@ -11,7 +11,7 @@ printf "sun_shadows = $3\nlight_shadows = $4\nshadow_detail = $5\n" >> testrun/u
 rm -rf testrun/user/capture; rm -f testrun/bench_frametimes.txt testrun/perf_samples.csv
 BIN=${BIN:-/d/i3-pc/bin-release} ./livestart.sh 400 "45:cross,60:cross" > /dev/null; sleep 25
 until [ "$(tasklist | grep -ci '^i3.exe')" != "0" ]; do sleep 3; done
-(powershell -NoProfile -ExecutionPolicy Bypass -File tools/perfsample.ps1 > /dev/null 2>&1 &)
+(powershell -NoProfile -ExecutionPolicy Bypass -File tools/perfsample.ps1 -Out testrun/perf_samples.csv -Name i3 > /dev/null 2>&1 &)
 sleep ${WAIT:-75}
 # Frame rate without recording: the mean of the runtime's own counter over the last 12 seconds
 # before the clip starts (four log lines, one every 3 s), standing where the clip begins.

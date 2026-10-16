@@ -1,0 +1,2637 @@
+{
+  "date": "2026-10-16",
+  "scope": "One AMD/NVIDIA PC; static title control only; no gameplay acceptance",
+  "series": [
+    {
+      "evidence_directory": "runtime/Build/w3-20261016/control",
+      "machine_id": "d5c054d629a9",
+      "matrix": {
+        "scenes": [
+          {
+            "name": "title-control",
+            "description": "Static title/Continue screen; control workload, not gameplay",
+            "warmup_seconds": 35,
+            "duration_seconds": 30,
+            "boot": [],
+            "route": []
+          }
+        ],
+        "variants": [
+          {
+            "name": "baseline",
+            "environment": {}
+          }
+        ]
+      },
+      "build_info": {
+        "mainCommit": "4c3433f74710f1725d0aa2ff7b7d4be19d06e791",
+        "runtimeCommit": "f88d3b6f331272ce854bda5875c11386b180f94f",
+        "mainChanges": [],
+        "runtimeChanges": [],
+        "configuration": "RelWithDebInfo",
+        "lto": false,
+        "compiler": [
+          "clang version 19.1.5",
+          "Target: x86_64-pc-windows-msvc",
+          "Thread model: posix",
+          "InstalledDir: C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin"
+        ],
+        "builtAtUtc": "2026-10-16T11:56:17.4029925Z",
+        "executableSha256": "DC983DB65BE1F9585E183EA2D1F5B6F59C673728FC8E264A015500CA1F729EE0"
+      },
+      "hardware": {
+        "ramBytes": 31879192576,
+        "cpu": [
+          {
+            "Name": "AMD Ryzen 5 7640HS w/ Radeon 760M Graphics     ",
+            "NumberOfCores": 6,
+            "NumberOfLogicalProcessors": 12
+          }
+        ],
+        "os": {
+          "Caption": "Microsoft Windows 11 Pro",
+          "Version": "10.0.26200",
+          "BuildNumber": "26200"
+        },
+        "gpu": [
+          {
+            "Name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+            "DriverVersion": "32.0.16.1742"
+          }
+        ],
+        "status": "available"
+      },
+      "harness_manifest": {
+        "benchmark.py": "203DF9E01247535214675A0BA669D8F238843BDFBF66D61E08E1BDC89A9114AC",
+        "collect-vulkan-diagnostics.ps1": "B45E2F286575E38F3D4C8347791285D8F4B45313FFC72A75228CE5B1E570F480",
+        "perfsample.ps1": "73C8D1BD37CA4D09F4BC589092C86A38245997423A367A474FD3D832F1851CAA",
+        "symprof.py": "6C016A172F08D874C908D6BBBF8E5C32642B06CDDAA903BC74E2969F33BEA15A"
+      },
+      "summary": {
+        "groups": [
+          {
+            "scene": "title-control",
+            "cache": "cold",
+            "variant": "baseline",
+            "repeats": 3,
+            "average_fps": {
+              "mean": 67.95482717876621,
+              "minimum": 66.74399487683914,
+              "maximum": 69.07965815209012,
+              "stdev": 1.1702042151821894
+            },
+            "low1_fps": {
+              "mean": 40.557864984587475,
+              "minimum": 38.95316160553802,
+              "maximum": 43.741980636883234,
+              "stdev": 2.757554038528406
+            },
+            "median_ms": {
+              "mean": 14.015833333333333,
+              "minimum": 13.978,
+              "maximum": 14.053,
+              "stdev": 0.03750444418110171
+            },
+            "p95_ms": {
+              "mean": 20.84893333333333,
+              "minimum": 20.689999999999998,
+              "maximum": 20.9813,
+              "stdev": 0.1474559708297151
+            },
+            "p99_ms": {
+              "mean": 21.5588,
+              "minimum": 21.447800000000004,
+              "maximum": 21.6511,
+              "stdev": 0.10293196782340985
+            },
+            "worst_ms": {
+              "mean": 46.09233333333333,
+              "minimum": 34.101,
+              "maximum": 55.553,
+              "stdev": 10.947615326331727
+            }
+          },
+          {
+            "scene": "title-control",
+            "cache": "warm",
+            "variant": "baseline",
+            "repeats": 3,
+            "average_fps": {
+              "mean": 68.35044643254218,
+              "minimum": 67.82705395091922,
+              "maximum": 68.74388151103122,
+              "stdev": 0.47202742369190115
+            },
+            "low1_fps": {
+              "mean": 44.42750862102062,
+              "minimum": 42.72321864522639,
+              "maximum": 45.515035133272356,
+              "stdev": 1.4946095487457693
+            },
+            "median_ms": {
+              "mean": 13.996666666666668,
+              "minimum": 13.984,
+              "maximum": 14.0135,
+              "stdev": 0.015184970639857798
+            },
+            "p95_ms": {
+              "mean": 20.83225,
+              "minimum": 20.75905,
+              "maximum": 20.894,
+              "stdev": 0.06819972507275959
+            },
+            "p99_ms": {
+              "mean": 21.520799999999998,
+              "minimum": 21.45747,
+              "maximum": 21.6122,
+              "stdev": 0.08109430867822992
+            },
+            "worst_ms": {
+              "mean": 27.790666666666667,
+              "minimum": 27.337,
+              "maximum": 28.018,
+              "stdev": 0.39288717634116477
+            }
+          }
+        ],
+        "comparisons": [],
+        "minimum_repeats_met": true,
+        "percentile_method": "linear interpolation at (N-1)*p",
+        "low1_method": "1000 / mean(slowest ceil(N*0.01) intervals in milliseconds)",
+        "regression_threshold": "not fixed; observed repeat range is descriptive, not statistical proof",
+        "second_pc": "unavailable",
+        "correctness": "See per-run visual reviews; no full gameplay acceptance",
+        "visual_reviews": {
+          "title-control-cold-baseline-0-primer": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-cold-baseline-1": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-cold-baseline-2": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-cold-baseline-3": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-baseline-1": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-baseline-2": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-baseline-3": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified"
+        },
+        "excluded_runs": [
+          {
+            "label": "title-control-cold-baseline-0-primer",
+            "primer": true,
+            "profile_enabled": false,
+            "status": "captured",
+            "issues": []
+          }
+        ]
+      },
+      "runs": [
+        {
+          "label": "title-control-cold-baseline-0-primer",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "cold",
+          "repeat": 0,
+          "primer": true,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2024,
+            "measured_seconds": 29.969549999999998,
+            "average_fps": 67.53521490980012,
+            "low1_fps": 35.43771484114623,
+            "median_ms": 14.019,
+            "p95_ms": 20.839399999999998,
+            "p99_ms": 21.75416,
+            "worst_ms": 48.577,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 26.98335714285714,
+              "minimum": 16.915,
+              "maximum": 29.681
+            },
+            "busiest_thread_percent": {
+              "mean": 97.02439285714286,
+              "minimum": 81.775,
+              "maximum": 101.237
+            },
+            "nvidia_gpu_percent": {
+              "mean": 53.25,
+              "minimum": 24.0,
+              "maximum": 58.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4531.0,
+              "minimum": 4531.0,
+              "maximum": 4531.0
+            },
+            "working_set_mb": {
+              "mean": 5272.458214285713,
+              "minimum": 5271.32,
+              "maximum": 5279.207
+            },
+            "nvidia_power_w": {
+              "mean": 45.011785714285715,
+              "minimum": 25.02,
+              "maximum": 48.06
+            },
+            "nvidia_temp_c": {
+              "mean": 60.392857142857146,
+              "minimum": 55.0,
+              "maximum": 62.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "E60C7AA9DD7734FF9062CF948527CB2F667EE3356172D08780327BE7D4033A27",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:08:45.730623+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-cold-baseline-0-primer",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "log_sha256": "6258AE9CC8A5ABAB2E55CE5D1259CA5DCFD0D2F4666ECA72BF33AFCBD05E7C34",
+          "screenshots": {
+            "CUSA00004_20261016_140802_077_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_140837_098_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        },
+        {
+          "label": "title-control-cold-baseline-1",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "cold",
+          "repeat": 1,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2036,
+            "measured_seconds": 29.923209999999997,
+            "average_fps": 68.04082850736935,
+            "low1_fps": 38.95316160553802,
+            "median_ms": 14.0165,
+            "p95_ms": 20.8755,
+            "p99_ms": 21.5775,
+            "worst_ms": 48.623,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.376964285714287,
+              "minimum": 17.39,
+              "maximum": 30.555
+            },
+            "busiest_thread_percent": {
+              "mean": 97.66457142857143,
+              "minimum": 82.294,
+              "maximum": 100.961
+            },
+            "nvidia_gpu_percent": {
+              "mean": 52.92857142857143,
+              "minimum": 23.0,
+              "maximum": 58.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4531.0,
+              "minimum": 4531.0,
+              "maximum": 4531.0
+            },
+            "working_set_mb": {
+              "mean": 5273.76775,
+              "minimum": 5272.793,
+              "maximum": 5280.676
+            },
+            "nvidia_power_w": {
+              "mean": 45.43785714285714,
+              "minimum": 26.0,
+              "maximum": 48.26
+            },
+            "nvidia_temp_c": {
+              "mean": 61.92857142857143,
+              "minimum": 56.0,
+              "maximum": 63.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "3C85D27B7F7F1AFA44435483EBB04781C24BD9D245F666A24A56F9C16EE0F5BC",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:10:07.086189+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-cold-baseline-1",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "log_sha256": "3627D748A55CF6DB8AED09CDBA216C63A27316198E3F74CD8E3BC899D1F0B1C2",
+          "screenshots": {
+            "CUSA00004_20261016_140928_566_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_141003_574_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        },
+        {
+          "label": "title-control-cold-baseline-2",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "cold",
+          "repeat": 2,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2071,
+            "measured_seconds": 29.979882,
+            "average_fps": 69.07965815209012,
+            "low1_fps": 43.741980636883234,
+            "median_ms": 13.978,
+            "p95_ms": 20.689999999999998,
+            "p99_ms": 21.447800000000004,
+            "worst_ms": 34.101,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.735714285714288,
+              "minimum": 24.653,
+              "maximum": 30.978
+            },
+            "busiest_thread_percent": {
+              "mean": 97.65260714285715,
+              "minimum": 88.264,
+              "maximum": 100.308
+            },
+            "nvidia_gpu_percent": {
+              "mean": 52.964285714285715,
+              "minimum": 50.0,
+              "maximum": 57.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4530.0,
+              "minimum": 4530.0,
+              "maximum": 4530.0
+            },
+            "working_set_mb": {
+              "mean": 5209.840821428572,
+              "minimum": 5112.086,
+              "maximum": 5296.859
+            },
+            "nvidia_power_w": {
+              "mean": 47.684285714285714,
+              "minimum": 43.93,
+              "maximum": 48.78
+            },
+            "nvidia_temp_c": {
+              "mean": 64.0,
+              "minimum": 63.0,
+              "maximum": 65.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "39EDA8BBF30BC775C6904DDCEC88334D2F75A0DF9DA91F43A61D25E1FE48F1A4",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:11:21.101474+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-cold-baseline-2",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "log_sha256": "29D2AAB3A1C8E8957346D757DEAF80CAB1DEA0E524F3B9BD964BA9045CB2DBF2",
+          "screenshots": {
+            "CUSA00004_20261016_141042_560_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_141117_575_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        },
+        {
+          "label": "title-control-cold-baseline-3",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "cold",
+          "repeat": 3,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 1999,
+            "measured_seconds": 29.95026,
+            "average_fps": 66.74399487683914,
+            "low1_fps": 38.97845271134117,
+            "median_ms": 14.053,
+            "p95_ms": 20.9813,
+            "p99_ms": 21.6511,
+            "worst_ms": 55.553,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.366000000000003,
+              "minimum": 19.674,
+              "maximum": 31.223
+            },
+            "busiest_thread_percent": {
+              "mean": 97.45139285714286,
+              "minimum": 87.984,
+              "maximum": 101.081
+            },
+            "nvidia_gpu_percent": {
+              "mean": 52.82142857142857,
+              "minimum": 28.0,
+              "maximum": 57.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4531.0,
+              "minimum": 4531.0,
+              "maximum": 4531.0
+            },
+            "working_set_mb": {
+              "mean": 5289.994642857143,
+              "minimum": 5288.977,
+              "maximum": 5297.887
+            },
+            "nvidia_power_w": {
+              "mean": 47.217499999999994,
+              "minimum": 16.79,
+              "maximum": 50.58
+            },
+            "nvidia_temp_c": {
+              "mean": 64.5,
+              "minimum": 58.0,
+              "maximum": 66.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "1DB2091B5E1CF74735F3209C439716DB38590708943D756E6B8A5DFB3994155B",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:12:35.129291+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-cold-baseline-3",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "log_sha256": "62B9DED6CDD9C8E6DAC61EEA7CCFDBD974F80E66CDACDB259AE4188C9C6D0058",
+          "screenshots": {
+            "CUSA00004_20261016_141156_554_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_141231_568_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        },
+        {
+          "label": "title-control-warm-baseline-1",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "warm",
+          "repeat": 1,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2054,
+            "measured_seconds": 29.993982,
+            "average_fps": 68.4804038356761,
+            "low1_fps": 45.515035133272356,
+            "median_ms": 13.9925,
+            "p95_ms": 20.75905,
+            "p99_ms": 21.45747,
+            "worst_ms": 28.017,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 28.20725,
+              "minimum": 25.819,
+              "maximum": 32.623
+            },
+            "busiest_thread_percent": {
+              "mean": 97.68414285714286,
+              "minimum": 85.287,
+              "maximum": 100.888
+            },
+            "nvidia_gpu_percent": {
+              "mean": 53.07142857142857,
+              "minimum": 50.0,
+              "maximum": 56.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4512.285714285715,
+              "minimum": 4512.0,
+              "maximum": 4520.0
+            },
+            "working_set_mb": {
+              "mean": 5265.730571428571,
+              "minimum": 5264.695,
+              "maximum": 5272.59
+            },
+            "nvidia_power_w": {
+              "mean": 47.666071428571435,
+              "minimum": 44.88,
+              "maximum": 53.76
+            },
+            "nvidia_temp_c": {
+              "mean": 64.5,
+              "minimum": 64.0,
+              "maximum": 66.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "454EB677035C0AEC4192B9D516514D9099599332E5FCAE8D4FFDEF26A2F0ED15",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:13:53.761610+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-warm-baseline-1",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "65D7B50A0DE914E904D323A6E0512F3F7EB3BE377559DE314D62BB0A226B0361",
+          "screenshots": {
+            "CUSA00004_20261016_141315_484_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_141350_448_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        },
+        {
+          "label": "title-control-warm-baseline-2",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "warm",
+          "repeat": 2,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2034,
+            "measured_seconds": 29.988034,
+            "average_fps": 67.82705395091922,
+            "low1_fps": 45.04427208456312,
+            "median_ms": 14.0135,
+            "p95_ms": 20.8437,
+            "p99_ms": 21.49273,
+            "worst_ms": 27.337,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.590392857142856,
+              "minimum": 25.811,
+              "maximum": 31.046
+            },
+            "busiest_thread_percent": {
+              "mean": 98.30325,
+              "minimum": 89.595,
+              "maximum": 101.06
+            },
+            "nvidia_gpu_percent": {
+              "mean": 54.642857142857146,
+              "minimum": 51.0,
+              "maximum": 57.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4512.0,
+              "minimum": 4512.0,
+              "maximum": 4512.0
+            },
+            "working_set_mb": {
+              "mean": 5252.669285714285,
+              "minimum": 5251.574,
+              "maximum": 5259.469
+            },
+            "nvidia_power_w": {
+              "mean": 49.13535714285714,
+              "minimum": 43.09,
+              "maximum": 68.6
+            },
+            "nvidia_temp_c": {
+              "mean": 65.17857142857143,
+              "minimum": 63.0,
+              "maximum": 66.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "60E450456E7D2CE1EEF3CE7ED6BC2E26C464F4989008BCF5153691F824115A10",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:15:12.217473+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-warm-baseline-2",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "8D1B80CBB26665389A480EDF79A1684796B0FB3BCF910D8804E764E01B2F5CE7",
+          "screenshots": {
+            "CUSA00004_20261016_141433_482_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_141508_506_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        },
+        {
+          "label": "title-control-warm-baseline-3",
+          "scene": "title-control",
+          "variant": "baseline",
+          "cache": "warm",
+          "repeat": 3,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2061,
+            "measured_seconds": 29.98085,
+            "average_fps": 68.74388151103122,
+            "low1_fps": 42.72321864522639,
+            "median_ms": 13.984,
+            "p95_ms": 20.894,
+            "p99_ms": 21.6122,
+            "worst_ms": 28.018,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.870035714285713,
+              "minimum": 22.579,
+              "maximum": 31.269
+            },
+            "busiest_thread_percent": {
+              "mean": 97.19449999999999,
+              "minimum": 88.258,
+              "maximum": 100.167
+            },
+            "nvidia_gpu_percent": {
+              "mean": 52.357142857142854,
+              "minimum": 38.0,
+              "maximum": 57.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4512.0,
+              "minimum": 4512.0,
+              "maximum": 4512.0
+            },
+            "working_set_mb": {
+              "mean": 5249.487928571429,
+              "minimum": 5248.336,
+              "maximum": 5257.227
+            },
+            "nvidia_power_w": {
+              "mean": 48.24035714285714,
+              "minimum": 42.04,
+              "maximum": 50.51
+            },
+            "nvidia_temp_c": {
+              "mean": 64.96428571428571,
+              "minimum": 64.0,
+              "maximum": 66.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "frame_times_sha256": "E9B0BC58223305A97022AF963713652B5624584B67CF4030F0158D65ACC3B1A5",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:16:30.992082+00:00",
+          "evidence_directory": "runtime/Build/w3-20261016/control/title-control-warm-baseline-3",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": null,
+            "fast_draws_per_3s": null,
+            "render_thread_cpu_ms_per_3s": null,
+            "direct_pipeline_ms_per_3s": null,
+            "direct_resources_ms_per_3s": null,
+            "direct_descriptors_ms_per_3s": null
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "5B5A6CE3AD954659B98E166B93E82F247D5C7BE851CCB907CB2518B83741F33D",
+          "screenshots": {
+            "CUSA00004_20261016_141552_127_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_141627_138_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e",
+          "telemetry_exit_code": null
+        }
+      ],
+      "emulator_settings_by_sha256": {
+        "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e": {
+          "Audio": {
+            "audio_backend": 0,
+            "openal_hrtf": 0,
+            "openal_main_output_device": "Default Device",
+            "openal_mic_device": "Default Device",
+            "openal_output_mode": 0,
+            "openal_padSpk_output_device": "Default Device",
+            "sdl_main_output_device": "Default Device",
+            "sdl_mic_device": "Default Device",
+            "sdl_padSpk_output_device": "Default Device"
+          },
+          "Debug": {
+            "config_version": "1e2a7566b34b831250a16a471811c1e7bc54ecbb",
+            "debug_dump": false,
+            "shader_collect": false
+          },
+          "GPU": {
+            "copy_gpu_buffers": false,
+            "direct_memory_access_enabled": false,
+            "dump_shaders": false,
+            "fsr_enabled": false,
+            "full_screen": false,
+            "full_screen_mode": "Fullscreen (Borderless)",
+            "hdr_allowed": false,
+            "inline_fetch_shader": false,
+            "internal_screen_height": 1080,
+            "internal_screen_width": 1920,
+            "null_gpu": false,
+            "patch_shaders": false,
+            "present_mode": "Immediate",
+            "rcas_attenuation": 250,
+            "rcas_enabled": true,
+            "readback_linear_images_enabled": false,
+            "readbacks_mode": 0,
+            "userfaultfd": false,
+            "vblank_frequency": 144,
+            "window_height": 1080,
+            "window_width": 1920
+          },
+          "General": {
+            "addon_install_dir": "",
+            "big_picture_folder_depth": 2,
+            "big_picture_scale": 1000,
+            "console_language": 1,
+            "dev_kit_mode": false,
+            "discord_rpc_enabled": false,
+            "extra_dmem_in_mbytes": 0,
+            "extra_fmem_in_mbytes": 0,
+            "font_dir": "",
+            "home_dir": "",
+            "install_dirs": [],
+            "neo_mode": false,
+            "redzone_patches": true,
+            "show_fps_counter": false,
+            "show_splash": false,
+            "sys_modules_dir": "",
+            "trophy_notification_duration": 6.0,
+            "trophy_notification_side": "right",
+            "trophy_popup_disabled": false,
+            "volume_slider": 100
+          },
+          "Input": {
+            "background_controller_input": false,
+            "camera_id": -1,
+            "cursor_hide_timeout": 5,
+            "cursor_state": 1,
+            "default_controller_id": "",
+            "ime_accessibility_enabled": false,
+            "ime_url_mail_short_panel": false,
+            "is_circle_enter": false,
+            "motion_controls_enabled": true,
+            "special_pad_class": 1,
+            "usb_device_backend": 0,
+            "use_keyboard_as_keyboard": false,
+            "use_mice_as_mice": false,
+            "use_special_pad": false,
+            "use_unified_input_config": true
+          },
+          "Log": {
+            "append": false,
+            "enable": true,
+            "filter": "",
+            "flush_level": "",
+            "max_skip_duration": 5000,
+            "separate": false,
+            "size_limit": 104857600,
+            "skip_duplicate": true,
+            "sync": true,
+            "type": "wincolor"
+          },
+          "Network": {
+            "connected_to_network": false,
+            "disable_https": false,
+            "enable_upnp": true,
+            "p2p_port": 3658,
+            "shad_net_enabled": false,
+            "shadnet_server": "srv.shadps4.net:31313",
+            "shadnet_webapi_server": "http://srv.shadps4.net:31315",
+            "signaling_info": ""
+          },
+          "Vulkan": {
+            "gpu_id": 1,
+            "pipeline_cache_archived": false,
+            "pipeline_cache_enabled": true,
+            "renderdoc_enabled": false,
+            "vkcrash_diagnostic_enabled": false,
+            "vkguest_markers": false,
+            "vkhost_markers": false,
+            "vkvalidation_core_enabled": true,
+            "vkvalidation_enabled": false,
+            "vkvalidation_gpu_enabled": false,
+            "vkvalidation_sync_enabled": false
+          }
+        }
+      }
+    },
+    {
+      "evidence_directory": "runtime/Build/w4-20261016/fastpath",
+      "machine_id": "d5c054d629a9",
+      "matrix": {
+        "scenes": [
+          {
+            "name": "title-control",
+            "description": "Existing direct-draw fast path A/B in a static control scene; no gameplay conclusion",
+            "warmup_seconds": 35,
+            "duration_seconds": 30,
+            "boot": [],
+            "route": []
+          }
+        ],
+        "variants": [
+          {
+            "name": "off",
+            "environment": {
+              "I3_NO_DRAW_FASTPATH": "1"
+            }
+          },
+          {
+            "name": "on",
+            "environment": {}
+          }
+        ]
+      },
+      "build_info": {
+        "mainCommit": "4c3433f74710f1725d0aa2ff7b7d4be19d06e791",
+        "runtimeCommit": "f88d3b6f331272ce854bda5875c11386b180f94f",
+        "mainChanges": [],
+        "runtimeChanges": [],
+        "configuration": "RelWithDebInfo",
+        "lto": false,
+        "compiler": [
+          "clang version 19.1.5",
+          "Target: x86_64-pc-windows-msvc",
+          "Thread model: posix",
+          "InstalledDir: C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin"
+        ],
+        "builtAtUtc": "2026-10-16T11:56:17.4029925Z",
+        "executableSha256": "DC983DB65BE1F9585E183EA2D1F5B6F59C673728FC8E264A015500CA1F729EE0"
+      },
+      "hardware": {
+        "ramBytes": 31879192576,
+        "cpu": [
+          {
+            "Name": "AMD Ryzen 5 7640HS w/ Radeon 760M Graphics     ",
+            "NumberOfCores": 6,
+            "NumberOfLogicalProcessors": 12
+          }
+        ],
+        "os": {
+          "Caption": "Microsoft Windows 11 Pro",
+          "Version": "10.0.26200",
+          "BuildNumber": "26200"
+        },
+        "gpu": [
+          {
+            "Name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+            "DriverVersion": "32.0.16.1742"
+          }
+        ],
+        "status": "available"
+      },
+      "harness_manifest": {
+        "benchmark.py": "B96B7C728B20C7BBBBEC0617667208B638269850DF4904A2437535CF1DEBC960",
+        "collect-vulkan-diagnostics.ps1": "B45E2F286575E38F3D4C8347791285D8F4B45313FFC72A75228CE5B1E570F480",
+        "perfsample.ps1": "73C8D1BD37CA4D09F4BC589092C86A38245997423A367A474FD3D832F1851CAA",
+        "symprof.py": "A52E66A79F47C97A997C9173524E04F6F2C6D59201ACB5E28A6D87FC792171C2"
+      },
+      "summary": {
+        "groups": [
+          {
+            "scene": "title-control",
+            "cache": "warm",
+            "variant": "off",
+            "repeats": 3,
+            "average_fps": {
+              "mean": 54.42853876196387,
+              "minimum": 50.9801595034646,
+              "maximum": 58.363777991129446,
+              "stdev": 3.715808117506127
+            },
+            "low1_fps": {
+              "mean": 28.637691907015135,
+              "minimum": 24.75197745094854,
+              "maximum": 30.72983354673496,
+              "stdev": 3.368437094727504
+            },
+            "median_ms": {
+              "mean": 16.922,
+              "minimum": 14.643,
+              "maximum": 20.39,
+              "stdev": 3.0524241186309613
+            },
+            "p95_ms": {
+              "mean": 25.115166666666667,
+              "minimum": 21.8646,
+              "maximum": 31.4757,
+              "stdev": 5.508832027148163
+            },
+            "p99_ms": {
+              "mean": 30.521673333333336,
+              "minimum": 28.184019999999997,
+              "maximum": 32.04496,
+              "stdev": 2.055263783978433
+            },
+            "worst_ms": {
+              "mean": 73.82766666666667,
+              "minimum": 41.717,
+              "maximum": 111.113,
+              "stdev": 34.9861984978839
+            }
+          },
+          {
+            "scene": "title-control",
+            "cache": "warm",
+            "variant": "on",
+            "repeats": 3,
+            "average_fps": {
+              "mean": 63.9459362811092,
+              "minimum": 61.13881636857784,
+              "maximum": 68.46401254511366,
+              "stdev": 3.950968676624553
+            },
+            "low1_fps": {
+              "mean": 35.58661762706104,
+              "minimum": 29.48520385914763,
+              "maximum": 41.400683702719434,
+              "stdev": 5.9629348057667615
+            },
+            "median_ms": {
+              "mean": 14.143166666666668,
+              "minimum": 13.973500000000001,
+              "maximum": 14.255,
+              "stdev": 0.14939572729276168
+            },
+            "p95_ms": {
+              "mean": 21.264333333333333,
+              "minimum": 20.8527,
+              "maximum": 21.6297,
+              "stdev": 0.39056075498356696
+            },
+            "p99_ms": {
+              "mean": 24.48972666666667,
+              "minimum": 21.477,
+              "maximum": 29.881980000000016,
+              "stdev": 4.680548319175162
+            },
+            "worst_ms": {
+              "mean": 43.916666666666664,
+              "minimum": 34.667,
+              "maximum": 55.512,
+              "stdev": 10.618621395140394
+            }
+          }
+        ],
+        "comparisons": [
+          {
+            "scene": "title-control",
+            "cache": "warm",
+            "average_fps_delta_percent": 17.486042682072412,
+            "observed_within_variant_range_percent": 13.565711399962696,
+            "clears_observed_range": true,
+            "minimum_repeats_met": true,
+            "acceptance": "requires representative scenes, correctness and second-PC validation"
+          }
+        ],
+        "minimum_repeats_met": true,
+        "percentile_method": "linear interpolation at (N-1)*p",
+        "low1_method": "1000 / mean(slowest ceil(N*0.01) intervals in milliseconds)",
+        "regression_threshold": "not fixed; observed repeat range is descriptive, not statistical proof",
+        "second_pc": "unavailable",
+        "correctness": "See per-run visual reviews; no full gameplay acceptance",
+        "visual_reviews": {
+          "title-control-warm-off-1": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-off-2": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-off-3": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-on-1": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-on-2": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "title-control-warm-on-3": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified"
+        },
+        "excluded_runs": []
+      },
+      "runs": [
+        {
+          "label": "title-control-warm-off-1",
+          "scene": "title-control",
+          "variant": "off",
+          "cache": "warm",
+          "repeat": 1,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 1615,
+            "measured_seconds": 29.939743,
+            "average_fps": 53.94167879129757,
+            "low1_fps": 30.431264723361902,
+            "median_ms": 20.39,
+            "p95_ms": 22.0052,
+            "p99_ms": 28.184019999999997,
+            "worst_ms": 68.653,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 26.863785714285715,
+              "minimum": 16.117,
+              "maximum": 29.965
+            },
+            "busiest_thread_percent": {
+              "mean": 96.01075,
+              "minimum": 85.627,
+              "maximum": 101.038
+            },
+            "nvidia_gpu_percent": {
+              "mean": 46.214285714285715,
+              "minimum": 29.0,
+              "maximum": 52.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4525.5,
+              "minimum": 4518.0,
+              "maximum": 4534.0
+            },
+            "working_set_mb": {
+              "mean": 5246.341785714286,
+              "minimum": 5245.234,
+              "maximum": 5254.145
+            },
+            "nvidia_power_w": {
+              "mean": 40.658928571428575,
+              "minimum": 27.06,
+              "maximum": 44.29
+            },
+            "nvidia_temp_c": {
+              "mean": 60.92857142857143,
+              "minimum": 57.0,
+              "maximum": 63.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "telemetry_exit_code": 0,
+          "log_window_byte_offsets": [
+            188416,
+            221184
+          ],
+          "profile_snapshots_complete": null,
+          "frame_times_sha256": "F9144299CEB3A2135DBD0FF84E1A0D26EE158842211BF405E54313D60F348914",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:25:32.922139+00:00",
+          "evidence_directory": "runtime/Build/w4-20261016/fastpath/title-control-warm-off-1",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "I3_NO_DRAW_FASTPATH": "1",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": {
+              "intervals": 11,
+              "mean": 278239.8181818182,
+              "minimum": 156271,
+              "maximum": 318267
+            },
+            "fast_draws_per_3s": {
+              "intervals": 11,
+              "mean": 0.0,
+              "minimum": 0,
+              "maximum": 0
+            },
+            "render_thread_cpu_ms_per_3s": {
+              "intervals": 11,
+              "mean": 2744.2727272727275,
+              "minimum": 1312,
+              "maximum": 2969
+            },
+            "direct_pipeline_ms_per_3s": {
+              "intervals": 11,
+              "mean": 352.72727272727275,
+              "minimum": 186,
+              "maximum": 386
+            },
+            "direct_resources_ms_per_3s": {
+              "intervals": 11,
+              "mean": 657.9090909090909,
+              "minimum": 337,
+              "maximum": 712
+            },
+            "direct_descriptors_ms_per_3s": {
+              "intervals": 22,
+              "mean": 32.95454545454545,
+              "minimum": 0,
+              "maximum": 72
+            }
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "3FC697EE89FD541378B81DCD623C74BA66085130FC79BC44B52BA410B3B0AD61",
+          "screenshots": {
+            "CUSA00004_20261016_142454_177_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_142529_168_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e"
+        },
+        {
+          "label": "title-control-warm-off-2",
+          "scene": "title-control",
+          "variant": "off",
+          "cache": "warm",
+          "repeat": 2,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 1527,
+            "measured_seconds": 29.952829,
+            "average_fps": 50.9801595034646,
+            "low1_fps": 24.75197745094854,
+            "median_ms": 15.733,
+            "p95_ms": 31.4757,
+            "p99_ms": 32.04496,
+            "worst_ms": 111.113,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 27,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 26.39174074074074,
+              "minimum": 14.958,
+              "maximum": 28.854
+            },
+            "busiest_thread_percent": {
+              "mean": 95.44918518518519,
+              "minimum": 86.807,
+              "maximum": 100.797
+            },
+            "nvidia_gpu_percent": {
+              "mean": 45.25925925925926,
+              "minimum": 37.0,
+              "maximum": 70.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4527.0,
+              "minimum": 4527.0,
+              "maximum": 4527.0
+            },
+            "working_set_mb": {
+              "mean": 5242.508888888889,
+              "minimum": 5240.813,
+              "maximum": 5254.629
+            },
+            "nvidia_power_w": {
+              "mean": 39.57296296296296,
+              "minimum": 13.87,
+              "maximum": 46.11
+            },
+            "nvidia_temp_c": {
+              "mean": 62.111111111111114,
+              "minimum": 57.0,
+              "maximum": 64.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "telemetry_exit_code": 0,
+          "log_window_byte_offsets": [
+            188416,
+            221184
+          ],
+          "profile_snapshots_complete": null,
+          "frame_times_sha256": "ED9728628319048BFE3A0B8B58E2B2573F43D8BBED932A0CA9B9CA1A430AD5BB",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:29:42.889387+00:00",
+          "evidence_directory": "runtime/Build/w4-20261016/fastpath/title-control-warm-off-2",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "I3_NO_DRAW_FASTPATH": "1",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": {
+              "intervals": 11,
+              "mean": 253045.45454545456,
+              "minimum": 101707,
+              "maximum": 322903
+            },
+            "fast_draws_per_3s": {
+              "intervals": 11,
+              "mean": 0.0,
+              "minimum": 0,
+              "maximum": 0
+            },
+            "render_thread_cpu_ms_per_3s": {
+              "intervals": 11,
+              "mean": 2620.7272727272725,
+              "minimum": 797,
+              "maximum": 2938
+            },
+            "direct_pipeline_ms_per_3s": {
+              "intervals": 11,
+              "mean": 359.09090909090907,
+              "minimum": 145,
+              "maximum": 399
+            },
+            "direct_resources_ms_per_3s": {
+              "intervals": 11,
+              "mean": 648.0,
+              "minimum": 259,
+              "maximum": 721
+            },
+            "direct_descriptors_ms_per_3s": {
+              "intervals": 22,
+              "mean": 33.04545454545455,
+              "minimum": 0,
+              "maximum": 73
+            }
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "CEA8B006F1BCF6915F42D472B3F54939D8BD5448BE63E0A212C0AA5C6E969B79",
+          "screenshots": {
+            "CUSA00004_20261016_142903_735_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_142938_746_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e"
+        },
+        {
+          "label": "title-control-warm-off-3",
+          "scene": "title-control",
+          "variant": "off",
+          "cache": "warm",
+          "repeat": 3,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 1749,
+            "measured_seconds": 29.967217,
+            "average_fps": 58.363777991129446,
+            "low1_fps": 30.72983354673496,
+            "median_ms": 14.643,
+            "p95_ms": 21.8646,
+            "p99_ms": 31.33604,
+            "worst_ms": 41.717,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.65542857142857,
+              "minimum": 24.206,
+              "maximum": 31.884
+            },
+            "busiest_thread_percent": {
+              "mean": 95.58603571428571,
+              "minimum": 86.963,
+              "maximum": 99.257
+            },
+            "nvidia_gpu_percent": {
+              "mean": 50.392857142857146,
+              "minimum": 37.0,
+              "maximum": 61.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4527.0,
+              "minimum": 4527.0,
+              "maximum": 4527.0
+            },
+            "working_set_mb": {
+              "mean": 5248.5895,
+              "minimum": 5247.586,
+              "maximum": 5256.496
+            },
+            "nvidia_power_w": {
+              "mean": 41.00928571428572,
+              "minimum": 21.44,
+              "maximum": 47.38
+            },
+            "nvidia_temp_c": {
+              "mean": 64.14285714285714,
+              "minimum": 63.0,
+              "maximum": 65.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "telemetry_exit_code": 0,
+          "log_window_byte_offsets": [
+            188416,
+            217088
+          ],
+          "profile_snapshots_complete": null,
+          "frame_times_sha256": "B7DA27773625F75FD91CFB3B81D2BFFF40270CC1AFE148320C34080C9E269B58",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:31:01.988955+00:00",
+          "evidence_directory": "runtime/Build/w4-20261016/fastpath/title-control-warm-off-3",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "I3_NO_DRAW_FASTPATH": "1",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": {
+              "intervals": 10,
+              "mean": 310772.1,
+              "minimum": 249329,
+              "maximum": 328975
+            },
+            "fast_draws_per_3s": {
+              "intervals": 10,
+              "mean": 0.0,
+              "minimum": 0,
+              "maximum": 0
+            },
+            "render_thread_cpu_ms_per_3s": {
+              "intervals": 9,
+              "mean": 2868.1111111111113,
+              "minimum": 2719,
+              "maximum": 2922
+            },
+            "direct_pipeline_ms_per_3s": {
+              "intervals": 10,
+              "mean": 359.2,
+              "minimum": 334,
+              "maximum": 394
+            },
+            "direct_resources_ms_per_3s": {
+              "intervals": 10,
+              "mean": 656.0,
+              "minimum": 615,
+              "maximum": 694
+            },
+            "direct_descriptors_ms_per_3s": {
+              "intervals": 20,
+              "mean": 33.85,
+              "minimum": 0,
+              "maximum": 69
+            }
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "BF78F8DA34193986ED18ECE1261EBC6BE281A741103B9BE1FCE063A251D38184",
+          "screenshots": {
+            "CUSA00004_20261016_143023_414_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_143058_425_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e"
+        },
+        {
+          "label": "title-control-warm-on-1",
+          "scene": "title-control",
+          "variant": "on",
+          "cache": "warm",
+          "repeat": 1,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 2054,
+            "measured_seconds": 30.001163000000002,
+            "average_fps": 68.46401254511366,
+            "low1_fps": 41.400683702719434,
+            "median_ms": 13.973500000000001,
+            "p95_ms": 20.8527,
+            "p99_ms": 21.477,
+            "worst_ms": 34.667,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.927,
+              "minimum": 25.47,
+              "maximum": 30.469
+            },
+            "busiest_thread_percent": {
+              "mean": 95.92792857142857,
+              "minimum": 87.434,
+              "maximum": 100.224
+            },
+            "nvidia_gpu_percent": {
+              "mean": 55.57142857142857,
+              "minimum": 51.0,
+              "maximum": 63.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4532.0,
+              "minimum": 4532.0,
+              "maximum": 4532.0
+            },
+            "working_set_mb": {
+              "mean": 5062.673892857143,
+              "minimum": 5061.406,
+              "maximum": 5070.293
+            },
+            "nvidia_power_w": {
+              "mean": 46.807500000000005,
+              "minimum": 26.17,
+              "maximum": 49.3
+            },
+            "nvidia_temp_c": {
+              "mean": 64.42857142857143,
+              "minimum": 63.0,
+              "maximum": 65.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "telemetry_exit_code": 0,
+          "log_window_byte_offsets": [
+            217088,
+            245760
+          ],
+          "profile_snapshots_complete": null,
+          "frame_times_sha256": "3989E62B9C62C955104F44EC884FC2DFC88FD2E08FF43E92F0F99337B6EBAF5A",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:26:52.323985+00:00",
+          "evidence_directory": "runtime/Build/w4-20261016/fastpath/title-control-warm-on-1",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": {
+              "intervals": 10,
+              "mean": 363605.8,
+              "minimum": 343730,
+              "maximum": 371317
+            },
+            "fast_draws_per_3s": {
+              "intervals": 10,
+              "mean": 192640.4,
+              "minimum": 182052,
+              "maximum": 196769
+            },
+            "render_thread_cpu_ms_per_3s": {
+              "intervals": 10,
+              "mean": 2871.9,
+              "minimum": 2734,
+              "maximum": 2953
+            },
+            "direct_pipeline_ms_per_3s": {
+              "intervals": 9,
+              "mean": 368.77777777777777,
+              "minimum": 359,
+              "maximum": 373
+            },
+            "direct_resources_ms_per_3s": {
+              "intervals": 9,
+              "mean": 697.8888888888889,
+              "minimum": 673,
+              "maximum": 715
+            },
+            "direct_descriptors_ms_per_3s": {
+              "intervals": 18,
+              "mean": 36.77777777777778,
+              "minimum": 0,
+              "maximum": 75
+            }
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "4ACCF454F355F09137848735BF2BA6F331EF539790FB167C59E21FD63BE4428B",
+          "screenshots": {
+            "CUSA00004_20261016_142613_771_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_142648_818_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e"
+        },
+        {
+          "label": "title-control-warm-on-2",
+          "scene": "title-control",
+          "variant": "on",
+          "cache": "warm",
+          "repeat": 2,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 1827,
+            "measured_seconds": 29.882816,
+            "average_fps": 61.13881636857784,
+            "low1_fps": 29.48520385914763,
+            "median_ms": 14.255,
+            "p95_ms": 21.6297,
+            "p99_ms": 29.881980000000016,
+            "worst_ms": 55.512,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 27,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 26.16922222222222,
+              "minimum": 15.79,
+              "maximum": 29.852
+            },
+            "busiest_thread_percent": {
+              "mean": 95.29703703703704,
+              "minimum": 83.722,
+              "maximum": 99.092
+            },
+            "nvidia_gpu_percent": {
+              "mean": 51.925925925925924,
+              "minimum": 21.0,
+              "maximum": 58.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4532.2962962962965,
+              "minimum": 4532.0,
+              "maximum": 4540.0
+            },
+            "working_set_mb": {
+              "mean": 5248.727555555555,
+              "minimum": 5247.68,
+              "maximum": 5256.59
+            },
+            "nvidia_power_w": {
+              "mean": 44.51037037037037,
+              "minimum": 17.53,
+              "maximum": 49.43
+            },
+            "nvidia_temp_c": {
+              "mean": 63.96296296296296,
+              "minimum": 58.0,
+              "maximum": 65.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "telemetry_exit_code": 0,
+          "log_window_byte_offsets": [
+            188416,
+            221184
+          ],
+          "profile_snapshots_complete": null,
+          "frame_times_sha256": "5C7FA395FC2564084347C0B2905A5F4CA4D3EC3B14D1044D3F840362F6BF629D",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:28:21.011017+00:00",
+          "evidence_directory": "runtime/Build/w4-20261016/fastpath/title-control-warm-on-2",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": {
+              "intervals": 11,
+              "mean": 314334.9090909091,
+              "minimum": 159487,
+              "maximum": 353625
+            },
+            "fast_draws_per_3s": {
+              "intervals": 11,
+              "mean": 166552.81818181818,
+              "minimum": 84612,
+              "maximum": 187372
+            },
+            "render_thread_cpu_ms_per_3s": {
+              "intervals": 11,
+              "mean": 2707.3636363636365,
+              "minimum": 1453,
+              "maximum": 2938
+            },
+            "direct_pipeline_ms_per_3s": {
+              "intervals": 10,
+              "mean": 351.8,
+              "minimum": 171,
+              "maximum": 385
+            },
+            "direct_resources_ms_per_3s": {
+              "intervals": 10,
+              "mean": 661.2,
+              "minimum": 314,
+              "maximum": 730
+            },
+            "direct_descriptors_ms_per_3s": {
+              "intervals": 21,
+              "mean": 31.523809523809526,
+              "minimum": 0,
+              "maximum": 73
+            }
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "455F2899F1AFC6FDA87173A1512B7D0E6E0EB8395A0984C7AEF7CE3A857434AF",
+          "screenshots": {
+            "CUSA00004_20261016_142732_845_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_142807_812_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e"
+        },
+        {
+          "label": "title-control-warm-on-3",
+          "scene": "title-control",
+          "variant": "on",
+          "cache": "warm",
+          "repeat": 3,
+          "primer": false,
+          "profile_enabled": false,
+          "status": "captured",
+          "issues": [],
+          "exit_code": 0,
+          "metrics": {
+            "frames": 1865,
+            "measured_seconds": 29.96707,
+            "average_fps": 62.23497992963609,
+            "low1_fps": 35.873965319316056,
+            "median_ms": 14.201,
+            "p95_ms": 21.3106,
+            "p99_ms": 22.110199999999995,
+            "worst_ms": 41.571,
+            "discarded_boundary_frames": 1
+          },
+          "telemetry": {
+            "samples": 28,
+            "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+            "process_cpu_percent": {
+              "mean": 27.784107142857145,
+              "minimum": 24.641,
+              "maximum": 30.454
+            },
+            "busiest_thread_percent": {
+              "mean": 96.29214285714285,
+              "minimum": 89.875,
+              "maximum": 100.613
+            },
+            "nvidia_gpu_percent": {
+              "mean": 53.892857142857146,
+              "minimum": 44.0,
+              "maximum": 62.0
+            },
+            "nvidia_vram_used_mb": {
+              "mean": 4518.285714285715,
+              "minimum": 4518.0,
+              "maximum": 4526.0
+            },
+            "working_set_mb": {
+              "mean": 5251.679892857143,
+              "minimum": 5250.465,
+              "maximum": 5259.332
+            },
+            "nvidia_power_w": {
+              "mean": 44.901785714285715,
+              "minimum": 24.51,
+              "maximum": 49.75
+            },
+            "nvidia_temp_c": {
+              "mean": 65.03571428571429,
+              "minimum": 64.0,
+              "maximum": 66.0
+            },
+            "gpu_frame_time_ms": null
+          },
+          "telemetry_exit_code": 0,
+          "log_window_byte_offsets": [
+            188416,
+            217088
+          ],
+          "profile_snapshots_complete": null,
+          "frame_times_sha256": "AE2C4BF22FB43BF31AC8A39058272A6500D7013E8F2545BE88537E62BCB1FB41",
+          "image_load_base": 123145302310912,
+          "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+          "finished_at_utc": "2026-10-16T12:32:21.274613+00:00",
+          "evidence_directory": "runtime/Build/w4-20261016/fastpath/title-control-warm-on-3",
+          "environment": {
+            "SOTC_HEADLESS": "1",
+            "I3_SKIP_FIRST_RUN": "1",
+            "SOTC_SCRIPT_BOOT_MS": "0",
+            "SDL_AUDIODRIVER": "dummy",
+            "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+          },
+          "seed_manifest_sha256": "20ACD939FA39583D6B905313015ECF2ECA297308945ED5B8ABADC0B158B21CF2",
+          "renderer_counters": {
+            "drawn_per_3s": {
+              "intervals": 10,
+              "mean": 333908.4,
+              "minimum": 299222,
+              "maximum": 351113
+            },
+            "fast_draws_per_3s": {
+              "intervals": 10,
+              "mean": 176907.6,
+              "minimum": 158511,
+              "maximum": 186022
+            },
+            "render_thread_cpu_ms_per_3s": {
+              "intervals": 9,
+              "mean": 2881.8888888888887,
+              "minimum": 2734,
+              "maximum": 2984
+            },
+            "direct_pipeline_ms_per_3s": {
+              "intervals": 10,
+              "mean": 360.7,
+              "minimum": 335,
+              "maximum": 381
+            },
+            "direct_resources_ms_per_3s": {
+              "intervals": 10,
+              "mean": 683.1,
+              "minimum": 643,
+              "maximum": 713
+            },
+            "direct_descriptors_ms_per_3s": {
+              "intervals": 20,
+              "mean": 34.8,
+              "minimum": 0,
+              "maximum": 71
+            }
+          },
+          "game": {
+            "title_id": "CUSA00004",
+            "app_ver": "01.07",
+            "executable_sha256": "2D1CA79630D7BBE6FA29575F59AA7996D43071D74AC8E4F7D40137967D9039AB"
+          },
+          "cache_seed_manifest_sha256": "523ec7073eb0a9a2b90fa09ec4d940bcfa29b14416755ec284a6aeebd3e8ad3e",
+          "log_sha256": "81B80B0094B5FF8A7019853B729BEDEC4A5AEA3DC54DF89FBA00F70241E0679A",
+          "screenshots": {
+            "CUSA00004_20261016_143142_714_game_000000.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            },
+            "CUSA00004_20261016_143217_716_game_000001.png": {
+              "sha256": "AEDB76FA6C7E8543CBC7E16332269E6FB2B4FB6024B02FCA13507FB93AB8B866"
+            }
+          },
+          "emulator_settings_sha256": "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e"
+        }
+      ],
+      "emulator_settings_by_sha256": {
+        "254221f1f6560c2b0bb25f5c69ebbbbfa10941b7b2a41dc8eb40a1227908444e": {
+          "Audio": {
+            "audio_backend": 0,
+            "openal_hrtf": 0,
+            "openal_main_output_device": "Default Device",
+            "openal_mic_device": "Default Device",
+            "openal_output_mode": 0,
+            "openal_padSpk_output_device": "Default Device",
+            "sdl_main_output_device": "Default Device",
+            "sdl_mic_device": "Default Device",
+            "sdl_padSpk_output_device": "Default Device"
+          },
+          "Debug": {
+            "config_version": "1e2a7566b34b831250a16a471811c1e7bc54ecbb",
+            "debug_dump": false,
+            "shader_collect": false
+          },
+          "GPU": {
+            "copy_gpu_buffers": false,
+            "direct_memory_access_enabled": false,
+            "dump_shaders": false,
+            "fsr_enabled": false,
+            "full_screen": false,
+            "full_screen_mode": "Fullscreen (Borderless)",
+            "hdr_allowed": false,
+            "inline_fetch_shader": false,
+            "internal_screen_height": 1080,
+            "internal_screen_width": 1920,
+            "null_gpu": false,
+            "patch_shaders": false,
+            "present_mode": "Immediate",
+            "rcas_attenuation": 250,
+            "rcas_enabled": true,
+            "readback_linear_images_enabled": false,
+            "readbacks_mode": 0,
+            "userfaultfd": false,
+            "vblank_frequency": 144,
+            "window_height": 1080,
+            "window_width": 1920
+          },
+          "General": {
+            "addon_install_dir": "",
+            "big_picture_folder_depth": 2,
+            "big_picture_scale": 1000,
+            "console_language": 1,
+            "dev_kit_mode": false,
+            "discord_rpc_enabled": false,
+            "extra_dmem_in_mbytes": 0,
+            "extra_fmem_in_mbytes": 0,
+            "font_dir": "",
+            "home_dir": "",
+            "install_dirs": [],
+            "neo_mode": false,
+            "redzone_patches": true,
+            "show_fps_counter": false,
+            "show_splash": false,
+            "sys_modules_dir": "",
+            "trophy_notification_duration": 6.0,
+            "trophy_notification_side": "right",
+            "trophy_popup_disabled": false,
+            "volume_slider": 100
+          },
+          "Input": {
+            "background_controller_input": false,
+            "camera_id": -1,
+            "cursor_hide_timeout": 5,
+            "cursor_state": 1,
+            "default_controller_id": "",
+            "ime_accessibility_enabled": false,
+            "ime_url_mail_short_panel": false,
+            "is_circle_enter": false,
+            "motion_controls_enabled": true,
+            "special_pad_class": 1,
+            "usb_device_backend": 0,
+            "use_keyboard_as_keyboard": false,
+            "use_mice_as_mice": false,
+            "use_special_pad": false,
+            "use_unified_input_config": true
+          },
+          "Log": {
+            "append": false,
+            "enable": true,
+            "filter": "",
+            "flush_level": "",
+            "max_skip_duration": 5000,
+            "separate": false,
+            "size_limit": 104857600,
+            "skip_duplicate": true,
+            "sync": true,
+            "type": "wincolor"
+          },
+          "Network": {
+            "connected_to_network": false,
+            "disable_https": false,
+            "enable_upnp": true,
+            "p2p_port": 3658,
+            "shad_net_enabled": false,
+            "shadnet_server": "srv.shadps4.net:31313",
+            "shadnet_webapi_server": "http://srv.shadps4.net:31315",
+            "signaling_info": ""
+          },
+          "Vulkan": {
+            "gpu_id": 1,
+            "pipeline_cache_archived": false,
+            "pipeline_cache_enabled": true,
+            "renderdoc_enabled": false,
+            "vkcrash_diagnostic_enabled": false,
+            "vkguest_markers": false,
+            "vkhost_markers": false,
+            "vkvalidation_core_enabled": true,
+            "vkvalidation_enabled": false,
+            "vkvalidation_gpu_enabled": false,
+            "vkvalidation_sync_enabled": false
+          }
+        }
+      }
+    }
+  ],
+  "profile": {
+    "evidence_directory": "runtime/Build/w4-20261016/profile",
+    "symbols": {
+      "samples": 5930,
+      "leaf_outside_samples": 2449,
+      "method": "Approximate stack scan: innermost three executable addresses, not an unwind",
+      "interval": "One completed sampler interval (approximately 10 seconds); counters reset each interval",
+      "nearest_image_frame": [
+        {
+          "function": "Core::MemoryManager::CopySparseMemory(unsigned __int64, unsigned char *, unsigned __int64)",
+          "samples": 593,
+          "percent": 10.0
+        },
+        {
+          "function": "Vulkan::Semaphore::Refresh(void)",
+          "samples": 472,
+          "percent": 7.959527824620573
+        },
+        {
+          "function": "AmdGpu::Liverpool::ProcessGraphics",
+          "samples": 397,
+          "percent": 6.694772344013491
+        },
+        {
+          "function": "Vulkan::CommandStream::Drain(void)",
+          "samples": 380,
+          "percent": 6.408094435075886
+        },
+        {
+          "function": "VideoCore::BufferCache::ObtainBuffer(unsigned __int64, unsigned int, bool, bool)",
+          "samples": 281,
+          "percent": 4.738617200674536
+        },
+        {
+          "function": "AmdGpu::Liverpool::Process(class std::stop_token)",
+          "samples": 214,
+          "percent": 3.6087689713322093
+        },
+        {
+          "function": "Core::AddressSpace::Impl::Protect(unsigned __int64, unsigned __int64, bool, bool, bool)",
+          "samples": 192,
+          "percent": 3.2377740303541316
+        },
+        {
+          "function": "Vulkan::Scheduler::PopPendingOperations(void)",
+          "samples": 187,
+          "percent": 3.1534569983136596
+        },
+        {
+          "function": "Vulkan::Rasterizer::Draw(bool, unsigned int)",
+          "samples": 136,
+          "percent": 2.2934232715008434
+        },
+        {
+          "function": "Shader::Info::RefreshFlatBuf(void)",
+          "samples": 131,
+          "percent": 2.209106239460371
+        },
+        {
+          "function": "VideoCore::TextureCache::FindImage(struct VideoCore::TextureCache::ImageDesc &, bool)",
+          "samples": 113,
+          "percent": 1.9055649241146713
+        },
+        {
+          "function": "Vulkan::PipelineCache::RefreshGraphicsStages::<lambda_0>::operator()",
+          "samples": 101,
+          "percent": 1.703204047217538
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindBuffers(struct Shader::Info const &, struct Shader::Backend::Bindings &, struct Shader::PushData &)",
+          "samples": 96,
+          "percent": 1.6188870151770658
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindTextures(struct Shader::Info const &, struct Shader::Backend::Bindings &)",
+          "samples": 94,
+          "percent": 1.5851602023608768
+        },
+        {
+          "function": "Vulkan::Runtime::FlushBarriers(void)",
+          "samples": 89,
+          "percent": 1.5008431703204048
+        },
+        {
+          "function": "Vulkan::Rasterizer::ResetBindings(bool)",
+          "samples": 86,
+          "percent": 1.4502529510961215
+        },
+        {
+          "function": "Shader::StageSpecialization::operator==(struct Shader::StageSpecialization const &) const",
+          "samples": 76,
+          "percent": 1.281618887015177
+        },
+        {
+          "function": "Vulkan::CommandStream::pushDescriptorSetKHR(enum vk::PipelineBindPoint, class vk::PipelineLayout, unsigned int, class std::span<struct vk::WriteDescriptorSet const, -1>)",
+          "samples": 74,
+          "percent": 1.2478920741989883
+        },
+        {
+          "function": "VideoCore::PageManager::Impl::UpdatePageWatchersForRegion(unsigned __int64, struct VideoCore::Bounds const &, struct VideoCore::RegionBits const &, struct VideoCore::RegionBits const &, enum VideoCore::PageOp, enum VideoCore::PageOp)",
+          "samples": 64,
+          "percent": 1.0792580101180438
+        },
+        {
+          "function": "AmdGpu::Liverpool::ProcessCommands(void)",
+          "samples": 63,
+          "percent": 1.0623946037099494
+        },
+        {
+          "function": "VideoCore::MemoryTracker::ForEachUploadRange<`lambda at E:\\Ziutkowanie\\i3-pc\\runtime\\src\\video_core\\buffer_cache\\buffer_cache.cpp:928:71'>::<lambda_1>::operator()",
+          "samples": 60,
+          "percent": 1.0118043844856661
+        },
+        {
+          "function": "Vulkan::PipelineCache::GetProgram(enum Shader::HwStage, enum Shader::SwStage, struct Shader::ShaderParams const &, struct Shader::Backend::Bindings &)",
+          "samples": 59,
+          "percent": 0.9949409780775716
+        },
+        {
+          "function": "Vulkan::PipelineCache::GetGraphicsPipeline(struct Vulkan::DrawIndirectParams)",
+          "samples": 55,
+          "percent": 0.927487352445194
+        },
+        {
+          "function": "VideoCore::ImageInfo::ImageInfo(struct AmdGpu::Image const &, struct Shader::ImageResource const &)",
+          "samples": 54,
+          "percent": 0.9106239460370995
+        },
+        {
+          "function": "VideoCore::Image::FindView(struct VideoCore::ImageViewInfo const &, bool)",
+          "samples": 49,
+          "percent": 0.8263069139966274
+        },
+        {
+          "function": "Shader::Gcn::ParseFetchShader(struct Shader::Info const &, struct Shader::Gcn::FetchShaderData &)",
+          "samples": 46,
+          "percent": 0.7757166947723441
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindResources(class Vulkan::Pipeline const *)",
+          "samples": 46,
+          "percent": 0.7757166947723441
+        },
+        {
+          "function": "AmdGpu::Liverpool::ProcessCompute<0>",
+          "samples": 40,
+          "percent": 0.6745362563237775
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindVertexBuffers(class Vulkan::GraphicsPipeline const *)",
+          "samples": 40,
+          "percent": 0.6745362563237775
+        },
+        {
+          "function": "VideoCore::BufferCache::SynchronizeMemory(struct VideoCore::Buffer const *, unsigned __int64, unsigned int, bool, bool)",
+          "samples": 39,
+          "percent": 0.657672849915683
+        },
+        {
+          "function": "VideoCore::BufferCache::SynchronizeMemory::<lambda_12>::operator()",
+          "samples": 34,
+          "percent": 0.5733558178752108
+        },
+        {
+          "function": "Vulkan::CommandStream::Reserve(unsigned __int64)",
+          "samples": 32,
+          "percent": 0.5396290050590219
+        },
+        {
+          "function": "VideoCore::BufferCache::EnsureResident(struct VideoCore::Buffer const *, unsigned __int64, unsigned __int64)",
+          "samples": 32,
+          "percent": 0.5396290050590219
+        },
+        {
+          "function": "Vulkan::PipelineCache::GraphicsState::Update(union AmdGpu::Regs const &)",
+          "samples": 31,
+          "percent": 0.5227655986509275
+        },
+        {
+          "function": "Vulkan::PipelineCache::RefreshGraphicsKey(void)",
+          "samples": 31,
+          "percent": 0.5227655986509275
+        },
+        {
+          "function": "",
+          "samples": 30,
+          "percent": 0.5059021922428331
+        },
+        {
+          "function": "tsl::detail_robin_hash::robin_hash<struct std::pair<struct Vulkan::GraphicsPipelineKey, class std::unique_ptr<class Vulkan::GraphicsPipeline, struct std::default_delete<class Vulkan::GraphicsPipeline>>>, class tsl::robin_map<struct Vulkan::GraphicsPipelineKey, class std::unique_ptr<class Vulkan::GraphicsPipeline, struct std::default_delete<class Vulkan::GraphicsPipeline>>, struct std::hash<struct Vulkan::GraphicsPipelineKey>, struct std::equal_to<struct Vulkan::GraphicsPipelineKey>, class std::allocator<struct std::pair<struct Vulkan::GraphicsPipelineKey, class std::unique_ptr<class Vulkan::GraphicsPipeline, struct std::default_delete<class Vulkan::GraphicsPipeline>>>>, 0, class tsl::rh::power_of_two_growth_policy<2>>::KeySelect, class tsl::robin_map<struct Vulkan::GraphicsPipelineKey, class std::unique_ptr<class Vulkan::GraphicsPipeline, struct std::default_delete<class Vulkan::GraphicsPipeline>>, struct std::hash<struct Vulkan::GraphicsPipelineKey>, struct std::equal_to<struct Vulkan::GraphicsPipelineKey>, class std::allocator<struct std::pair<struct Vulkan::GraphicsPipelineKey, class std::unique_ptr<class Vulkan::GraphicsPipeline, struct std::default_delete<class Vulkan::GraphicsPipeline>>>>, 0, class tsl::rh::power_of_two_growth_policy<2>>::ValueSelect, struct std::hash<struct Vulkan::GraphicsPipelineKey>, struct std::equal_to<struct Vulkan::GraphicsPipelineKey>, class std::allocator<struct std::pair<struct Vulkan::GraphicsPipelineKey, class std::unique_ptr<class Vulkan::GraphicsPipeline, struct std::default_delete<class Vulkan::GraphicsPipeline>>>>, 0, class tsl::rh::power_of_two_growth_policy<2>>::insert_impl<struct Vulkan::GraphicsPipelineKey, struct std::piecewise_construct_t const &, class std::tuple<struct Vulkan::GraphicsPipelineKey const &>, class std::tuple<>>(struct Vulkan::GraphicsPipelineKey const &, struct std::piecewise_construct_t const &, class std::tuple<struct Vulkan::GraphicsPipelineKey const &> &&, class std::tuple<> &&)",
+          "samples": 30,
+          "percent": 0.5059021922428331
+        },
+        {
+          "function": "Vulkan::Runtime::Transit(struct VideoCore::Image *, enum vk::ImageLayout, class vk::Flags<enum vk::PipelineStageFlagBits2>, class vk::Flags<enum vk::AccessFlagBits2>, class std::optional<struct VideoCore::SubresourceRange>)",
+          "samples": 29,
+          "percent": 0.48903878583473864
+        },
+        {
+          "function": "Shader::StageSpecialization::ForEachSharp<class SmallVector<struct Shader::BufferSpecialization, 16, unsigned __int64>, class boost::container::static_vector<struct Shader::BufferResource, 56, void> const, class `public: __cdecl Shader::StageSpecialization::StageSpecialization(struct Shader::Info const &, struct Shader::RuntimeInfo, struct Shader::Profile const &, struct Shader::Backend::Bindings)'::`1'::<lambda_2>>(unsigned int &, class SmallVector<struct Shader::BufferSpecialization, 16, unsigned __int64> &, class boost::container::static_vector<struct Shader::BufferResource, 56, void> const &, class `public: __cdecl Shader::StageSpecialization::StageSpecialization(struct Shader::Info const &, struct Shader::RuntimeInfo, struct Shader::Profile const &, struct Shader::Backend::Bindings)'::`1'::<lambda_2> &&)",
+          "samples": 29,
+          "percent": 0.48903878583473864
+        },
+        {
+          "function": "Vulkan::Pipeline::BindResources(class std::vector<struct vk::WriteDescriptorSet, class std::allocator<struct vk::WriteDescriptorSet>> &, struct Shader::PushData const &) const",
+          "samples": 27,
+          "percent": 0.45531197301854975
+        }
+      ],
+      "any_scanned_image_frame": [
+        {
+          "function": "AmdGpu::Liverpool::Process(class std::stop_token)",
+          "samples": 1183,
+          "percent": 19.949409780775717
+        },
+        {
+          "function": "Vulkan::Scheduler::PopPendingOperations(void)",
+          "samples": 794,
+          "percent": 13.389544688026982
+        },
+        {
+          "function": "Vulkan::Semaphore::Refresh(void)",
+          "samples": 707,
+          "percent": 11.922428330522765
+        },
+        {
+          "function": "Core::MemoryManager::CopySparseMemory(unsigned __int64, unsigned char *, unsigned __int64)",
+          "samples": 682,
+          "percent": 11.500843170320405
+        },
+        {
+          "function": "std::thread::_Invoke<class std::tuple<class std::_Front_binder<void (__cdecl AmdGpu::Liverpool::*)(class std::stop_token), struct AmdGpu::Liverpool *>, class std::stop_token>, 0, 1>(void *)",
+          "samples": 609,
+          "percent": 10.269814502529512
+        },
+        {
+          "function": "VideoCore::BufferCache::ObtainBuffer(unsigned __int64, unsigned int, bool, bool)",
+          "samples": 541,
+          "percent": 9.123102866779089
+        },
+        {
+          "function": "Vulkan::CommandStream::Drain(void)",
+          "samples": 502,
+          "percent": 8.465430016863406
+        },
+        {
+          "function": "AmdGpu::Liverpool::ProcessGraphics",
+          "samples": 492,
+          "percent": 8.296795952782462
+        },
+        {
+          "function": "VideoCore::StreamBuffer::Map(unsigned __int64, unsigned __int64, bool)",
+          "samples": 488,
+          "percent": 8.229342327150084
+        },
+        {
+          "function": "Vulkan::Rasterizer::Draw(bool, unsigned int)",
+          "samples": 488,
+          "percent": 8.229342327150084
+        },
+        {
+          "function": "Vulkan::PipelineCache::GetProgram(enum Shader::HwStage, enum Shader::SwStage, struct Shader::ShaderParams const &, struct Shader::Backend::Bindings &)",
+          "samples": 376,
+          "percent": 6.340640809443507
+        },
+        {
+          "function": "VideoCore::BufferCache::SynchronizeMemory(struct VideoCore::Buffer const *, unsigned __int64, unsigned int, bool, bool)",
+          "samples": 353,
+          "percent": 5.9527824620573355
+        },
+        {
+          "function": "VideoCore::StreamBuffer::Commit(void)",
+          "samples": 305,
+          "percent": 5.143338954468803
+        },
+        {
+          "function": "Vulkan::Runtime::CopyBuffer(struct VideoCore::Buffer const *, struct VideoCore::Buffer const *, class std::span<struct vk::BufferCopy const, -1>)",
+          "samples": 287,
+          "percent": 4.839797639123103
+        },
+        {
+          "function": "Shader::StageSpecialization::StageSpecialization(struct Shader::Info const &, struct Shader::RuntimeInfo, struct Shader::Profile const &, struct Shader::Backend::Bindings)",
+          "samples": 264,
+          "percent": 4.451939291736931
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindBuffers(struct Shader::Info const &, struct Shader::Backend::Bindings &, struct Shader::PushData &)",
+          "samples": 263,
+          "percent": 4.435075885328836
+        },
+        {
+          "function": "AmdGpu::Liverpool::ProcessCommands(void)",
+          "samples": 242,
+          "percent": 4.080944350758854
+        },
+        {
+          "function": "Shader::StageSpecialization::operator==(struct Shader::StageSpecialization const &) const",
+          "samples": 231,
+          "percent": 3.8954468802698146
+        },
+        {
+          "function": "",
+          "samples": 229,
+          "percent": 3.861720067453626
+        },
+        {
+          "function": "const tracy::moodycamel::ConcurrentQueue<struct tracy::QueueItem, struct tracy::moodycamel::ConcurrentQueueDefaultTraits>::ExplicitProducer::`vftable'",
+          "samples": 214,
+          "percent": 3.6087689713322093
+        },
+        {
+          "function": "VideoCore::StreamBuffer::PrepareMap(unsigned __int64, unsigned __int64, bool)",
+          "samples": 210,
+          "percent": 3.5413153456998314
+        },
+        {
+          "function": "Core::AddressSpace::Impl::Protect(unsigned __int64, unsigned __int64, bool, bool, bool)",
+          "samples": 198,
+          "percent": 3.338954468802698
+        },
+        {
+          "function": "Vulkan::Scheduler::BeginRendering(struct Vulkan::RenderState const &)",
+          "samples": 197,
+          "percent": 3.3220910623946036
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindTextures(struct Shader::Info const &, struct Shader::Backend::Bindings &)",
+          "samples": 197,
+          "percent": 3.3220910623946036
+        },
+        {
+          "function": "VideoCore::SignalImpl::Protect(unsigned __int64, unsigned __int64, enum Core::MemoryPermission)",
+          "samples": 174,
+          "percent": 2.9342327150084317
+        },
+        {
+          "function": "Core::AddressSpace::Protect(unsigned __int64, unsigned __int64, enum Core::MemoryPermission)",
+          "samples": 170,
+          "percent": 2.866779089376054
+        },
+        {
+          "function": "Vulkan::Scheduler::SubmitExecution(struct Vulkan::SubmitInfo &)",
+          "samples": 165,
+          "percent": 2.782462057335582
+        },
+        {
+          "function": "VideoCore::MemoryTracker::ForEachUploadRange<`lambda at E:\\Ziutkowanie\\i3-pc\\runtime\\src\\video_core\\buffer_cache\\buffer_cache.cpp:928:71'>::<lambda_1>::operator()",
+          "samples": 162,
+          "percent": 2.7318718381112985
+        },
+        {
+          "function": "??:0:0",
+          "samples": 159,
+          "percent": 2.681281618887015
+        },
+        {
+          "function": "Vulkan::Rasterizer::BindVertexBuffers(class Vulkan::GraphicsPipeline const *)",
+          "samples": 156,
+          "percent": 2.630691399662732
+        },
+        {
+          "function": "Vulkan::Scheduler::EndSession(void)",
+          "samples": 149,
+          "percent": 2.5126475548060707
+        },
+        {
+          "function": "Vulkan::PipelineCache::RefreshGraphicsStages::<lambda_0>::operator()",
+          "samples": 142,
+          "percent": 2.39460370994941
+        },
+        {
+          "function": "VideoCore::TextureCache::FindImage(struct VideoCore::TextureCache::ImageDesc &, bool)",
+          "samples": 140,
+          "percent": 2.360876897133221
+        },
+        {
+          "function": "Vulkan::PipelineCache::RefreshGraphicsStages(void)",
+          "samples": 138,
+          "percent": 2.327150084317032
+        },
+        {
+          "function": "Vulkan::CommandStream::setVertexInputEXT(class std::span<struct vk::VertexInputBindingDescription2EXT const, -1>, class std::span<struct vk::VertexInputAttributeDescription2EXT const, -1>)",
+          "samples": 136,
+          "percent": 2.2934232715008434
+        },
+        {
+          "function": "Shader::Info::RefreshFlatBuf(void)",
+          "samples": 133,
+          "percent": 2.24283305227656
+        },
+        {
+          "function": "`public: __cdecl Shader::StageSpecialization::StageSpecialization(struct Shader::Info const &, struct Shader::RuntimeInfo, struct Shader::Profile const &, struct Shader::Backend::Bindings)'::`1'::<lambda_3>::operator()<struct Shader::ImageSpecialization, struct Shader::ImageResource>(struct Shader::ImageSpecialization &, struct Shader::ImageResource const &, struct AmdGpu::Image) const",
+          "samples": 133,
+          "percent": 2.24283305227656
+        },
+        {
+          "function": "Vulkan::DrawStats::Tick(void)",
+          "samples": 128,
+          "percent": 2.1585160202360876
+        },
+        {
+          "function": "Vulkan::Program::FindPermutation(struct Shader::StageSpecialization const &)",
+          "samples": 124,
+          "percent": 2.09106239460371
+        },
+        {
+          "function": "Vulkan::Runtime::FlushBarriers(void)",
+          "samples": 119,
+          "percent": 2.0067453625632377
+        }
+      ],
+      "unknown_nearest_frame_samples": 0
+    },
+    "result": {
+      "label": "title-control-warm-baseline-1",
+      "scene": "title-control",
+      "variant": "baseline",
+      "cache": "warm",
+      "repeat": 1,
+      "primer": false,
+      "profile_enabled": true,
+      "status": "captured",
+      "issues": [],
+      "exit_code": 0,
+      "metrics": {
+        "frames": 1750,
+        "measured_seconds": 29.967046,
+        "average_fps": 58.397481019650726,
+        "low1_fps": 35.267701447151346,
+        "median_ms": 14.5625,
+        "p95_ms": 21.63015,
+        "p99_ms": 27.7261,
+        "worst_ms": 33.365,
+        "discarded_boundary_frames": 1
+      },
+      "telemetry": {
+        "samples": 28,
+        "gpu_scope": "whole selected NVIDIA GPU, not per-process",
+        "process_cpu_percent": {
+          "mean": 27.223285714285712,
+          "minimum": 22.539,
+          "maximum": 30.881
+        },
+        "busiest_thread_percent": {
+          "mean": 93.41592857142858,
+          "minimum": 88.559,
+          "maximum": 100.486
+        },
+        "nvidia_gpu_percent": {
+          "mean": 51.57142857142857,
+          "minimum": 40.0,
+          "maximum": 62.0
+        },
+        "nvidia_vram_used_mb": {
+          "mean": 4522.321428571428,
+          "minimum": 4522.0,
+          "maximum": 4531.0
+        },
+        "working_set_mb": {
+          "mean": 5289.389499999999,
+          "minimum": 5288.348,
+          "maximum": 5297.234
+        },
+        "nvidia_power_w": {
+          "mean": 43.38464285714286,
+          "minimum": 36.54,
+          "maximum": 48.03
+        },
+        "nvidia_temp_c": {
+          "mean": 62.67857142857143,
+          "minimum": 60.0,
+          "maximum": 64.0
+        },
+        "gpu_frame_time_ms": null
+      },
+      "telemetry_exit_code": 0,
+      "log_window_byte_offsets": [
+        196608,
+        237568
+      ],
+      "profile_snapshots_complete": true,
+      "frame_times_sha256": "E99C500BEC5B69E2128B49D982ABFBC4EEC87E21AFACB0C9351A05B27ABAD772",
+      "image_load_base": 123145302310912,
+      "visual_review": "Reviewed start/end 1920x1080 screenshots: same static title/Continue, no evident visual difference; gameplay/effects/transitions unverified",
+      "finished_at_utc": "2026-10-16T12:19:35.027405+00:00"
+    }
+  },
+  "cross_suite_check": {
+    "distinct_recorded_machines": 1,
+    "two_pc_coverage": false,
+    "missing_cases_preserved_as_null": true,
+    "evidence": "runtime/Build/w4-20261016/local-comparison.json"
+  },
+  "visual_comparison": {
+    "captures": 28,
+    "dimensions": [
+      1920,
+      1080
+    ],
+    "decoded_rgb_images_identical": true,
+    "scope": "static title screenshots only"
+  }
+}

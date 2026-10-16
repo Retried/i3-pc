@@ -160,3 +160,24 @@ and the original package. Keep the emulator's normal APP_VER parsing; do not
 add a VERSION override or title-specific version hack. This fixes identification
 and does not install an update or establish full gameplay correctness.
 Evidence and recovery: [APP_VERSION_REPAIR_20261016.md](APP_VERSION_REPAIR_20261016.md).
+
+## 2026-10-16: W3 capture boundaries and W4 evidence
+
+Reuse bench.sh, the runtime frame-interval recorder, perfsample.ps1 and the
+existing stack sampler. Isolate every run's user data and freeze the executable,
+seed and harness instead of deleting or replacing live saves. Define cold/warm
+at the emulator-cache level; NVIDIA driver cache is uncontrolled. Report raw
+data, percentile/low methods and repeat variation explicitly; missing counters
+remain unavailable. Keep whole-card GPU load separate from per-process CPU/RAM
+and unavailable GPU frame timing.
+
+Only one target PC and opening autosaves are available. A static title or
+cinematic measurement cannot establish a heavy-gameplay improvement. Use the
+existing fast-path switch for a same-binary A/B before accepting any new renderer
+change. Do not infer effectiveness of priority-2 commit 9a719c45 from a different
+fast-path switch, or adopt the push-descriptor patch based on inspection alone.
+Profiling is separate from timing and accounts for ASLR. The existing sampler
+resets counts every ten seconds; snapshots are independent intervals and must
+not be subtracted as cumulative totals. Stack scans are approximate, not an
+exclusive time breakdown.
+Method and commands: [W3_BENCHMARKS.md](W3_BENCHMARKS.md).

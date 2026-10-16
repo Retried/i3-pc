@@ -314,3 +314,15 @@ Current validation and usage are tracked in [W1_WINDOWS.md](W1_WINDOWS.md).
 Second-PC launch remains required before closing W1. W2-W4 are not started by
 this implementation; renderer priority 1 remains unapplied and no FPS improvement
 is claimed.
+
+## W3/W4 local evaluation update (2026-10-16)
+
+The earlier W3/W4 table records the planning state. Portable Windows capture,
+independent cold/warm repeats, provenance, PID-scoped CPU telemetry and explicit
+NVIDIA selection are now implemented through the existing benchmark entry points.
+One-PC title-control results are in [PERFORMANCE_LOG.md](PERFORMANCE_LOG.md);
+reproduction and coverage limits are in [W3_BENCHMARKS.md](W3_BENCHMARKS.md).
+Separate CPU profiling and direct-draw off/on evaluation are documented in
+[W4_CPU_DRAWS.md](W4_CPU_DRAWS.md). Only opening autosaves and one target PC are
+available. These results do not close representative-scene/two-PC acceptance,
+isolate priority-2 commit 9a719c45, or validate the unapplied priority-1 patch.

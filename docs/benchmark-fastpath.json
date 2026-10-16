@@ -1,0 +1,16 @@
+{
+  "scenes": [
+    {
+      "name": "opening-sequence",
+      "description": "Existing direct-draw fast path A/B; same executable and opening replay",
+      "warmup_seconds": 75,
+      "duration_seconds": 30,
+      "boot": [[20, "cross"], [40, "cross"], [60, "cross"]],
+      "route": []
+    }
+  ],
+  "variants": [
+    {"name": "off", "environment": {"I3_NO_DRAW_FASTPATH": "1"}},
+    {"name": "on", "environment": {}}
+  ]
+}

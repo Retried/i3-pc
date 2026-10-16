@@ -1,71 +1,63 @@
-# Samples what a benchmark video shows beside the frame rate, once a second, until the process
-# ends: total CPU load, the busiest thread of the process, its GPU load and video memory, its
-# RAM. Reads Windows performance counters and process times only; nothing is attached to the game.
-# Output: CSV lines "unix seconds,cpu %,busiest thread %,gpu %,video memory MB,ram MB".
-param([string]$Out = 'D:\i3-pc\testrun\perf_samples.csv', [string]$Name = 'i3', [int]$Max = 0)
-
-Set-Content -Path $Out -Value 'time,cpu,thread,gpu,vram,ram' -Encoding ascii
-$seen = $false
-$before = @{}
+# PID-scoped telemetry. NVIDIA utilization and VRAM describe the whole selected GPU.
+param(
+    [Parameter(Mandatory = $true)][string]$Out,
+    [int]$ProcessId = 0,
+    [string]$Name = 'shadps4',
+    [int]$Max = 0,
+    [string]$NvidiaGpu = '0'
+)
+$ErrorActionPreference = 'Stop'
+$culture = [Globalization.CultureInfo]::InvariantCulture
+$nvidia = Get-Command nvidia-smi.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($ProcessId) { $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue }
+else { $process = Get-Process -Name $Name -ErrorAction SilentlyContinue | Select-Object -First 1 }
+if (-not $process) { throw 'Target process is not running.' }
+$ProcessId = $process.Id
+$started = $process.StartTime.ToUniversalTime()
+$beforeThreads = @{}
 $beforeAt = $null
+$beforeCpu = $null
 $count = 0
+Set-Content -LiteralPath $Out -Value 'unix_seconds,process_cpu_percent,busiest_thread_percent,nvidia_gpu_percent,nvidia_vram_used_mb,working_set_mb,nvidia_power_w,nvidia_temp_c' -Encoding ascii
 while ($true) {
-    $p = Get-Process -Name $Name -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $p) {
-        if ($seen) { break }
-        Start-Sleep -Milliseconds 500
-        continue
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $process -or $process.StartTime.ToUniversalTime() -ne $started) { break }
+    $now = [DateTimeOffset]::UtcNow
+    $cpuTime = $process.TotalProcessorTime.TotalMilliseconds
+    $threads = @{}
+    foreach ($thread in $process.Threads) {
+        try { $threads[$thread.Id] = $thread.TotalProcessorTime.TotalMilliseconds } catch { }
     }
-    $seen = $true
-    $id = $p.Id
-    $paths = @(
-        '\Processor(_Total)\% Processor Time',
-        '\GPU Engine(*engtype_3D)\Utilization Percentage',
-        "\GPU Process Memory(pid_${id}_*)\Dedicated Usage"
-    )
-    $s = $null
-    try {
-        $s = (Get-Counter -Counter $paths -SampleInterval 1 -ErrorAction SilentlyContinue).CounterSamples
-    } catch { }
-    if (-not $s) { Start-Sleep -Milliseconds 500; continue }
-    $cpu = ($s | Where-Object Path -like '*processor(_total)*' | Measure-Object CookedValue -Maximum).Maximum
-    # GPU load of the whole card: the per-process counters read zero for this program. Every
-    # process has one counter per engine; the busiest 3D engine, summed over processes, is the load.
-    $gpu = 0.0
-    $s | Where-Object Path -like '*gpu engine*' |
-        Group-Object { $_.InstanceName -replace '^pid_\d+_', '' } | ForEach-Object {
-            $sum = ($_.Group | Measure-Object CookedValue -Sum).Sum
-            if ($sum -gt $gpu) { $gpu = $sum }
-        }
-    $vram = 0.0
-    $mem = ($s | Where-Object Path -like '*gpu process memory*' | Measure-Object CookedValue -Sum).Sum
-    if ($mem) { $vram = $mem / 1MB }
-    # Busiest thread: processor time each thread gained since the last sample.
-    $thread = 0.0
-    $nowAt = Get-Date
-    $now = @{}
-    try {
-        $p.Refresh()
-        foreach ($t in $p.Threads) {
-            try { $now[$t.Id] = $t.TotalProcessorTime.TotalMilliseconds } catch { }
-        }
-    } catch { }
+    $cpu = $null
+    $busiest = $null
     if ($beforeAt) {
-        $span = ($nowAt - $beforeAt).TotalMilliseconds
-        foreach ($k in $now.Keys) {
-            if ($before.ContainsKey($k)) {
-                $share = ($now[$k] - $before[$k]) / $span * 100.0
-                if ($share -gt $thread) { $thread = $share }
+        $elapsed = ($now - $beforeAt).TotalMilliseconds
+        $cpu = ($cpuTime - $beforeCpu) / $elapsed / [Environment]::ProcessorCount * 100.0
+        foreach ($threadId in $threads.Keys) {
+            if ($beforeThreads.ContainsKey($threadId)) {
+                $share = ($threads[$threadId] - $beforeThreads[$threadId]) / $elapsed * 100.0
+                if ($null -eq $busiest -or $share -gt $busiest) { $busiest = $share }
             }
         }
     }
-    $before = $now
-    $beforeAt = $nowAt
-    $ram = $p.WorkingSet64 / 1MB
-    $unix = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000.0
-    $line = [string]::Format([Globalization.CultureInfo]::InvariantCulture,
-        '{0:F2},{1:F1},{2:F1},{3:F1},{4:F0},{5:F0}', $unix, $cpu, $thread, $gpu, $vram, $ram)
-    Add-Content -Path $Out -Value $line -Encoding ascii
-    $count++
+    $gpu = $null; $vram = $null; $power = $null; $temperature = $null
+    if ($nvidia) {
+        $values = & $nvidia.Source "--id=$NvidiaGpu" '--query-gpu=utilization.gpu,memory.used,power.draw,temperature.gpu' '--format=csv,noheader,nounits' 2>$null
+        if ($LASTEXITCODE -eq 0 -and $values) {
+            $parts = ($values | Select-Object -First 1) -split ','
+            $parsed = @()
+            foreach ($part in $parts) {
+                $number = 0.0
+                $parsed += $(if ([double]::TryParse($part.Trim(), [Globalization.NumberStyles]::Float, $culture, [ref]$number)) { $number } else { $null })
+            }
+            if ($parsed.Count -eq 4) { $gpu, $vram, $power, $temperature = $parsed }
+        }
+    }
+    $cells = @(($now.ToUnixTimeMilliseconds() / 1000.0), $cpu, $busiest, $gpu, $vram, ($process.WorkingSet64 / 1MB), $power, $temperature)
+    $line = ($cells | ForEach-Object { if ($null -eq $_) { '' } else { $_.ToString('F3', $culture) } }) -join ','
+    Add-Content -LiteralPath $Out -Value $line -Encoding ascii
+    $beforeAt = $now; $beforeCpu = $cpuTime; $beforeThreads = $threads
+    ++$count
     if ($Max -gt 0 -and $count -ge $Max) { break }
+    Start-Sleep -Milliseconds 1000
 }

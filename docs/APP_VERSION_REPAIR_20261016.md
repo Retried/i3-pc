@@ -32,7 +32,9 @@ An isolated run on AMD Ryzen 5 7640HS and NVIDIA GeForce RTX 4050 Laptop GPU
 used the existing CI baseline executable. Its log reports both
 `App Version: 01.07` and `GPU_Model: NVIDIA GeForce RTX 4050 Laptop GPU`.
 The scripted run exited with code 0 at 13:48 Warsaw time. It verifies version
-identification and startup, not full gameplay acceptance or the pending W2 build.
+identification and startup, not full gameplay acceptance or the then-pending W2
+build. The later successful candidate build and control runs are recorded in
+[W2_NVIDIA_VULKAN.md](W2_NVIDIA_VULKAN.md) and [PERFORMANCE_LOG.md](PERFORMANCE_LOG.md).
 
 Local backup and machine-readable records are under the ignored directory
 `runtime/Build/w2-nvidia-20261016/`:

@@ -3,8 +3,11 @@
 ## Status and scope
 
 The capability audit, diagnostic collector and focused startup diagnostics are
-implemented. W2 acceptance remains open: the candidate build/smoke job is pending
-and the Khronos validation layer is unavailable locally. The local merged dump's
+implemented. The candidate Windows build finished with exit 0 and matching
+executable metadata. W3 repeated title-control runs of that candidate also exited
+0 on NVIDIA with APP_VER 01.07. W2 acceptance remains open because the Khronos
+validation layer is unavailable locally and gameplay coverage is incomplete.
+The local merged dump's
 stale APP_VER was repaired and startup now reports 01.07; see
 [APP_VERSION_REPAIR_20261016.md](APP_VERSION_REPAIR_20261016.md). Short baseline
 runs do not establish gameplay correctness or long-session stability.
@@ -20,7 +23,9 @@ Wrapper HEAD at preparation: `c0b51c2dc6a4e0924a99e1038be03ceae6e4a1fb`.
 The baseline executable does not include the new W2 source changes.
 
 No renderer optimization, shader fallback, upload scheduling or guest readback
-algorithm was replaced. W3/W4 and the unapplied priority-1 patch were not started.
+algorithm was replaced. Subsequent W3/W4 local work is recorded in
+[W3_BENCHMARKS.md](W3_BENCHMARKS.md) and [PERFORMANCE_LOG.md](PERFORMANCE_LOG.md).
+The priority-1 patch remains unapplied.
 
 ## Hardware and capabilities observed
 
@@ -76,7 +81,8 @@ Changed runtime functions are Instance's windowed constructor, Instance::CreateD
 CreateInstance, and PipelineCache's constructor in the three renderer_vulkan
 translation units. The additive logs and initialization guard have low expected
 regression risk; successful initialization should retain existing rendering
-choices. Full compilation and runtime validation of the candidate remain pending.
+choices. Candidate compilation and title-control startup passed subsequently;
+representative gameplay and Vulkan-layer validation remain pending.
 The Vulkan 1.3 feature definitions are documented by
 [Khronos](https://docs.vulkan.org/refpages/latest/refpages/source/VkPhysicalDeviceVulkan13Features.html).
 
@@ -190,7 +196,12 @@ without launching an emulator, under the user's updated hardware policy.
 `build.status.json` records build/metadata success; final pipeline status
 is `build-and-smoke.status.json`. Candidate run directories are candidate-nvidia
 and candidate-amd. Their source is the dirty W2 snapshot, not the baseline binary.
-No result is claimed until these records are checked at the next prompt.
+The W3 prompt checked build.status.json once: exit 0, expected executable present,
+and matching build metadata. SHA-256:
+`DC983DB65BE1F9585E183EA2D1F5B6F59C673728FC8E264A015500CA1F729EE0`.
+Subsequent isolated W3 runs independently confirmed successful NVIDIA startup
+and APP_VER 01.07 with this binary. The original pipeline's final smoke status
+was not used as gameplay acceptance.
 
 The startup source changes were published as runtime
 `f88d3b6f331272ce854bda5875c11386b180f94f` while the local build was pending.
@@ -200,12 +211,12 @@ build completion can name the newer commit, while the generated build revision
 can still describe the original launch state. Neither publication nor that
 revision change establishes a passing build.
 [CI 38896616489](https://github.com/Retried/i3-pc/actions/runs/38896616489)
-for f88d3b6f is pending and must be checked at the next prompt.
+for f88d3b6f was still in progress at the single W3 prompt check; check it once
+at the next prompt. Do not start a duplicate job.
 
 ## Remaining acceptance
 
-1. Check the detached build and automatic candidate smoke results once at the
-   next prompt. Missing status plus a dead process is interrupted/unknown.
+1. Check the recorded CI result once at the next prompt.
 2. Use the corrected, corroborated CUSA00004 01.07 dump for target acceptance
    runs; retain the repair provenance.
 3. Supply a compatible Khronos validation layer and run core/synchronization
@@ -219,5 +230,6 @@ for f88d3b6f is pending and must be checked at the next prompt.
 6. Run a long-session resource-pressure check. Record which GPUs, drivers and
    scenes were actually covered; other configurations remain unverified.
 
-No benchmark was run and no FPS improvement is claimed. Measurements, if later
-requested, belong to W3 under [BENCHMARK_PROTOCOL.md](BENCHMARK_PROTOCOL.md).
+The original W2 audit did not measure performance. Subsequent local control
+measurements belong to W3/W4 in [PERFORMANCE_LOG.md](PERFORMANCE_LOG.md);
+they do not establish a gameplay FPS improvement.

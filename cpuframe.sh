@@ -1,8 +1,30 @@
 #!/bin/bash
-# Render-thread CPU per frame in the cannery scene (independent of the game's pacing tier).
-# ./cpuframe.sh label [VAR=value ...]
-cd /d/i3-pc || exit 1
-label=$1; shift
-r=$(env X=1 "$@" SCENES=cannery CONFIGS=1080p ./bench.sh | grep "^cannery")
-paste -d' ' <(grep "cpu/3s" testrun/user/log/shad_log.txt | tail -7 | awk '{print $(NF-2)}') <(grep "Flip: fps" testrun/user/log/shad_log.txt | tail -7 | awk '{print $7}') |
-    awk -v l="$label" -v r="$r" '{ if ($2>0) { n++; s+=$1/($2*3); f+=$2 } } END { if (n) printf "%s: %.1f ms thread CPU per frame, %.1f fps (%s)\n", l, s/n, f/n, r }'
+# Approximate render-thread CPU/frame from a completed portable benchmark suite.
+# Usage: ./cpuframe.sh <suite-directory>
+set -e
+exec "${PYTHON3_EXECUTABLE:-python}" - "$@" <<'PY'
+import json
+from pathlib import Path
+import re
+import statistics
+import sys
+
+if len(sys.argv) != 2:
+    raise SystemExit('Usage: cpuframe.sh <completed-suite-directory>')
+for path in sorted(Path(sys.argv[1]).glob('*/result.json')):
+    result = json.loads(path.read_text(encoding='utf-8'))
+    if result['primer'] or result['profile_enabled'] or result['status'] != 'captured':
+        continue
+    window = path.parent/'measurement.log'
+    if not window.exists():
+        print(result['label'] + ': CPU/frame unavailable (no captured counter window)')
+        continue
+    log = window.read_text(encoding='utf-8', errors='replace')
+    counters = [int(x) for x in re.findall(r'cpu/3s ms: render thread (\d+)', log)]
+    if counters:
+        cpu_ms = statistics.fmean(counters) / (3 * result['metrics']['average_fps'])
+        print(f"{result['label']}: approximately {cpu_ms:.2f} ms render CPU/frame "
+              f"({len(counters)} counter intervals; boundaries approximate)")
+    else:
+        print(result['label'] + ': CPU/frame unavailable')
+PY

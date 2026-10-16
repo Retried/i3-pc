@@ -106,21 +106,25 @@ Those numbers are from one PC; nothing else has been measured.
 
 No ready-made program is published. You build it once from source:
 
-1. Install Visual Studio 2022 with "Desktop development with C++", CMake, Git and clang 23
-   (LLVM for Windows).
+1. Install Visual Studio 2022 or Build Tools with "Desktop development with C++",
+   a Windows SDK, C++ Clang tools for Windows and C++ CMake tools. Install Git and
+   Python 3. CMake must be version 3.30 or newer.
 2. Get the source with its submodules:
-   `git clone --recursive https://github.com/SotC-project/i3-pc.git`
-3. Open `build-lto.bat` in a text editor. Two lines hold paths from the author's PC: the
-   `vcvars64.bat` of Visual Studio and the `bin` folder of clang. Change both to yours.
-4. Run `build-lto.bat`. The first build takes a long time.
-5. Copy `runtime\Build\x64-Clang-Release\shadps4.exe` into the `dist` folder and rename it
-   `inFAMOUS Second Son.exe`.
+   `git clone --recursive https://github.com/Retried/i3-pc.git`
+3. Run `build.bat` from a 64-bit Windows shell. Tools are discovered automatically.
+   Use `build-lto.bat` for a Release build with link-time optimization.
+4. Package the default build in PowerShell:
+   `powershell -NoProfile -ExecutionPolicy Bypass -File tools/package-windows.ps1`
+   For LTO, add `-BuildDirectory runtime/Build/w1-x64-Clang-Release-lto`.
+5. Extract the resulting ZIP from `packages` to a writable folder on the target PC.
+   Follow `START-HERE.txt`. See [Windows build instructions](docs/W1_WINDOWS.md)
+   for tool overrides, dependencies and the second-PC validation checklist.
 
-The `dist` folder is now the game's program folder. You can move it anywhere.
+The extracted package is the program folder. It contains no game files or saves.
 
 ### 3. Tell the program where the game is
 
-1. In the `dist` folder create a text file named `game_path.txt`.
+1. In the extracted program folder create a text file named `game_path.txt`.
 2. Write one line in it: the full path of the game's `eboot.bin`, for example
    `D:\Games\CUSA00004\eboot.bin`.
 

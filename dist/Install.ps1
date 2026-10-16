@@ -4,6 +4,7 @@ param([switch]$Remove)
 
 $exe = Join-Path $PSScriptRoot 'inFAMOUS Second Son.exe'
 $icon = Join-Path $PSScriptRoot 'game.ico'
+if (-not (Test-Path -LiteralPath $icon)) { $icon = $exe }
 $links = @(
     (Join-Path ([Environment]::GetFolderPath('Desktop')) 'inFAMOUS Second Son.lnk'),
     (Join-Path ([Environment]::GetFolderPath('Programs')) 'inFAMOUS Second Son.lnk')

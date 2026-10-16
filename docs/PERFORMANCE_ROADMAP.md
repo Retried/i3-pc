@@ -298,3 +298,14 @@ sprawdzić i zatwierdzić.
 Status tego rozszerzenia: **plan prac**. W ramach uzupełnienia dokumentacji
 nie zmieniono skryptów ani renderera i nie wykonano nowych buildów, benchmarków
 lub testów w grze na docelowych konfiguracjach.
+
+## W1 implementation update (2026-10-16)
+
+The W1 row above describes the original planning audit. The wrapper now uses
+`tools/build-windows.ps1` for x64 tool discovery and separate normal/LTO builds,
+and `tools/package-windows.ps1` for allowlisted ZIP packaging with build metadata,
+hashes and dependency inspection. `install.sh` resolves paths from its checkout.
+Current validation and usage are tracked in [W1_WINDOWS.md](W1_WINDOWS.md).
+Second-PC launch remains required before closing W1. W2-W4 are not started by
+this implementation; renderer priority 1 remains unapplied and no FPS improvement
+is claimed.

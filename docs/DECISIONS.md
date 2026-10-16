@@ -65,3 +65,30 @@ freeze-log counter. Both return microseconds to the existing diagnostics.
 Retain the previous counter if the OS query fails. This portability fix does
 not alter GPU synchronization or rendering. See
 [CI_RUN_38805748119.md](CI_RUN_38805748119.md) for the failed run and validation.
+
+## 2026-10-15: W1 build and package boundaries
+
+Keep Windows orchestration in the wrapper repository. Discover Visual Studio
+with vswhere and initialize its x64 host/target environment; select one x64 LLVM
+installation consistently for CMake, font compilation, linker and builtins.
+Use separate normal/LTO build directories and preserve explicit Python overrides.
+Configuration is checked on every build instead of trusting a configured.ok file.
+
+Package an explicit allowlist, not the live dist directory, which can contain
+private saves, settings and game-derived assets. Refuse existing output paths,
+record source/build provenance and file hashes, inspect imported dependencies,
+and document system runtime requirements. A local CLI smoke test does not prove
+NVIDIA compatibility, gameplay correctness or second-PC portability. See
+[W1_WINDOWS.md](W1_WINDOWS.md) for usage and acceptance criteria.
+
+## 2026-10-16: Windows artifacts and deferred build checks
+
+Per user request, push/PR/default manual CI builds emulator artifacts for Windows
+only. macOS, Linux Clang and Linux GCC emulator jobs require the manual
+build_non_windows input. Cross-platform unit tests and existing checks remain.
+The upstream release gate stays unchanged, but depends only on Windows artifacts.
+
+Long builds run in detached hidden processes with persistent logs and exit
+status. The next user prompt checks the previous results; the current response
+does not wait or repeatedly poll. Pending builds are not passing builds and
+must not be used as evidence for package correctness or performance.

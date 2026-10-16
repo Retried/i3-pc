@@ -31,7 +31,7 @@ Options:   this build's settings are the last sections of the game's own Options
                        saved in user\i3_achievements. Names show as "Trophy 1" to "Trophy 48"
                        unless user\i3_achievements\names.txt lists them (id, tab, name, tab,
                        description, one per line).
-Game data: D:\Games\CUSA00004 (read only, never modified; path in game_path.txt)
+Game data: your own CUSA00004 v1.07 folder (read only; path in game_path.txt)
 Saves:     user\home\1000\savedata\CUSA00004
 Bindings:  user\input_config\CUSA00004.ini  (F8 reloads it while the game runs)
 

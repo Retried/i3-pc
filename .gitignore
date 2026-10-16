@@ -2,6 +2,7 @@
 runtime/Build/
 bin/
 bin-release/
+packages/
 dist/*.exe
 dist/*.pdb
 dist/game_path.txt

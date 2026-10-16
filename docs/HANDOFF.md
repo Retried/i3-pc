@@ -1,6 +1,6 @@
 # Continuation notes
 
-Prepared on 2026-10-15 for the next project chat. This file records completed
+Updated on 2026-10-16 for the next project chat. This file records completed
 work and remaining checks; it does not authorize implementing another stage.
 
 ## Start here
@@ -28,7 +28,7 @@ Do not trade rendering correctness or stability for FPS.
   x86-64 without changing the `__rdtsc()` calls. Only the affected C++ files were
   formatted. REUSE annotations record verified author/year metadata for 11 files.
 
-The main commit containing this handoff pins runtime `1e2a7566` and includes the
+The current main checkout pins runtime `f921cf04` and includes the
 development rules, expanded roadmap, benchmark protocol, decisions and results
 log. Read [DECISIONS.md](DECISIONS.md) before changing the cache or build workflow.
 
@@ -55,14 +55,16 @@ log. Read [DECISIONS.md](DECISIONS.md) before changing the cache or build workfl
   Linux GCC, Linux Clang and macOS emulator builds exposed an additional
   unguarded Windows thread-time API in the rasterizer. Published runtime `340d9afa`
   preserves Windows timing and uses POSIX thread CPU timing elsewhere.
-  Its full Windows x64 emulator build and affected-file format check passed;
-  cross-platform CI verification remains pending. See
-  [CI_RUN_38805748119.md](CI_RUN_38805748119.md).
+  Its full Windows x64 emulator build and affected-file format check passed.
+  Follow-up CI [38812901885](https://github.com/Retried/i3-pc/actions/runs/38812901885)
+  completed successfully: all four emulator builds, all three C++ test jobs and
+  REUSE passed; clang-format retained the same 44 inherited failures.
+  See [CI_RUN_38812901885.md](CI_RUN_38812901885.md).
 - The 44 inherited clang-format findings remain. Do not disable the check or
   perform a repository-wide formatting sweep without a task that calls for it.
-- W1 portable Windows build and packaging remains planned; the scripts still
-  contain machine-specific paths. Local build workarounds are not a portable
-  build implementation.
+- W1 now has shared Windows tool discovery, normal/LTO wrappers and allowlisted
+  portable packaging. See [W1_WINDOWS.md](W1_WINDOWS.md) for commands and validation.
+  Second-PC launch and gameplay acceptance remain pending.
 - W2 NVIDIA validation, W3 repeatable two-PC measurements and W4 further
   measured CPU optimization remain as described in the roadmap.
 - Renderer priority 1 is an unapplied experimental patch, preserved at
@@ -82,3 +84,73 @@ check the test and emulator configurations separately. Keep the existing tests
 and CI checks intact. Use [BENCHMARK_PROTOCOL.md](BENCHMARK_PROTOCOL.md) before
 measuring and record only actual measured changes in
 [PERFORMANCE_LOG.md](PERFORMANCE_LOG.md).
+
+## Current continuation: W1 and non-blocking builds
+
+The previous fresh normal and LTO builds both linked shadps4.exe successfully.
+The old LTO script process then failed to write metadata because Get-FileHash was
+unavailable. The current script uses .NET SHA-256; the incremental normal build
+and an allowlisted package passed. `packages/W1 validation incremental.zip` is
+that earlier validation artifact, not a package of the later dirty checkout.
+
+The current user requested Windows-only automatic emulator artifact builds.
+The workflow now gates macOS, Linux Clang and Linux GCC builds behind manual
+workflow_dispatch with build_non_windows=true (default false). Cross-platform
+C++ tests remain enabled. The upstream-only release condition is preserved;
+its dependencies now include only Windows and get-info.
+
+The top-level and runtime AGENTS.md now require recording long builds without
+waiting. Check the pending build records below on the next prompt; do not start
+duplicate builds or claim success before reading their final status and logs.
+
+A separate pre-existing local formatting change in
+`runtime/src/core/libraries/audio/sdl_audio_out.cpp` was discovered on resume.
+It is preserved and excluded from the requested CI/AGENTS publication. Local
+refresh builds include that dirty file and must not be confused with clean CI.
+
+The user explicitly confirmed publication to https://github.com/Retried/i3-pc.git
+on 2026-10-16. Runtime `f921cf04f458d455751ac4e9db3385e9d00204d8` publishes the
+workflow and AGENTS.md policy changes. The main W1 commit pins that revision.
+The unrelated audio formatting change remains local and must not be staged.
+
+### Pending local builds: check on the next prompt
+
+Started on 2026-10-16 in hidden detached processes, without waiting:
+
+| Variant | PID | Entry command from repository root |
+| --- | --- | --- |
+| RelWithDebInfo | 25964 | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File runtime/Build/w1-resume-20261016/run.ps1 -Variant normal` |
+| Release/LTO | 23328 | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File runtime/Build/w1-resume-20261016/run.ps1 -Variant lto` |
+
+Source: main `8cf172f2eebe5e2aa9c123d5ecf9c1471dc90730` plus local W1/docs/rules
+changes; runtime `340d9afac55cdc4267a197ef1c96aacd7ff03072` plus local workflow,
+AGENTS.md and the separate audio-formatting change. These are dirty local builds.
+
+Records live in ignored `runtime/Build/w1-resume-20261016/`:
+
+- `normal.started.json`, `lto.started.json`: exact launch commands, PIDs, revisions.
+- `normal.stdout.log`, `normal.stderr.log`, `lto.stdout.log`, `lto.stderr.log`.
+- `normal.status.json`, `lto.status.json`: created when the wrapper finishes;
+  require exitCode=0 and verify matching build-info.json/executable hashes.
+- Expected outputs: `runtime/Build/w1-x64-Clang-RelWithDebInfo/shadps4.exe` and
+  `runtime/Build/w1-x64-Clang-Release-lto/shadps4.exe`, with build-info.json beside each.
+
+The helper invokes tools/build-windows.ps1 with -Jobs 3 and the local explicit
+Python interpreter; -Configuration Release -Lto is added for the LTO variant.
+Do not start duplicate jobs. If a status file is absent, verify the PID/start time
+from the started record; a dead process without status means interrupted/unknown.
+After success, package the desired matching build and smoke-test the new package.
+At the publication prompt, both recorded processes were still running and no
+status files existed; no duplicate jobs were started and no completion was claimed.
+The source refs were advanced for publication while these builds were running.
+Use the launch records for their original revisions and final metadata/logs for
+their completion state; they are not substitutes for clean CI on the published ref.
+
+### Pending CI: check on the next prompt
+
+[Run 38860588943](https://github.com/Retried/i3-pc/actions/runs/38860588943)
+was queued for runtime `f921cf04f458d455751ac4e9db3385e9d00204d8` after publication.
+On the next prompt, verify Windows build and test/check results and confirm that
+the three non-Windows emulator jobs were skipped on this push. Do not wait or
+repeatedly poll during the publication response. The older successful run
+38812901885 does not validate the new workflow changes.

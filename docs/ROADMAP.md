@@ -10,7 +10,7 @@ For the current checkout, validation results and continuation notes, read
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| W1 | Portable Windows build, toolchain discovery, packaging and launch | Planned; current scripts contain machine-specific paths. |
+| W1 | Portable Windows build, toolchain discovery, packaging and launch | Implemented wrapper and package tooling; validation in progress, second-PC acceptance pending. See W1_WINDOWS.md. |
 | W2 | NVIDIA Vulkan compatibility and diagnostics | Basic device diagnostics exist; target hardware validation remains pending. |
 | W3 | Repeatable benchmarks and profiling on two PCs | Existing scripts need portability, metadata and comparison improvements. |
 | W4 | CPU and draw-call optimization guided by measurements | Existing optimizations need validation against a baseline on both PCs. |
@@ -21,8 +21,14 @@ build; game validation and performance measurements remain pending. The
 priority 1 push-descriptor patch remains experimental and unapplied.
 
 CI portability fixes and their validation are documented in
-[CI_RUN_38766554875.md](CI_RUN_38766554875.md). The remaining 44 inherited
-clang-format findings are listed there; they are not new optimization work.
+[CI_RUN_38812901885.md](CI_RUN_38812901885.md). The remaining 44 inherited
+clang-format findings are listed in [the original report](CI_RUN_38766554875.md);
+they are not new optimization work. W1 usage and validation are in
+[W1_WINDOWS.md](W1_WINDOWS.md).
+
+Automatic emulator artifact builds now target Windows; Linux/macOS jobs are
+manual opt-in. Cross-platform C++ tests remain enabled. Per AGENTS.md, long
+builds are checked on the next user prompt using the pending records in HANDOFF.md.
 
 Work on the stage requested by the user. A roadmap entry alone does not authorize
 implementation of every stage. Use [BENCHMARK_PROTOCOL.md](BENCHMARK_PROTOCOL.md)

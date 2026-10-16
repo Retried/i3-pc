@@ -105,13 +105,14 @@ duplicate builds or claim success before reading their final status and logs.
 
 A separate pre-existing local formatting change in
 `runtime/src/core/libraries/audio/sdl_audio_out.cpp` was discovered on resume.
-It is preserved and excluded from the requested CI/AGENTS publication. Local
-refresh builds include that dirty file and must not be confused with clean CI.
+It was excluded from the CI/AGENTS publication, then explicitly requested and
+published as `2aa98f8b5eebc2b50b5e591d43cf4b4a5fcdef81`. Local refresh builds
+include its content and must not be confused with clean CI.
 
 The user explicitly confirmed publication to https://github.com/Retried/i3-pc.git
 on 2026-10-16. Runtime `f921cf04f458d455751ac4e9db3385e9d00204d8` publishes the
 workflow and AGENTS.md policy changes. The main W1 commit pins that revision.
-The unrelated audio formatting change remains local and must not be staged.
+The subsequent audio/upstream publication is recorded below.
 
 ### Pending local builds: check on the next prompt
 
@@ -154,3 +155,34 @@ On the next prompt, verify Windows build and test/check results and confirm that
 the three non-Windows emulator jobs were skipped on this push. Do not wait or
 repeatedly poll during the publication response. The older successful run
 38812901885 does not validate the new workflow changes.
+
+## 2026-10-16: Audio and selected upstream merge published
+
+Runtime `23fb10237227edeafa2398b8d6993c56c6b48f61` is a two-parent merge of
+our audio commit `2aa98f8b5eebc2b50b5e591d43cf4b4a5fcdef81` and the requested
+upstream snapshot `01201155b2daab7f0d3459c007317cf245660302`. Main pins the
+merged revision. See [UPSTREAM_6D2A7388.md](UPSTREAM_6D2A7388.md) for accepted
+resource-pool fixes and excluded shader/upload paths.
+
+At the start of this task, both previous local build processes were still
+running without final status files. Prior CI run 38860588943 had passed REUSE,
+failed formatting, and still had Windows/tests in progress. Its three non-Windows
+emulator jobs were skipped, confirming the requested automatic-build policy.
+
+To preserve those running builds, the primary `runtime` checkout stays at
+`2aa98f8b`; it intentionally differs from main's gitlink. The clean merged tree
+is at `runtime/Build/upstream-01201155`, branch
+`codex/merge-upstream-01201155`. Do not stage the older primary submodule pointer.
+After checking the old builds and confirming their processes have stopped,
+verify the primary runtime has no local edits, fetch origin and fast-forward
+its runtime branch to the pinned revision. Do not change its sources mid-build.
+
+Audio clang-format and diff whitespace checks pass. A focused clang-cl `/Zs`
+syntax check of the merged texture-cache translation unit passed (exit 0), using the existing
+Windows compile database/includes; local helper: `runtime/Build/upstream-syntax.cmd`.
+It does not link or validate gameplay. Full validation remains pending in
+[run 38861638420](https://github.com/Retried/i3-pc/actions/runs/38861638420)
+for `23fb10237227edeafa2398b8d6993c56c6b48f61`, initially pending after push.
+On the next prompt check that run, previous run 38860588943 and the two local
+build records above. Do not wait or launch duplicate builds in this response.
+No new binary package or measured performance claim accompanies this merge.

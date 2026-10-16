@@ -92,3 +92,14 @@ Long builds run in detached hidden processes with persistent logs and exit
 status. The next user prompt checks the previous results; the current response
 does not wait or repeatedly poll. Pending builds are not passing builds and
 must not be used as evidence for package correctness or performance.
+
+## 2026-10-16: Selective merge of runtime snapshot 01201155
+
+Merge the runtime snapshot referenced by wrapper commit 6d2a7388, retaining our
+shader specialization checks and synchronous upload copies. Accept the sampler
+limit clamp and occupancy-aware image collection, correcting the pressure-relax
+condition to consider remaining image slots. Publish the existing audio-only
+formatting separately. See [UPSTREAM_6D2A7388.md](UPSTREAM_6D2A7388.md) for scope,
+rejected paths, correctness evidence and validation limits. Do not infer a
+performance win from source inspection. Prepare changes outside the source tree
+of pending local builds and defer checkout synchronization until they finish.

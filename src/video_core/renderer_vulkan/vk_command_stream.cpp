@@ -1,19 +1,115 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cstdlib>
 #include <immintrin.h>
 
 #include "common/assert.h"
+#include "common/logging/log.h"
 #include "common/thread.h"
 #include "video_core/renderer_vulkan/vk_command_stream.h"
 
 namespace Vulkan {
 
 CommandStream::CommandStream() {
+    descriptor_cache_enabled = std::getenv("SHAD_DISABLE_PUSH_DESCRIPTOR_CACHE") == nullptr;
+    descriptor_stats_enabled = std::getenv("SHAD_PUSH_DESCRIPTOR_STATS") != nullptr;
+    last_descriptor_report = std::chrono::steady_clock::now();
     const char* setting = std::getenv("SOTC_WORKER_RECORD");
     async = setting == nullptr || std::atoi(setting) != 0;
     if (async) {
         worker = std::jthread([this](std::stop_token stop) { WorkerLoop(stop); });
+    }
+}
+
+void CommandStream::InvalidateDescriptorCache(DescriptorInvalidation reason) {
+    if (descriptor_stats_enabled) {
+        ++descriptor_stats.invalidations[static_cast<size_t>(reason)];
+    }
+    for (auto& cache : descriptor_caches) {
+        cache.layout = nullptr;
+        cache.hit_run = 0;
+    }
+}
+
+void CommandStream::ReportDescriptorCacheStats() {
+    if (!descriptor_stats_enabled) {
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_descriptor_report < std::chrono::seconds(3)) {
+        return;
+    }
+    last_descriptor_report = now;
+    const auto& s = descriptor_stats;
+    LOG_INFO(Render_Vulkan,
+             "Push descriptors total: cache {} worker {} calls {} cacheable {} writes {} "
+             "forwarded {} skipped_calls {} max_hit_run {} layout_changes {}",
+             descriptor_cache_enabled, async, s.calls, s.cacheable_calls, s.writes, s.forwarded,
+             s.skipped_calls, s.max_hit_run, s.layout_changes);
+    LOG_INFO(Render_Vulkan,
+             "Push descriptor invalidations total: target {} session {} sets {} generic {} "
+             "direct {} unsupported {} lifetime {}",
+             s.invalidations[0], s.invalidations[1], s.invalidations[2], s.invalidations[3],
+             s.invalidations[4], s.invalidations[5], s.invalidations[6]);
+}
+
+bool CommandStream::CachedDescriptor::Update(const vk::WriteDescriptorSet& write) {
+    bool same = valid && type == write.descriptorType;
+    switch (write.descriptorType) {
+    case vk::DescriptorType::eSampler:
+        same &= image.sampler == write.pImageInfo->sampler;
+        image.sampler = write.pImageInfo->sampler;
+        break;
+    case vk::DescriptorType::eCombinedImageSampler:
+        same &= image == *write.pImageInfo;
+        image = *write.pImageInfo;
+        break;
+    case vk::DescriptorType::eSampledImage:
+    case vk::DescriptorType::eStorageImage:
+    case vk::DescriptorType::eInputAttachment:
+        same &= image.imageView == write.pImageInfo->imageView &&
+                image.imageLayout == write.pImageInfo->imageLayout;
+        image.imageView = write.pImageInfo->imageView;
+        image.imageLayout = write.pImageInfo->imageLayout;
+        break;
+    case vk::DescriptorType::eUniformBuffer:
+    case vk::DescriptorType::eStorageBuffer:
+        same &= buffer == *write.pBufferInfo;
+        buffer = *write.pBufferInfo;
+        break;
+    case vk::DescriptorType::eUniformTexelBuffer:
+    case vk::DescriptorType::eStorageTexelBuffer:
+        same &= texel == *write.pTexelBufferView;
+        texel = *write.pTexelBufferView;
+        break;
+    default:
+        return false;
+    }
+    type = write.descriptorType;
+    valid = true;
+    return same;
+}
+
+static bool CanCacheDescriptor(const vk::WriteDescriptorSet& write) {
+    if (write.pNext || write.descriptorCount != 1 || write.dstArrayElement != 0) {
+        return false;
+    }
+    switch (write.descriptorType) {
+    case vk::DescriptorType::eSampler:
+    case vk::DescriptorType::eCombinedImageSampler:
+    case vk::DescriptorType::eSampledImage:
+    case vk::DescriptorType::eStorageImage:
+    case vk::DescriptorType::eInputAttachment:
+        return write.pImageInfo != nullptr;
+    case vk::DescriptorType::eUniformBuffer:
+    case vk::DescriptorType::eStorageBuffer:
+        return write.pBufferInfo != nullptr;
+    case vk::DescriptorType::eUniformTexelBuffer:
+    case vk::DescriptorType::eStorageTexelBuffer:
+        return write.pTexelBufferView != nullptr;
+    default:
+        return false;
     }
 }
 
@@ -116,6 +212,58 @@ void CommandStream::WorkerLoop(std::stop_token stop) {
 
 void CommandStream::pushDescriptorSetKHR(vk::PipelineBindPoint point, vk::PipelineLayout layout,
                                          u32 set, std::span<const vk::WriteDescriptorSet> writes) {
+    if (descriptor_cache_enabled && descriptor_resources_changed.load(std::memory_order_acquire) &&
+        descriptor_resources_changed.exchange(false, std::memory_order_acq_rel)) {
+        InvalidateDescriptorCache(DescriptorInvalidation::ResourceLifetime);
+    }
+    if (descriptor_stats_enabled) {
+        ++descriptor_stats.calls;
+        descriptor_stats.writes += writes.size();
+    }
+    auto& changed = changed_descriptor_writes;
+    const bool cacheable =
+        descriptor_cache_enabled && !writes.empty() && set == 0 &&
+        (point == vk::PipelineBindPoint::eGraphics || point == vk::PipelineBindPoint::eCompute) &&
+        writes.size() <= changed.size() && std::ranges::all_of(writes, [](const auto& write) {
+            return write.dstBinding < MaxCachedDescriptorBindings && CanCacheDescriptor(write);
+        });
+    if (cacheable) {
+        if (descriptor_stats_enabled) {
+            ++descriptor_stats.cacheable_calls;
+        }
+        auto& cache = descriptor_caches[point == vk::PipelineBindPoint::eCompute ? 1 : 0];
+        if (cache.layout != layout) {
+            if (descriptor_stats_enabled) {
+                ++descriptor_stats.layout_changes;
+            }
+            cache.layout = layout;
+            cache.hit_run = 0;
+            for (auto& binding : cache.bindings) {
+                binding.valid = false;
+            }
+        }
+        size_t count = 0;
+        for (const auto& write : writes) {
+            if (!cache.bindings[write.dstBinding].Update(write)) {
+                changed[count++] = write;
+            }
+        }
+        if (count == 0) {
+            if (descriptor_stats_enabled) {
+                ++descriptor_stats.skipped_calls;
+                descriptor_stats.max_hit_run =
+                    std::max(descriptor_stats.max_hit_run, ++cache.hit_run);
+            }
+            return;
+        }
+        cache.hit_run = 0;
+        writes = std::span{changed}.first(count);
+    } else if (descriptor_cache_enabled) {
+        InvalidateDescriptorCache(DescriptorInvalidation::Unsupported);
+    }
+    if (descriptor_stats_enabled) {
+        descriptor_stats.forwarded += writes.size();
+    }
     if (!async) {
         target.pushDescriptorSetKHR(point, layout, set, static_cast<u32>(writes.size()),
                                     writes.data());

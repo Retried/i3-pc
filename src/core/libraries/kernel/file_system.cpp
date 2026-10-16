@@ -121,7 +121,13 @@ s32 PS4_SYSV_ABI open(const char* raw_path, s32 flags, u16 mode) {
         LOG_WARNING(Kernel_Fs, "flags {:#x} not fully handled", flags);
     }
 
-    std::string_view path{raw_path};
+    const auto sanitized_path = Core::FileSys::MntPoints::SanitizeGuestPath(raw_path);
+    if (!sanitized_path) {
+        *__Error() = POSIX_EINVAL;
+        LOG_ERROR(Kernel_Fs, "Opening path {} failed, invalid path", raw_path);
+        return -1;
+    }
+    const std::string& path = *sanitized_path;
     u32 handle = h->CreateHandle();
     auto* file = h->GetFile(handle);
 
@@ -206,8 +212,7 @@ s32 PS4_SYSV_ABI open(const char* raw_path, s32 flags, u16 mode) {
 
         file->type = Core::FileSys::FileType::Directory;
         file->is_opened = true;
-        if (file->m_guest_name.starts_with("/app0")) {
-            // TODO: Properly identify type for paths like "/app0/.."
+        if (file->m_guest_name == "/app0" || file->m_guest_name.starts_with("/app0/")) {
             file->directory = Core::Directories::PfsDirectory::Create(file->m_guest_name);
         } else {
             file->directory = Core::Directories::NormalDirectory::Create(file->m_guest_name);
@@ -636,6 +641,10 @@ s32 PS4_SYSV_ABI sceKernelMkdir(const char* path, u16 mode) {
 }
 
 s32 PS4_SYSV_ABI posix_rmdir(const char* path) {
+    if (!path) {
+        *__Error() = POSIX_EFAULT;
+        return -1;
+    }
     if (strlen(path) > 255) {
         *__Error() = POSIX_ENAMETOOLONG;
         return -1;
@@ -650,21 +659,37 @@ s32 PS4_SYSV_ABI posix_rmdir(const char* path) {
         return -1;
     }
 
-    if (dir_name.empty() || !fs::is_directory(dir_name)) {
-        *__Error() = POSIX_ENOTDIR;
-        return -1;
-    }
-
-    if (!fs::exists(dir_name)) {
+    if (dir_name.empty()) {
         *__Error() = POSIX_ENOENT;
         return -1;
     }
 
     std::error_code ec;
-    s32 result = fs::remove_all(dir_name, ec);
-
+    const auto status = fs::symlink_status(dir_name, ec);
+    if (ec == std::errc::no_such_file_or_directory || (!ec && !fs::exists(status))) {
+        *__Error() = POSIX_ENOENT;
+        return -1;
+    }
+    if (!ec && !fs::is_directory(status)) {
+        *__Error() = POSIX_ENOTDIR;
+        return -1;
+    }
+    if (!ec && !fs::remove(dir_name, ec) && !ec) {
+        *__Error() = POSIX_ENOENT;
+        return -1;
+    }
     if (ec) {
-        *__Error() = POSIX_EIO;
+        if (ec == std::errc::directory_not_empty) {
+            *__Error() = POSIX_ENOTEMPTY;
+        } else if (ec == std::errc::permission_denied || ec == std::errc::operation_not_permitted) {
+            *__Error() = POSIX_EACCES;
+        } else if (ec == std::errc::no_such_file_or_directory) {
+            *__Error() = POSIX_ENOENT;
+        } else if (ec == std::errc::not_a_directory) {
+            *__Error() = POSIX_ENOTDIR;
+        } else {
+            *__Error() = POSIX_EIO;
+        }
         return -1;
     }
     return ORBIS_OK;
@@ -689,7 +714,7 @@ s32 PS4_SYSV_ABI posix_access(const char* path, s32 mode) {
     auto* mnt = Common::Singleton<Core::FileSys::MntPoints>::Instance();
     const bool is_dir = mnt->IsDirectory(path);
     const bool is_file = !is_dir && mnt->Exists(path);
-    const bool is_root = strncmp(path, "/", 2) == 0;
+    const bool is_root = Core::FileSys::MntPoints::SanitizeGuestPath(path) == "/";
     if (!is_dir && !is_file && !is_root) {
         *__Error() = POSIX_ENOENT;
         return -1;
@@ -712,7 +737,7 @@ s32 PS4_SYSV_ABI posix_stat(const char* path, OrbisKernelStat* sb) {
 
     const bool is_dir = mnt->IsDirectory(path);
     const bool is_file = !is_dir && mnt->Exists(path);
-    const bool is_root = strncmp(path, "/", 2) == 0;
+    const bool is_root = Core::FileSys::MntPoints::SanitizeGuestPath(path) == "/";
     if (!is_dir && !is_file && !is_root) {
         *__Error() = POSIX_ENOENT;
         return -1;
@@ -786,12 +811,22 @@ s32 PS4_SYSV_ABI sceKernelStat(const char* path, OrbisKernelStat* sb) {
 }
 
 s32 PS4_SYSV_ABI sceKernelCheckReachability(const char* path) {
+    if (!path) {
+        return ORBIS_KERNEL_ERROR_EFAULT;
+    }
     if (strlen(path) > 255) {
         return ORBIS_KERNEL_ERROR_ENAMETOOLONG;
     }
 
     auto* mnt = Common::Singleton<Core::FileSys::MntPoints>::Instance();
-    std::string_view guest_path{path};
+    const auto sanitized = Core::FileSys::MntPoints::SanitizeGuestPath(path);
+    if (!sanitized) {
+        return ORBIS_KERNEL_ERROR_EINVAL;
+    }
+    const std::string_view guest_path{*sanitized};
+    if (guest_path == "/") {
+        return ORBIS_OK;
+    }
     for (const auto& prefix : available_device | std::views::keys) {
         if (guest_path.starts_with(prefix)) {
             return ORBIS_OK;

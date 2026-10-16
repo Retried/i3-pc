@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/alignment.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -77,18 +78,37 @@ static std::pair<u32, u32> SanitizeCopyLayers(const VideoCore::ImageInfo& src_in
     return std::make_pair(src_layers, dst_layers);
 }
 
-static u32 BufferImageCopySize(const vk::BufferImageCopy& copy, const vk::Format pixel_format) {
+static u64 BufferImageCopySize(const vk::BufferImageCopy& copy, vk::Format pixel_format) {
+    // Buffer copies pack depth and stencil as separate planes, not the combined image format.
+    if (copy.imageSubresource.aspectMask == vk::ImageAspectFlagBits::eStencil) {
+        pixel_format = vk::Format::eS8Uint;
+    } else if (copy.imageSubresource.aspectMask == vk::ImageAspectFlagBits::eDepth) {
+        switch (pixel_format) {
+        case vk::Format::eD16UnormS8Uint:
+            pixel_format = vk::Format::eD16Unorm;
+            break;
+        case vk::Format::eD24UnormS8Uint:
+            pixel_format = vk::Format::eX8D24UnormPack32;
+            break;
+        case vk::Format::eD32SfloatS8Uint:
+            pixel_format = vk::Format::eD32Sfloat;
+            break;
+        default:
+            break;
+        }
+    }
     const u32 row_length = copy.bufferRowLength ? copy.bufferRowLength : copy.imageExtent.width;
     const u32 height = copy.bufferImageHeight ? copy.bufferImageHeight : copy.imageExtent.height;
 
     const auto block = vk::blockExtent(pixel_format);
     const u32 block_size = vk::blockSize(pixel_format);
-    const u32 row_pitch = (row_length / block[0]) * block_size;
-    const u32 slice_pitch = (height / block[1]) * row_pitch;
+    const u64 row_pitch = ((u64(row_length) + block[0] - 1) / block[0]) * block_size;
+    const u64 slice_pitch = ((u64(height) + block[1] - 1) / block[1]) * row_pitch;
 
-    const u32 width_in_blocks = (copy.imageExtent.width + block[0] - 1) / block[0];
-    const u32 height_in_blocks = (copy.imageExtent.height + block[1] - 1) / block[1];
-    const u32 num_slices = copy.imageExtent.depth * copy.imageSubresource.layerCount;
+    const u64 width_in_blocks = (u64(copy.imageExtent.width) + block[0] - 1) / block[0];
+    const u64 height_in_blocks = (u64(copy.imageExtent.height) + block[1] - 1) / block[1];
+    const u64 num_slices = ((u64(copy.imageExtent.depth) + block[2] - 1) / block[2]) *
+                           copy.imageSubresource.layerCount;
 
     return (num_slices - 1) * slice_pitch + (height_in_blocks - 1) * row_pitch +
            width_in_blocks * block_size;
@@ -321,29 +341,53 @@ void Runtime::CopyImage(VideoCore::Image* src, VideoCore::Image* dst) {
     dst->flags &= ~VideoCore::ImageFlagBits::Dirty;
 }
 
-void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
-                                  const VideoCore::Buffer* buffer, u64 offset) {
+void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst) {
     const u32 num_mips = std::min(src->info.resources.levels, dst->info.resources.levels);
     const u32 num_layers = std::min(src->info.resources.layers, dst->info.resources.layers);
-    ASSERT(src->info.resources.layers == dst->info.resources.layers && num_mips == 1);
+    if (num_mips == 0 || num_layers == 0) {
+        return;
+    }
 
     SetBackingSamples(dst, dst->info.num_samples, false);
     SetBackingSamples(src, src->info.num_samples);
 
-    vk::BufferImageCopy buffer_copy = {
-        .bufferOffset = offset,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource{
-            .aspectMask = src->aspect_mask & ~vk::ImageAspectFlagBits::eStencil,
-            .mipLevel = 0u,
-            .baseArrayLayer = 0,
-            .layerCount = num_layers,
-        },
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {src->info.size.width, src->info.size.height, src->info.size.depth},
-    };
-    const auto copy_size = BufferImageCopySize(buffer_copy, src->info.pixel_format);
+    const auto src_aspect = src->aspect_mask & ~vk::ImageAspectFlagBits::eStencil;
+    const auto dst_aspect = dst->aspect_mask & ~vk::ImageAspectFlagBits::eStencil;
+    SmallVector<vk::BufferImageCopy, 8> buffer_copies;
+    u64 copy_size = 0;
+    for (u32 mip = 0; mip < num_mips; ++mip) {
+        vk::BufferImageCopy copy{
+            .bufferOffset = Common::AlignUp(copy_size, 16),
+            .imageSubresource{
+                .aspectMask = src_aspect,
+                .mipLevel = mip,
+                .baseArrayLayer = 0,
+                .layerCount = num_layers,
+            },
+            .imageExtent =
+                {
+                    std::max(std::min(src->info.size.width, dst->info.size.width) >> mip, 1u),
+                    std::max(std::min(src->info.size.height, dst->info.size.height) >> mip, 1u),
+                    std::max(std::min(src->info.size.depth, dst->info.size.depth) >> mip, 1u),
+                },
+        };
+        const u64 mip_size = BufferImageCopySize(copy, src->info.pixel_format);
+        auto dst_copy = copy;
+        dst_copy.imageSubresource.aspectMask = dst_aspect;
+        ASSERT_MSG(mip_size == BufferImageCopySize(dst_copy, dst->info.pixel_format),
+                   "Incompatible buffer image copy formats: {} -> {}",
+                   vk::to_string(src->info.pixel_format), vk::to_string(dst->info.pixel_format));
+        copy_size = copy.bufferOffset + mip_size;
+        buffer_copies.push_back(copy);
+    }
+
+    const auto copy_ref = staging_pool.Request(copy_size, VideoCore::MemoryType::DeviceLocal, 16);
+    const auto* buffer = copy_ref.buffer;
+    const u64 offset = copy_ref.offset;
+    ASSERT(offset <= buffer->SizeBytes() && copy_size <= buffer->SizeBytes() - offset);
+    for (auto& copy : buffer_copies) {
+        copy.bufferOffset += offset;
+    }
 
     scheduler.EndRendering();
 
@@ -352,14 +396,14 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
                 vk::AccessFlagBits2::eTransferRead);
     needs_flush |= Transit(dst, vk::ImageLayout::eTransferDstOptimal,
                            vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite);
-    needs_flush |= IsBufferAccessed(buffer, offset, copy_size);
+    needs_flush |= IsBufferAccessed(buffer, offset, copy_size, true);
     if (needs_flush) {
         FlushBarriers();
     }
 
     auto cmdbuf = scheduler.CommandBuffer();
     cmdbuf.copyImageToBuffer(src->GetImage(), vk::ImageLayout::eTransferSrcOptimal,
-                             buffer->Handle(), buffer_copy);
+                             buffer->Handle(), buffer_copies);
 
     const vk::MemoryBarrier2 post_copy_barrier = {
         .srcStageMask = vk::PipelineStageFlagBits2::eCopy,
@@ -373,9 +417,13 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
         .pMemoryBarriers = &post_copy_barrier,
     });
 
-    buffer_copy.imageSubresource.aspectMask = dst->aspect_mask & ~vk::ImageAspectFlagBits::eStencil;
+    for (auto& copy : buffer_copies) {
+        copy.imageSubresource.aspectMask = dst_aspect;
+    }
     cmdbuf.copyBufferToImage(buffer->Handle(), dst->GetImage(),
-                             vk::ImageLayout::eTransferDstOptimal, buffer_copy);
+                             vk::ImageLayout::eTransferDstOptimal, buffer_copies);
+    AccessBuffer(buffer, offset, copy_size, vk::PipelineStageFlagBits2::eCopy,
+                 vk::AccessFlagBits2::eTransferRead | vk::AccessFlagBits2::eTransferWrite);
 
     dst->flags |= (src->flags & VideoCore::ImageFlagBits::GpuModified);
     dst->flags &= ~VideoCore::ImageFlagBits::Dirty;
@@ -441,10 +489,7 @@ void Runtime::CopyColorAndDepth(VideoCore::Image* src, VideoCore::Image* dst) {
             CopyImage(src, dst);
         } else {
             // Perform depth from/to color copy using the intermediate copy buffer.
-            static constexpr size_t COPY_BUFFER_SIZE = 128_MB;
-            const auto copy_ref =
-                staging_pool.Request(COPY_BUFFER_SIZE, VideoCore::MemoryType::DeviceLocal);
-            CopyImageWithBuffer(src, dst, copy_ref.buffer, copy_ref.offset);
+            CopyImageWithBuffer(src, dst);
         }
     } else if (src->info.num_samples == 1 && dst->info.num_samples > 1 &&
                dst->info.props.is_depth) {

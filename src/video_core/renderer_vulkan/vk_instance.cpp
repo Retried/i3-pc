@@ -212,7 +212,8 @@ bool Instance::CreateDevice() {
         vk::PhysicalDevicePrimitiveTopologyListRestartFeaturesEXT,
         vk::PhysicalDeviceShaderAtomicFloat2FeaturesEXT,
         vk::PhysicalDeviceWorkgroupMemoryExplicitLayoutFeaturesKHR,
-        vk::PhysicalDeviceImage2DViewOf3DFeaturesEXT, vk::PhysicalDeviceShaderClockFeaturesKHR>();
+        vk::PhysicalDeviceImage2DViewOf3DFeaturesEXT, vk::PhysicalDeviceShaderClockFeaturesKHR,
+        vk::PhysicalDeviceMaintenance5FeaturesKHR, vk::PhysicalDeviceMaintenance6FeaturesKHR>();
     features = feature_chain.get().features;
 
     const vk::StructureChain properties_chain = physical_device.getProperties2<
@@ -266,7 +267,12 @@ bool Instance::CreateDevice() {
                "Required Vulkan feature unavailable: nullDescriptor");
 
     // Optional
-    maintenance_5 = add_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
+    maintenance_5 = feature_chain.get<vk::PhysicalDeviceMaintenance5FeaturesKHR>().maintenance5 &&
+                    add_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
+    maintenance_6 = feature_chain.get<vk::PhysicalDeviceMaintenance6FeaturesKHR>().maintenance6 &&
+                    add_extension(VK_KHR_MAINTENANCE_6_EXTENSION_NAME);
+    LOG_INFO(Render_Vulkan, "Index buffer features: maintenance5={}, maintenance6={}",
+             maintenance_5, maintenance_6);
     maintenance_8 = add_extension(VK_KHR_MAINTENANCE_8_EXTENSION_NAME);
     attachment_feedback_loop = add_extension(VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME);
     if (attachment_feedback_loop) {
@@ -517,6 +523,9 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceMaintenance5FeaturesKHR{
             .maintenance5 = true,
         },
+        vk::PhysicalDeviceMaintenance6FeaturesKHR{
+            .maintenance6 = true,
+        },
         vk::PhysicalDeviceMaintenance8FeaturesKHR{
             .maintenance8 = true,
         },
@@ -582,6 +591,9 @@ bool Instance::CreateDevice() {
     }
     if (!maintenance_5) {
         device_chain.unlink<vk::PhysicalDeviceMaintenance5FeaturesKHR>();
+    }
+    if (!maintenance_6) {
+        device_chain.unlink<vk::PhysicalDeviceMaintenance6FeaturesKHR>();
     }
     if (!maintenance_8) {
         device_chain.unlink<vk::PhysicalDeviceMaintenance8FeaturesKHR>();

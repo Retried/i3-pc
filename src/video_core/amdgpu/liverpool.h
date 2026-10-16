@@ -60,6 +60,7 @@ struct Liverpool {
     };
 
     Regs regs{};
+    u32 index_buffer_num_indices{};
     /// Set by every command other than an indirect draw; cleared by the rasterizer after one.
     /// While clear, the next indirect draw can only differ in its argument slot.
     bool state_changed_since_draw{true};

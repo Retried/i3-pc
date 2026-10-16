@@ -7,6 +7,7 @@
 #include "core/emulator_settings.h"
 #include "core/file_sys/fs.h"
 #include "core/libraries/kernel/process.h"
+#include "core/libraries/kernel/time.h"
 #include "core/libraries/libs.h"
 #include "core/libraries/system/systemservice.h"
 #include "core/libraries/system/systemservice_error.h"
@@ -1956,11 +1957,15 @@ s32 PS4_SYSV_ABI sceSystemServiceParamGetInt(OrbisSystemServiceParamId param_id,
         *value = u32(OrbisSystemParamTimeFormat::Fmt24Hour);
         break;
     case OrbisSystemServiceParamId::TimeZone:
-        *value = +120;
+    case OrbisSystemServiceParamId::Summertime: {
+        Kernel::OrbisKernelTimezone zone{};
+        if (const auto ret = Kernel::sceKernelGettimezone(&zone); ret < 0) {
+            return ret;
+        }
+        *value = param_id == OrbisSystemServiceParamId::TimeZone ? zone.tz_minuteswest
+                                                                 : zone.tz_dsttime != 0;
         break;
-    case OrbisSystemServiceParamId::Summertime:
-        *value = 1;
-        break;
+    }
     case OrbisSystemServiceParamId::GameParentalLevel:
         *value = u32(OrbisSystemParamGameParentalLevel::Off);
         break;

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
+// SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
@@ -12,6 +12,33 @@
 #include "core/libraries/rtc/rtc_error.h"
 
 namespace Libraries::Rtc {
+
+namespace {
+time_t TickSeconds(const OrbisRtcTick& tick) {
+    return static_cast<s64>(tick.tick / 1000000) - static_cast<s64>(UNIX_EPOCH_TICKS / 1000000);
+}
+
+int LocalOffset(const OrbisRtcTick& tick, int& minutes) {
+    Kernel::OrbisTimesec info{};
+    const auto ret =
+        Kernel::sceKernelConvertUtcToLocaltime(TickSeconds(tick), nullptr, &info, nullptr);
+    if (ret < 0) {
+        return ORBIS_RTC_ERROR_INVALID_VALUE;
+    }
+    minutes = (static_cast<s32>(info.west_sec) + static_cast<s32>(info.dst_sec)) / 60;
+    return ORBIS_OK;
+}
+
+int LocalFormatOffset(const OrbisRtcTick* tick, OrbisRtcTick& current, int& minutes) {
+    if (!tick) {
+        if (const auto ret = sceRtcGetCurrentTick(&current); ret < 0) {
+            return ret;
+        }
+        tick = &current;
+    }
+    return LocalOffset(*tick, minutes);
+}
+} // namespace
 
 int PS4_SYSV_ABI sceRtcCheckValid(OrbisRtcDateTime* pTime) {
     LOG_TRACE(Lib_Rtc, "called");
@@ -69,18 +96,18 @@ int PS4_SYSV_ABI sceRtcCompareTick(OrbisRtcTick* pTick1, OrbisRtcTick* pTick2) {
 int PS4_SYSV_ABI sceRtcConvertLocalTimeToUtc(OrbisRtcTick* pTickLocal, OrbisRtcTick* pTickUtc) {
     LOG_TRACE(Lib_Rtc, "called");
 
-    if (pTickLocal == nullptr)
+    if (pTickLocal == nullptr || pTickUtc == nullptr)
         return ORBIS_RTC_ERROR_INVALID_POINTER;
 
     time_t seconds;
     Kernel::OrbisKernelTimezone timezone;
 
-    int convertValue = Kernel::sceKernelConvertLocaltimeToUtc(
-        (pTickLocal->tick - UNIX_EPOCH_TICKS) / 1000000, 0xffffffff, &seconds, &timezone, 0);
+    int convertValue = Kernel::sceKernelConvertLocaltimeToUtc(TickSeconds(*pTickLocal), 0xffffffff,
+                                                              &seconds, &timezone, nullptr);
 
     if (convertValue >= 0) {
-        convertValue = sceRtcTickAddMinutes(
-            pTickUtc, pTickLocal, -(((timezone.tz_dsttime * 60) - timezone.tz_minuteswest)));
+        convertValue =
+            sceRtcTickAddSeconds(pTickUtc, pTickLocal, seconds - TickSeconds(*pTickLocal));
     }
 
     return convertValue;
@@ -89,16 +116,14 @@ int PS4_SYSV_ABI sceRtcConvertLocalTimeToUtc(OrbisRtcTick* pTickLocal, OrbisRtcT
 int PS4_SYSV_ABI sceRtcConvertUtcToLocalTime(OrbisRtcTick* pTickUtc, OrbisRtcTick* pTickLocal) {
     LOG_TRACE(Lib_Rtc, "called");
 
-    if (pTickUtc == nullptr)
+    if (pTickUtc == nullptr || pTickLocal == nullptr)
         return ORBIS_RTC_ERROR_INVALID_POINTER;
 
-    Kernel::OrbisKernelTimezone timeZone;
-    int returnValue = Kernel::sceKernelGettimezone(&timeZone);
-
-    sceRtcTickAddMinutes(pTickLocal, pTickUtc,
-                         -(timeZone.tz_minuteswest - (timeZone.tz_dsttime * 60)));
-
-    return 0;
+    int minutes;
+    if (const auto ret = LocalOffset(*pTickUtc, minutes); ret < 0) {
+        return ret;
+    }
+    return sceRtcTickAddMinutes(pTickLocal, pTickUtc, minutes);
 }
 
 int PS4_SYSV_ABI sceRtcEnd() {
@@ -259,11 +284,12 @@ int PS4_SYSV_ABI sceRtcFormatRFC2822(char* pszDateTime, const OrbisRtcTick* pTic
 int PS4_SYSV_ABI sceRtcFormatRFC2822LocalTime(char* pszDateTime, const OrbisRtcTick* pTickUtc) {
     LOG_TRACE(Lib_Rtc, "called");
 
-    Kernel::OrbisKernelTimezone timeZone;
-    Kernel::sceKernelGettimezone(&timeZone);
-
-    return sceRtcFormatRFC2822(pszDateTime, pTickUtc,
-                               -(timeZone.tz_minuteswest - (timeZone.tz_dsttime * 60)));
+    OrbisRtcTick current{};
+    int minutes;
+    if (const auto ret = LocalFormatOffset(pTickUtc, current, minutes); ret < 0) {
+        return ret;
+    }
+    return sceRtcFormatRFC2822(pszDateTime, pTickUtc ? pTickUtc : &current, minutes);
 }
 
 int PS4_SYSV_ABI sceRtcFormatRFC3339(char* pszDateTime, const OrbisRtcTick* pTickUtc,
@@ -275,11 +301,12 @@ int PS4_SYSV_ABI sceRtcFormatRFC3339(char* pszDateTime, const OrbisRtcTick* pTic
 int PS4_SYSV_ABI sceRtcFormatRFC3339LocalTime(char* pszDateTime, const OrbisRtcTick* pTickUtc) {
     LOG_TRACE(Lib_Rtc, "called");
 
-    Kernel::OrbisKernelTimezone timeZone;
-    Kernel::sceKernelGettimezone(&timeZone);
-
-    return sceRtcFormatRFC3339(pszDateTime, pTickUtc,
-                               -(timeZone.tz_minuteswest - (timeZone.tz_dsttime * 60)));
+    OrbisRtcTick current{};
+    int minutes;
+    if (const auto ret = LocalFormatOffset(pTickUtc, current, minutes); ret < 0) {
+        return ret;
+    }
+    return sceRtcFormatRFC3339(pszDateTime, pTickUtc ? pTickUtc : &current, minutes);
 }
 
 int PS4_SYSV_ABI sceRtcFormatRFC3339Precise(char* pszDateTime, const OrbisRtcTick* pTickUtc,
@@ -381,11 +408,12 @@ int PS4_SYSV_ABI sceRtcFormatRFC3339PreciseLocalTime(char* pszDateTime,
                                                      const OrbisRtcTick* pTickUtc) {
     LOG_TRACE(Lib_Rtc, "called");
 
-    Kernel::OrbisKernelTimezone timeZone;
-    Kernel::sceKernelGettimezone(&timeZone);
-
-    return sceRtcFormatRFC3339Precise(pszDateTime, pTickUtc,
-                                      -(timeZone.tz_minuteswest - (timeZone.tz_dsttime * 60)));
+    OrbisRtcTick current{};
+    int minutes;
+    if (const auto ret = LocalFormatOffset(pTickUtc, current, minutes); ret < 0) {
+        return ret;
+    }
+    return sceRtcFormatRFC3339Precise(pszDateTime, pTickUtc ? pTickUtc : &current, minutes);
 }
 
 int PS4_SYSV_ABI sceRtcGetCurrentAdNetworkTick(OrbisRtcTick* pTick) {
@@ -439,7 +467,7 @@ int PS4_SYSV_ABI sceRtcGetCurrentClockLocalTime(OrbisRtcDateTime* pTime) {
         Kernel::OrbisKernelTimespec clocktime;
 
         // calculate total timezone offset for converting UTC to local time
-        uint64_t tzOffset = -(timeZone.tz_minuteswest - (timeZone.tz_dsttime * 60));
+        int tzOffset = timeZone.tz_minuteswest + timeZone.tz_dsttime;
 
         if (returnValue >= 0) {
             OrbisRtcTick newTick;

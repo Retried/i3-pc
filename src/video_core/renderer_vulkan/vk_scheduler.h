@@ -412,8 +412,10 @@ public:
 
     /// Returns the current command buffer for direct use. Everything queued on the stream is
     /// recorded first, so commands issued through the returned handle keep their place.
+    /// Do not retain it across Stream() calls; obtain it again before further direct recording.
     vk::CommandBuffer CommandBuffer() const {
         stream.Drain();
+        stream.InvalidateDescriptorCache(CommandStream::DescriptorInvalidation::DirectAccess);
         return sessions.back().primary;
     }
 

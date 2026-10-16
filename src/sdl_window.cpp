@@ -490,22 +490,43 @@ void WindowSDL::WaitEvent() {
     }
 
     {
-        // Button prompts start as key caps when no controller is connected, and moving the
-        // mouse selects them too (until now only a key or mouse button press did, so a player
-        // who had only moved the mouse saw PlayStation icons).
+        const auto controller_prompts = [](SDL_JoystickID id) {
+            switch (SDL_GetGamepadTypeForID(id)) {
+            case SDL_GAMEPAD_TYPE_XBOX360:
+            case SDL_GAMEPAD_TYPE_XBOXONE:
+                return VideoCore::PromptSet::Xbox;
+            default:
+                // Unknown devices must not be advertised as having Xbox controls.
+                return VideoCore::PromptSet::PlayStation;
+            }
+        };
+        // Observe input before overlays consume it, so their hints follow the same device.
         static bool first_event = true;
-        if (first_event) {
+        if (first_event || event.type == SDL_EVENT_GAMEPAD_REMOVED) {
             first_event = false;
             int count = 0;
             SDL_JoystickID* pads = SDL_GetGamepads(&count);
+            VideoCore::g_prompt_set =
+                count > 0 ? controller_prompts(pads[0]) : VideoCore::PromptSet::Keyboard;
             SDL_free(pads);
-            if (count == 0) {
-                VideoCore::g_prompt_set = VideoCore::PromptSet::Keyboard;
-            }
         }
-        if (event.type == SDL_EVENT_MOUSE_MOTION &&
-            (std::abs(event.motion.xrel) + std::abs(event.motion.yrel)) > 2.0f) {
+        if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+            event.type == SDL_EVENT_MOUSE_WHEEL ||
+            (event.type == SDL_EVENT_MOUSE_MOTION &&
+             (std::abs(event.motion.xrel) + std::abs(event.motion.yrel)) > 2.0f)) {
             VideoCore::g_prompt_set = VideoCore::PromptSet::Keyboard;
+        } else if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                   (event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+                    (event.gaxis.axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER
+                         ? event.gaxis.value > 16000
+                         : std::abs(event.gaxis.value) > 16000))) {
+            const SDL_JoystickID id = event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                                          ? event.gbutton.which
+                                          : event.gaxis.which;
+            VideoCore::g_prompt_set = controller_prompts(id);
+        } else if (event.type == SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN ||
+                   event.type == SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION) {
+            VideoCore::g_prompt_set = controller_prompts(event.gtouchpad.which);
         }
     }
 
@@ -540,10 +561,6 @@ void WindowSDL::WaitEvent() {
     case SDL_EVENT_MOUSE_WHEEL_OFF:
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
-        // Button prompts follow the device in use.
-        if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            VideoCore::g_prompt_set = VideoCore::PromptSet::Keyboard;
-        }
         OnKeyboardMouseInput(&event);
         break;
     case SDL_EVENT_GAMEPAD_ADDED:
@@ -557,22 +574,6 @@ void WindowSDL::WaitEvent() {
     case SDL_EVENT_GAMEPAD_TOUCHPAD_UP:
     case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:
     case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
-        if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
-            (event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION && std::abs(event.gaxis.value) > 16000)) {
-            const SDL_JoystickID id = event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN
-                                          ? event.gbutton.which
-                                          : event.gaxis.which;
-            switch (SDL_GetGamepadTypeForID(id)) {
-            case SDL_GAMEPAD_TYPE_PS3:
-            case SDL_GAMEPAD_TYPE_PS4:
-            case SDL_GAMEPAD_TYPE_PS5:
-                VideoCore::g_prompt_set = VideoCore::PromptSet::PlayStation;
-                break;
-            default:
-                VideoCore::g_prompt_set = VideoCore::PromptSet::Xbox;
-                break;
-            }
-        }
         OnGamepadEvent(&event);
         break;
     case SDL_EVENT_QUIT:

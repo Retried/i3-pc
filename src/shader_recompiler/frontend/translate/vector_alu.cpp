@@ -1,12 +1,21 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <limits>
 #include "shader_recompiler/frontend/opcodes.h"
 #include "shader_recompiler/frontend/translate/translate.h"
 #include "shader_recompiler/ir/attribute.h"
 #include "shader_recompiler/profile.h"
 
 namespace Shader::Gcn {
+
+static IR::F32 ClampToFinite(IR::IREmitter& ir, const IR::F32& value) {
+    const auto max = ir.Imm32(std::numeric_limits<float>::max());
+    const auto min = ir.Imm32(-std::numeric_limits<float>::max());
+    // Ordered comparisons preserve NaN instead of applying FPClamp's numeric min/max rules.
+    const IR::F32 lower{ir.Select(ir.FPLessThan(value, min), min, value)};
+    return IR::F32{ir.Select(ir.FPGreaterThan(value, max), max, lower)};
+}
 
 void Translator::EmitVectorAlu(const GcnInst& inst) {
     switch (inst.opcode) {
@@ -170,7 +179,7 @@ void Translator::EmitVectorAlu(const GcnInst& inst) {
     case Opcode::V_EXP_F32:
         return V_EXP_F32(inst);
     case Opcode::V_LOG_CLAMP_F32:
-        return V_LOG_F32(inst);
+        return V_LOG_CLAMP_F32(inst);
     case Opcode::V_LOG_F32:
         return V_LOG_F32(inst);
     case Opcode::V_RCP_F32:
@@ -182,11 +191,11 @@ void Translator::EmitVectorAlu(const GcnInst& inst) {
     case Opcode::V_RCP_IFLAG_F32:
         return V_RCP_F32(inst);
     case Opcode::V_RCP_CLAMP_F32:
-        return V_RCP_F32(inst);
+        return V_RCP_CLAMP_F32(inst);
     case Opcode::V_RSQ_CLAMP_F32:
-        return V_RSQ_F32(inst);
+        return V_RSQ_CLAMP_F32(inst);
     case Opcode::V_RSQ_LEGACY_F32:
-        return V_RSQ_F32(inst);
+        return V_RSQ_LEGACY_F32(inst);
     case Opcode::V_RSQ_F32:
         return V_RSQ_F32(inst);
     case Opcode::V_SQRT_F32:
@@ -1046,6 +1055,11 @@ void Translator::V_EXP_F32(const GcnInst& inst) {
     SetDst(inst.dst[0], ir.FPExp2(src0));
 }
 
+void Translator::V_LOG_CLAMP_F32(const GcnInst& inst) {
+    const IR::F32 src0{GetSrc<IR::F32>(inst.src[0])};
+    SetDst(inst.dst[0], ClampToFinite(ir, ir.FPLog2(src0)));
+}
+
 void Translator::V_LOG_F32(const GcnInst& inst) {
     const IR::F32 src0{GetSrc<IR::F32>(inst.src[0])};
     SetDst(inst.dst[0], ir.FPLog2(src0));
@@ -1073,6 +1087,24 @@ void Translator::V_RCP_LEGACY_F32(const GcnInst& inst) {
 void Translator::V_RCP_F64(const GcnInst& inst) {
     const IR::F64 src0{GetSrc64<IR::F64>(inst.src[0])};
     SetDst64(inst.dst[0], ir.FPRecip(src0));
+}
+
+void Translator::V_RSQ_LEGACY_F32(const GcnInst& inst) {
+    const IR::F32 src0{GetSrc<IR::F32>(inst.src[0])};
+    const IR::F32 clamped{ClampToFinite(ir, ir.FPRecipSqrt(src0))};
+    const auto zero = ir.Imm32(0.0f);
+    const IR::F32 result{ir.Select(ir.FPEqual(src0, zero), zero, clamped)};
+    SetDst(inst.dst[0], result);
+}
+
+void Translator::V_RCP_CLAMP_F32(const GcnInst& inst) {
+    const IR::F32 src0{GetSrc<IR::F32>(inst.src[0])};
+    SetDst(inst.dst[0], ClampToFinite(ir, ir.FPRecip(src0)));
+}
+
+void Translator::V_RSQ_CLAMP_F32(const GcnInst& inst) {
+    const IR::F32 src0{GetSrc<IR::F32>(inst.src[0])};
+    SetDst(inst.dst[0], ClampToFinite(ir, ir.FPRecipSqrt(src0)));
 }
 
 void Translator::V_RSQ_F32(const GcnInst& inst) {

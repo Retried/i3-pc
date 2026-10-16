@@ -33,6 +33,50 @@ static std::chrono::system_clock::time_point network_boottime;
 static std::chrono::steady_clock::time_point initial_uptime;
 static std::unique_ptr<Common::NativeClock> clock;
 
+#ifdef _WIN64
+namespace {
+// FILETIME conversions avoid CRT range limits and use Windows' historical DST rules.
+constexpr s64 FiletimeEpochSeconds = 11644473600LL;
+constexpr s64 FiletimeTicksPerSecond = 10000000;
+
+bool ToSystemTime(time_t seconds, SYSTEMTIME& result) {
+    constexpr s64 max_seconds = INT64_MAX / FiletimeTicksPerSecond - FiletimeEpochSeconds;
+    if (seconds < -FiletimeEpochSeconds || seconds > max_seconds) {
+        return false;
+    }
+    const u64 ticks = (seconds + FiletimeEpochSeconds) * FiletimeTicksPerSecond;
+    const FILETIME filetime{static_cast<DWORD>(ticks), static_cast<DWORD>(ticks >> 32)};
+    return FileTimeToSystemTime(&filetime, &result) != 0;
+}
+
+bool FromSystemTime(const SYSTEMTIME& value, time_t& seconds) {
+    FILETIME filetime{};
+    if (!SystemTimeToFileTime(&value, &filetime)) {
+        return false;
+    }
+    const u64 ticks = (static_cast<u64>(filetime.dwHighDateTime) << 32) | filetime.dwLowDateTime;
+    seconds = static_cast<s64>(ticks / FiletimeTicksPerSecond) - FiletimeEpochSeconds;
+    return true;
+}
+
+bool GetTimeOffsets(time_t utc, time_t& local, s32& standard_seconds, s32& dst_seconds) {
+    DYNAMIC_TIME_ZONE_INFORMATION zone{};
+    SYSTEMTIME utc_time{}, local_time{};
+    TIME_ZONE_INFORMATION year_zone{};
+    if (GetDynamicTimeZoneInformation(&zone) == TIME_ZONE_ID_INVALID ||
+        !ToSystemTime(utc, utc_time) ||
+        !SystemTimeToTzSpecificLocalTimeEx(&zone, &utc_time, &local_time) ||
+        !GetTimeZoneInformationForYear(local_time.wYear, &zone, &year_zone) ||
+        !FromSystemTime(local_time, local)) {
+        return false;
+    }
+    standard_seconds = -(year_zone.Bias + year_zone.StandardBias) * 60;
+    dst_seconds = static_cast<s32>(local - utc) - standard_seconds;
+    return true;
+}
+} // namespace
+#endif
+
 u64 PS4_SYSV_ABI sceKernelGetTscFrequency() {
     return clock->GetTscFrequency();
 }
@@ -421,30 +465,39 @@ s32 PS4_SYSV_ABI posix_gettimeofday(OrbisKernelTimeval* tp, OrbisKernelTimezone*
         tp->tv_usec = ticks % TICKS_PER_SECOND;
     }
     if (tz) {
-        static int tzflag = 0;
-        if (!tzflag) {
-            _tzset();
-            tzflag++;
+        time_t local;
+        s32 standard_seconds, dst_seconds;
+        if (!GetTimeOffsets(std::time(nullptr), local, standard_seconds, dst_seconds)) {
+            *__Error() = POSIX_EINVAL;
+            return -1;
         }
-        tz->tz_minuteswest = _timezone / 60;
-        tz->tz_dsttime = _daylight;
+        tz->tz_minuteswest = standard_seconds / 60;
+        tz->tz_dsttime = dst_seconds / 60;
     }
     return 0;
 #else
-    struct timezone tzz;
     timeval tv;
-    const auto ret = gettimeofday(&tv, &tzz);
+    const auto ret = gettimeofday(&tv, nullptr);
+    if (ret < 0) {
+        SetPosixErrno(errno);
+        return -1;
+    }
     if (tp) {
         tp->tv_sec = tv.tv_sec;
         tp->tv_usec = tv.tv_usec;
     }
     if (tz) {
-        tz->tz_dsttime = tzz.tz_dsttime;
-        tz->tz_minuteswest = tzz.tz_minuteswest;
-    }
-    if (ret < 0) {
-        SetPosixErrno(errno);
-        return -1;
+        time_t t = tv.tv_sec;
+        struct tm tm_val{};
+        if (!localtime_r(&t, &tm_val)) {
+            SetPosixErrno(errno);
+            return -1;
+        }
+        s32 is_dst = (tm_val.tm_isdst > 0) ? 1 : 0;
+        s32 dst_sec_val = is_dst ? 3600 : 0;
+        s32 standard_offset_sec = static_cast<s32>(tm_val.tm_gmtoff) - dst_sec_val;
+        tz->tz_minuteswest = standard_offset_sec / 60;
+        tz->tz_dsttime = dst_sec_val / 60;
     }
     return 0;
 #endif
@@ -467,17 +520,39 @@ s32 PS4_SYSV_ABI sceKernelGettimezone(OrbisKernelTimezone* tz) {
 s32 PS4_SYSV_ABI sceKernelConvertLocaltimeToUtc(time_t param_1, int64_t param_2, time_t* seconds,
                                                 OrbisKernelTimezone* timezone, s32* dst_seconds) {
     LOG_INFO(Kernel, "called");
-    if (timezone) {
-        sceKernelGettimezone(timezone);
-        param_1 -= (timezone->tz_minuteswest + timezone->tz_dsttime) * 60;
-        if (seconds) {
-            *seconds = param_1;
-        }
-        if (dst_seconds) {
-            *dst_seconds = timezone->tz_dsttime * 60;
-        }
-    } else {
+    if (!timezone) {
         return ORBIS_KERNEL_ERROR_EINVAL;
+    }
+    time_t utc;
+#ifdef _WIN64
+    DYNAMIC_TIME_ZONE_INFORMATION zone{};
+    SYSTEMTIME local_time{}, utc_time{};
+    if (GetDynamicTimeZoneInformation(&zone) == TIME_ZONE_ID_INVALID ||
+        !ToSystemTime(param_1, local_time) ||
+        !TzSpecificLocalTimeToSystemTimeEx(&zone, &local_time, &utc_time) ||
+        !FromSystemTime(utc_time, utc)) {
+        return ORBIS_KERNEL_ERROR_EINVAL;
+    }
+#else
+    struct tm local_tm{};
+    if (!gmtime_r(&param_1, &local_tm)) {
+        return ORBIS_KERNEL_ERROR_EINVAL;
+    }
+    local_tm.tm_isdst = -1;
+    utc = std::mktime(&local_tm);
+#endif
+    OrbisTimesec info{};
+    const auto ret = sceKernelConvertUtcToLocaltime(utc, nullptr, &info, nullptr);
+    if (ret < 0) {
+        return ret;
+    }
+    timezone->tz_minuteswest = static_cast<s32>(info.west_sec) / 60;
+    timezone->tz_dsttime = static_cast<s32>(info.dst_sec) / 60;
+    if (seconds) {
+        *seconds = utc;
+    }
+    if (dst_seconds) {
+        *dst_seconds = static_cast<s32>(info.dst_sec);
     }
     return ORBIS_OK;
 }
@@ -496,41 +571,50 @@ Common::NativeClock* GetClock() {
 s32 PS4_SYSV_ABI sceKernelConvertUtcToLocaltime(time_t time, time_t* local_time,
                                                 struct OrbisTimesec* st, u64* dst_sec) {
     LOG_TRACE(Kernel, "Called");
-#ifdef _WIN32
-    TIME_ZONE_INFORMATION tz{};
-    DWORD res = GetTimeZoneInformation(&tz);
-    *local_time = time - tz.Bias;
+#ifdef _WIN64
+    time_t local;
+    s32 west_sec_val, dst_sec_val;
+    if (!GetTimeOffsets(time, local, west_sec_val, dst_sec_val)) {
+        return ORBIS_KERNEL_ERROR_EINVAL;
+    }
+
+    if (local_time != nullptr) {
+        *local_time = local;
+    }
 
     if (st != nullptr) {
         st->t = time;
-        st->west_sec = -tz.Bias * 60;
-        st->dst_sec = res == TIME_ZONE_ID_DAYLIGHT ? -_dstbias : 0;
+        st->west_sec = west_sec_val;
+        st->dst_sec = dst_sec_val;
     }
 
     if (dst_sec != nullptr) {
-        *dst_sec = res == TIME_ZONE_ID_DAYLIGHT ? -_dstbias : 0;
+        *dst_sec = dst_sec_val;
     }
 #else
-#if defined(__APPLE__) || defined(__FreeBSD__)
-    // std::chrono::current_zone() not available yet.
-    const auto* time_zone = date::current_zone();
-#else
-    const auto* time_zone = std::chrono::current_zone();
-#endif // __APPLE__
-    auto info = time_zone->get_info(std::chrono::system_clock::now());
+    time_t t = time;
+    struct tm tm_val{};
+    if (!localtime_r(&t, &tm_val)) {
+        return ORBIS_KERNEL_ERROR_EINVAL;
+    }
+    s32 is_dst = (tm_val.tm_isdst > 0) ? 1 : 0;
+    s32 dst_sec_val = is_dst ? 3600 : 0;
+    s32 west_sec_val = static_cast<s32>(tm_val.tm_gmtoff) - dst_sec_val;
 
-    *local_time = info.offset.count() + info.save.count() * 60 + time;
+    if (local_time != nullptr) {
+        *local_time = time + tm_val.tm_gmtoff;
+    }
 
     if (st != nullptr) {
         st->t = time;
-        st->west_sec = info.offset.count();
-        st->dst_sec = info.save.count() * 60;
+        st->west_sec = west_sec_val;
+        st->dst_sec = dst_sec_val;
     }
 
     if (dst_sec != nullptr) {
-        *dst_sec = info.save.count() * 60;
+        *dst_sec = dst_sec_val;
     }
-#endif // _WIN32
+#endif // _WIN64
 
     return ORBIS_OK;
 }

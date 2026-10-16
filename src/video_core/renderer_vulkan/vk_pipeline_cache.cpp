@@ -390,6 +390,11 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
         .needs_clip_distance_emulation = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary,
         .supports_shader_stencil_export = instance_.IsShaderStencilExportSupported(),
     };
+    LOG_INFO(Render_Vulkan,
+             "Shader compatibility: manual_interpolation={}, lds_barriers={}, "
+             "clip_distance_emulation={}, buffer_offsets={}",
+             profile.needs_manual_interpolation, profile.needs_lds_barriers,
+             profile.needs_clip_distance_emulation, profile.needs_buffer_offsets);
     WarmUp();
 
     auto [cache_result, cache] = instance.GetDevice().createPipelineCacheUnique({});

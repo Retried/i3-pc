@@ -171,7 +171,9 @@ Instance::Instance(Frontend::WindowSDL& window, s32 physical_device_index,
                VK_VERSION_MAJOR(TargetVulkanApiVersion), VK_VERSION_MINOR(TargetVulkanApiVersion),
                VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion));
 
-    CreateDevice();
+    if (!CreateDevice()) {
+        UNREACHABLE_MSG("Vulkan device initialization failed; see Render_Vulkan errors above");
+    }
     CollectPhysicalMemoryInfo();
     CollectImageFormatInfo();
     CollectToolingInfo();
@@ -387,6 +389,27 @@ bool Instance::CreateDevice() {
     const auto vk11_features = feature_chain.get<vk::PhysicalDeviceVulkan11Features>();
     vk12_features = feature_chain.get<vk::PhysicalDeviceVulkan12Features>();
     vk13_features = feature_chain.get<vk::PhysicalDeviceVulkan13Features>();
+    LOG_INFO(Render_Vulkan,
+             "Device features: timelineSemaphore={}, bufferDeviceAddress={}, scalarBlockLayout={}, "
+             "synchronization2={}, dynamicRendering={}, maintenance4={}",
+             vk12_features.timelineSemaphore, vk12_features.bufferDeviceAddress,
+             vk12_features.scalarBlockLayout, vk13_features.synchronization2,
+             vk13_features.dynamicRendering, vk13_features.maintenance4);
+    LOG_INFO(Render_Vulkan,
+             "Device limits: maxPushDescriptors={}, minStorageBufferOffsetAlignment={}, "
+             "nonCoherentAtomSize={}, maxComputeSharedMemorySize={}; graphics queue family={}",
+             push_descriptor_props.maxPushDescriptors,
+             properties.limits.minStorageBufferOffsetAlignment,
+             properties.limits.nonCoherentAtomSize, properties.limits.maxComputeSharedMemorySize,
+             queue_family_index);
+    ASSERT_MSG(vk12_features.timelineSemaphore,
+               "Required Vulkan feature unavailable: timelineSemaphore");
+    ASSERT_MSG(vk12_features.bufferDeviceAddress,
+               "Required Vulkan feature unavailable: bufferDeviceAddress");
+    ASSERT_MSG(vk13_features.synchronization2,
+               "Required Vulkan feature unavailable: synchronization2");
+    ASSERT_MSG(vk13_features.dynamicRendering,
+               "Required Vulkan feature unavailable: dynamicRendering");
     vk::StructureChain device_chain = {
         vk::DeviceCreateInfo{
             .queueCreateInfoCount = 1u,

@@ -305,6 +305,13 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
     vk::Bool32 enable_core = EmulatorSettings.IsVkValidationCoreEnabled() ? vk::True : vk::False;
     vk::Bool32 enable_sync = EmulatorSettings.IsVkValidationSyncEnabled() ? vk::True : vk::False;
     vk::Bool32 enable_gpuav = EmulatorSettings.IsVkValidationGpuEnabled() ? vk::True : vk::False;
+    const bool validation_layer_enabled = std::ranges::find_if(layers, [](const char* layer) {
+                                              return std::strcmp(layer, VALIDATION_LAYER_NAME) == 0;
+                                          }) != layers.end();
+    LOG_INFO(Render_Vulkan,
+             "Validation layer requested={}, explicitly enabled={}; requested checks: core={}, "
+             "sync={}, gpu={}",
+             enable_validation, validation_layer_enabled, enable_core, enable_sync, enable_gpuav);
 
     // Crash diagnostics settings
     static const auto crash_diagnostic_path =

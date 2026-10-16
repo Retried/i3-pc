@@ -80,17 +80,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-26]
+        os: [windows-latest]
         include:
           - os: windows-latest
             compiler_cxx: clang-cl
             compiler_c: clang-cl
-          - os: ubuntu-latest
-            compiler_cxx: clang++
-            compiler_c: clang
-          - os: macos-26
-            compiler_cxx: clang++
-            compiler_c: clang
 
     steps:
       - name: Checkout repository

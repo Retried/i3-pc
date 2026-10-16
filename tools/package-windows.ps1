@@ -67,7 +67,7 @@ try {
     if ((Test-Path -LiteralPath $OutputDirectory) -or (Test-Path -LiteralPath "$OutputDirectory.zip")) {
         throw 'Output already exists. Choose a new directory; existing packages are never overwritten.'
     }
-    $allowlist = @('Play.bat', 'Install.bat', 'Install.ps1', 'Keys.ps1', 'README.txt', 'input_config\CUSA00004.ini')
+    $allowlist = @('Play.bat', 'Install.bat', 'Install.ps1', 'Keys.ps1', 'XboxPrompts.ps1', 'README.txt', 'input_config\CUSA00004.ini')
     foreach ($relative in $allowlist) {
         $source = Join-Path (Join-Path $repo 'dist') $relative
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing package input: $source" }
@@ -79,6 +79,7 @@ try {
         Copy-Item -LiteralPath (Join-Path (Join-Path $repo 'dist') $relative) -Destination $target
     }
     Copy-Item -LiteralPath $executable -Destination (Join-Path $OutputDirectory 'inFAMOUS Second Son.exe')
+    & (Join-Path $OutputDirectory 'XboxPrompts.ps1') -OutputDirectory $OutputDirectory
     foreach ($name in $dlls.Keys) { Copy-Item -LiteralPath $dlls[$name] -Destination (Join-Path $OutputDirectory $name) }
     Copy-Item -LiteralPath $metadataPath -Destination $OutputDirectory
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $OutputDirectory

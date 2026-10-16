@@ -60,10 +60,25 @@ tools or unsuccessful configure/build commands return a nonzero exit code.
 Initial configuration downloads CMake dependencies and needs network access.
 Initialize source dependencies with `git submodule update --init --recursive`.
 
-For agent-driven work, AGENTS.md requires detached hidden execution with durable
-logs/exit status and a HANDOFF.md entry. The next user prompt checks the result;
-the agent does not wait for compilation during the launching response. The batch
-wrappers themselves remain synchronous when run directly by a developer.
+For agent-driven work, keep the worker detached with durable logs/exit status and
+a HANDOFF.md entry, and always show its output in a visible console. The launcher
+opens a separate console by default through tools/open-windows-build-console.ps1.
+It records the viewer PID/command in console-launch.json and streams both durable
+logs through tools/show-windows-build.ps1. The final result stays visible until
+Enter is pressed. Closing the viewer leaves the build running.
+
+The user authorized a separate console window and prohibited taking control of
+the desktop: do not use UI automation, injected input or window activation for
+builds. -Detach is only for explicit manual use. The next prompt checks the build
+result once; a viewer streaming output does not require agent status polling.
+The batch wrappers remain synchronous when run directly by a developer.
+
+To display logs for a build launched separately (custom workers may use the
+optional *File parameters):
+
+```powershell
+& .\tools\open-windows-build-console.ps1 -LaunchDirectory '.\runtime\Build\my-launch'
+```
 
 For the detached PC2 Release/LTO build and automatic verified package, use:
 
@@ -73,7 +88,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/start-windows-build.ps
 
 Supply an existing Python path and new output paths. The launcher requires a
 clean checkout and AMD/NVIDIA host, refuses overlapping builds/emulators, records
-launch/source state and returns immediately. The hidden worker writes persistent
+launch/source state and streams logs by default. The hidden worker writes persistent
 stdout.log, stderr.log and status.json, then packages with acceptance tools and
 checks executable/manifest/ZIP hashes. Only status complete/exitCode 0 with the
 expected artifact confirms success; runtime behavior still needs acceptance.

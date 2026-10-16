@@ -24,8 +24,13 @@ Target: Windows x86-64, AMD Ryzen, NVIDIA Vulkan, CUSA00004 v1.07.
 
 - At the next prompt, check recorded pending local/CI results once. Do not wait or
   repeatedly poll builds unless explicitly asked; do not start duplicate jobs.
-- Launch long local builds detached and hidden, with persistent stdout/stderr and
-  exit status. Store command, PID/start time, configuration, source SHA/dirty state
+- Launch long local build workers detached and hidden, with persistent stdout/stderr
+  and exit status, and always show their logs in a visible console when launched
+  by the agent. Use tools/open-windows-build-console.ps1 to open a separate console
+  through Start-Process; keep its launch record. A separate window is authorized.
+  Do not use desktop/UI automation, mouse/keyboard injection or window activation
+  to attach or manage builds. Closing the viewer must not stop the worker.
+  Store command, PID/start time, configuration, source SHA/dirty state
   in a launch record; put its path in HANDOFF. For CI record run URL and source SHA.
 - Missing status plus dead process means interrupted/unknown. Success requires
   exit 0 and the expected executable; packaging also requires matching metadata.

@@ -211,3 +211,160 @@ active compiler/build process, checked workspace-contained targets and no repars
 points. Retain artifacts, source dependencies, old packages, saves, metadata
 repair backups and raw measurement evidence. Record removed sizes and verify
 preserved artifact hashes.
+
+## 2026-10-16: roadmap item 1 correctness ports
+
+Port the input pair together and propagate actual binding origin. Preserve the
+local resting-pad drift filter and keyboard smoothing; idle analog presence
+must not disable digital smoothing. An analog return to center remains direct,
+and changing source mode at an unchanged value must reach the controller.
+
+Use Windows dynamic timezone APIs and per-year standard bias for time conversion,
+rather than today's DST flag, a hardcoded hour or a hardcoded +120 minutes.
+Share the kernel offset result with system service and use the supplied RTC date
+for conversion/formatting. Keep the guest ABI field layout intact. Ambiguous
+local-time policy still requires console evidence.
+
+Port details, validation and OpenOrbis hardware cases:
+[ROADMAP1_CORRECTNESS_20261016.md](ROADMAP1_CORRECTNESS_20261016.md).
+
+## 2026-10-16: index buffer capacity and optional Vulkan features
+
+Port #5278, #5327 and #5358 as one package. Preserve IndexBufferSize separately
+from direct draw counts and keep null guest bases null after offsets. Use wide
+byte arithmetic, cap to the existing u32 buffer-cache API before narrowing and
+align the result to complete indices. Opt into strict mapped-range clamping
+for indices while retaining the existing small-range fast path for other users.
+
+Query and enable maintenance5/6 only with their feature and extension. Record
+explicit-size binds through CommandStream, retain the legacy bind path and use
+a tracked zero buffer when null index binds are unavailable. Preserve streamed
+index-buffer reuse, its barrier exemption, checked arguments and draw fast paths;
+include capacity in repeated-indirect reuse.
+
+Build workers retain durable detached execution. At the user's request, agent
+build output must appear in the integrated bottom Terminal panel, verified by
+read_thread_terminal; an execution output card alone is insufficient. Closing
+the viewer leaves the build running.
+
+Evidence, limitations and OpenOrbis reference cases:
+[ROADMAP2_INDEX_BUFFERS_20261016.md](ROADMAP2_INDEX_BUFFERS_20261016.md).
+
+## 2026-10-16: shared layer/mip copies and staging capacity
+
+Port #5299 and #5368 together. Build one aligned region layout for all shared
+mips/layers and request staging capacity from that layout instead of assuming
+128 MB. Add the pool allocation's base offset to each region, verify capacity
+and require source/destination packed byte sizes to agree. Use 64-bit footprint
+arithmetic with rounded block counts and the copied depth/stencil plane format.
+Preserve the depth/float parked-twin reuse path and the existing multisample paths.
+
+Keep image transitions and the intermediate copy barrier. Include earlier reads
+when checking a staging write, and track the staging read/write range afterward.
+Do not remove synchronization or bypass the command recorder.
+
+The user now permits separate visible build consoles and prohibits desktop
+control. Supersede the earlier bottom-terminal requirement: use the native
+Start-Process console launcher, with durable worker/viewer launch records and
+logs. Do not use UI automation or injected input to attach a build viewer.
+
+Evidence and pending OpenOrbis/gameplay cases:
+[ROADMAP3_IMAGE_COPIES_20261016.md](ROADMAP3_IMAGE_COPIES_20261016.md).
+
+## 2026-10-16: stencil plane size and copy-destination ownership
+
+Port all three parts of #5296 together. Derive stencil bytes from the finalized
+depth guest footprint divided by depth bytes per sample, retaining layers,
+samples and tiling/alignment padding. Share the existing AssociateStencil logic
+between target binding and DepthStencilCopy destinations, using the write
+stencil address and current depth ID/UID. Retain owner-lifetime checks, cache
+registration/generation invalidation, copy synchronization and local optimizations.
+
+Do not expand this small port into alias/GC redesign or copy-aspect policy
+changes without separate evidence. Hardware cases cover plane growth, ownership
+reuse, layers, padding, shadow consumers and depth/stencil readback.
+Evidence: [ROADMAP4_STENCIL_20261016.md](ROADMAP4_STENCIL_20261016.md).
+
+## 2026-10-16: shared BC layout capacity
+
+Port #5307 by sharing MAX_DIM_LOG2 between both constexpr table generators and
+the lookup guard. Twelve entries include 2048 at index 11 while excluding 4096.
+Retain all other eligibility restrictions, the generic layout calculation and
+local descriptor memoization. No serialized cache layout changes are required.
+Inspect the compiler-evaluated table values for both BC block widths; rendering
+acceptance remains separate. Evidence:
+[ROADMAP5_BC_LAYOUT_20261016.md](ROADMAP5_BC_LAYOUT_20261016.md).
+
+## 2026-10-16: indirect shader variants, finite clamps and fp64
+
+Include explicit indirect-draw state in software vertex RuntimeInfo and retain
+its equality/serialization in local content-based variants. Keep the previous
+pipeline and repeated-indirect shortcuts; their existing dependency checks
+must still distinguish direct/indirect switches. Increment ShaderBinaryVersion
+to 9 and ShaderMetaVersion to 7: inserting a raw RuntimeInfo field changes
+serialized meaning even if structure size stays constant. Reject old metadata
+before deserializing specializations; leave PipelineKeyVersion unchanged.
+
+Use ordered comparison/selects for translation-local finite clamping. The local
+shared FPClamp uses numeric NMin/NMax and would erase NaN here; keep that helper
+and other instructions unchanged. Port the final explicit fp64 opcode switch.
+Leave gather/U64/descriptor-pattern ports conditional without target-game
+evidence; a future descriptor port needs another resource serialization audit.
+Evidence and pending OpenOrbis cases:
+[ROADMAP6_SHADERS_20261016.md](ROADMAP6_SHADERS_20261016.md).
+
+## 2026-10-17: guest path normalization and virtual root
+
+Normalize guest slash-separated components before mount and permission selection,
+independently of Windows filesystem parsing. Reject Windows drive/stream/backslash
+syntax on Windows; do not rewrite host-configured paths. Keep boundary matching
+and select the longest mount. Normalize mount registration/unmount as well;
+replace changed registrations after backend construction and clear the host
+case-search cache. Preserve overlay order and archive backends.
+
+Keep guest root virtual: synthesize directory access and stat without returning
+the host drive root from GetHostPath. Share root-entry snapshots between directory
+APIs and invoke callbacks outside the mount lock. NormalDirectory must own the
+normalized path. Do not extend this lexical port into symlink or CWD emulation.
+Evidence and pending OpenOrbis/save cases:
+[ROADMAP7_VFS_20261017.md](ROADMAP7_VFS_20261017.md).
+
+## 2026-10-17: integrate push-descriptor filtering
+
+The user explicitly requested roadmap item 8 as a normal project change,
+superseding the earlier recommendation to leave the patch unapplied pending
+measurements. Integrate it into CommandStream, default enabled, and remove the
+standalone patch. Keep rendering/performance acceptance separate; no FPS claim
+or benchmark acceptance follows from this source decision.
+
+Use independent graphics/compute set-0 caches and compare relevant descriptor
+values, retaining fixed capacity and whole-batch fallback for unsupported cases.
+Filter on the producer before deep copying to the worker. Invalidate on new
+sessions even for reused handles, target/layout changes, ordinary sets, opaque
+callbacks and direct command-buffer access. Direct handles must be reacquired
+after stream calls. Preserve barriers and resource preparation.
+
+Add resource-reclamation notices consumed by the producer, and invalidate on
+shader replacement before pipeline-layout handles can be recycled. Deferred
+callbacks publish an atomic notice rather than mutate producer cache arrays.
+Keep same-binary cache disable and optional cumulative diagnostics for coverage,
+hit runs and invalidation reasons; do not version unrelated shader cache data.
+Evidence and pending OpenOrbis/A-B cases:
+[ROADMAP8_PUSH_DESCRIPTORS_20261017.md](ROADMAP8_PUSH_DESCRIPTORS_20261017.md).
+
+## 2026-10-17: Xbox prompt style through the existing texture pack
+
+Reuse the existing prompt sets and texture upload path. Persist the live Controls
+selection in the existing force.txt, preserving legacy values and defaulting to
+Auto. Recognize Xbox devices explicitly; unknown controllers retain original
+artwork unless the user forces Xbox. Observe device activity before menu input
+is consumed without changing input processing or guest pad mappings.
+
+Generate sparse procedural patches for documented atlas cells instead of shipping
+or depending on a copied game atlas. Preserve touchpad/motion and unverified
+artwork, including D-pad and separate glyph textures. Do not guess their cells or
+map touchpad press to View. Keep normal unknown-glyph GPU readback disabled unless
+diagnostic capture is requested. Track style application at cache invalidation,
+not at an individual image upload, so one image cannot suppress other refreshes.
+Coverage, file format, evidence and pending validation:
+[XBOX_PROMPTS_20261017.md](XBOX_PROMPTS_20261017.md).

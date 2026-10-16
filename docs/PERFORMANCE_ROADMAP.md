@@ -51,7 +51,13 @@ Vulkan file paths in the table are relative to
 `runtime/src/video_core/renderer_vulkan/`; BufferCache is in
 `runtime/src/video_core/buffer_cache/buffer_cache.cpp`.
 
-## Priority-1 patch review
+## Priority-1 patch review (historical)
+
+Superseded on 2026-10-17 by the user's request to integrate roadmap item 8.
+The runtime now includes a default-enabled implementation with additional
+lifetime invalidation and optional diagnostics. The standalone patch was
+removed. See [ROADMAP8_PUSH_DESCRIPTORS_20261017.md](ROADMAP8_PUSH_DESCRIPTORS_20261017.md).
+The review below describes the original candidate, not current delivery status.
 
 Input: `priority1-push-descriptor-cache.patch`, supplied separately.
 It changes `vk_command_stream.cpp`, `vk_command_stream.h`, `vk_scheduler.cpp`
@@ -116,7 +122,7 @@ of possible cache misses.
 Static review conclusion: the scope reduces repeated push-descriptor writes,
 and applicability to the sources is confirmed. This does not establish
 readiness for implementation, a performance result or full correctness.
-The patch remains an experimental validation candidate.
+At that review date the patch remained an experimental validation candidate.
 
 ## Further work order
 
@@ -308,10 +314,15 @@ and `tools/package-windows.ps1` for allowlisted ZIP packaging with build metadat
 hashes and dependency inspection. `install.sh` resolves paths from its checkout.
 Current validation and usage are tracked in [W1_WINDOWS.md](W1_WINDOWS.md).
 Second-PC launch remains required before closing W1. W2-W4 are not started by
-this implementation; renderer priority 1 remains unapplied and no FPS improvement
+this implementation; at that W1 baseline renderer priority 1 was unapplied and no FPS improvement
 is claimed.
 
 ## W3/W4 local evaluation update (2026-10-16)
+
+Later update, 2026-10-17: priority 1 is integrated by explicit user request as
+[roadmap item 8](ROADMAP8_PUSH_DESCRIPTORS_20261017.md), with diagnostic cache
+on/off and worker on/off controls. Gameplay correctness and performance
+acceptance remain pending; the prior W3/W4 data does not measure this change.
 
 The earlier W3/W4 table records the planning state. Portable Windows capture,
 independent cold/warm repeats, provenance, PID-scoped CPU telemetry and explicit

@@ -1,22 +1,21 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include <filesystem>
-#include <cstdio>
-#include "common/path_util.h"
-#include "common/recording.h"
-#include <cmath>
-#include <string>
-#include <fmt/format.h>
-#include <cstdlib>
-#include <cstring>
 #include <algorithm>
 #include <atomic>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <memory>
+#include <string>
 #include <thread>
 #include <SDL3/SDL_audio.h>
 #include <SDL3/SDL_hints.h>
+#include <fmt/format.h>
+#include "common/path_util.h"
+#include "common/recording.h"
 
 #include "common/logging/log.h"
 #include "core/emulator_settings.h"
@@ -115,10 +114,11 @@ public:
         meter.late += meter.last_time != 0 && current_time - meter.last_time > 2 * period_us;
         meter.last_time = current_time;
         if (meter.samples >= u64(sample_rate) * channels * 3) {
-            LOG_ERROR(Lib_AudioOut,
-                      "meter ch {}: peak {:.3f} rms {:.4f} clipped {} bad {} clicks {} late {} of {}",
-                      channels, meter.peak, std::sqrt(meter.sum_squares / double(meter.samples)),
-                      meter.clipped, meter.bad, meter.clicks, meter.late, meter.buffers);
+            LOG_ERROR(
+                Lib_AudioOut,
+                "meter ch {}: peak {:.3f} rms {:.4f} clipped {} bad {} clicks {} late {} of {}",
+                channels, meter.peak, std::sqrt(meter.sum_squares / double(meter.samples)),
+                meter.clipped, meter.bad, meter.clicks, meter.late, meter.buffers);
             const float last = meter.last;
             const u64 last_time = meter.last_time;
             meter = {};

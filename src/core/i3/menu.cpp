@@ -10,6 +10,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 #include <SDL3/SDL.h>
@@ -86,6 +87,10 @@ std::atomic<u32> probe_count{0};
 int closed_stick_direction = 0;
 // Lines of the PC sections before the Controls lines (Language comes after them).
 int graphics_count = 0;
+int bindings_start = 0;
+bool prompt_save_failed = false;
+constexpr std::array<const char*, 4> PromptStyleNames{"Auto", "PlayStation", "Xbox",
+                                                      "Keyboard/Mouse"};
 // Controller input for the menu, taken from the pad events themselves (ImGui's own gamepad
 // navigation is not switched on in this program): bits up, down, left, right, confirm, back.
 enum PadNav : int {
@@ -596,6 +601,13 @@ std::vector<Row> BuildRows() {
              Tr("Reduced and Low leave small objects out of the sun's shadows. Applies at once"),
              true});
         graphics_count = static_cast<int>(rows.size());
+        rows.push_back({"Button Prompts", Tr(PromptStyleNames[size_t(VideoCore::GetPromptStyle())]),
+                        prompt_save_failed
+                            ? Tr("Could not save button prompt style")
+                            : Tr("Visual style only. Auto follows the active device. "
+                                 "Touchpad and motion artwork stay unchanged on Xbox"),
+                        true});
+        bindings_start = static_cast<int>(rows.size());
         const auto lines = ReadLines();
         for (const auto& action : Actions) {
             rows.push_back({action.label, KeysOf(lines, action.pad),
@@ -896,11 +908,15 @@ void Activate(int row, int direction, int count, const std::string& label) {
     const int actions = static_cast<int>(Actions.size());
     if (row < graphics_count) {
         AdjustGraphics(row, direction == 0 ? 1 : direction);
-    } else if (row < graphics_count + actions) {
+    } else if (row == graphics_count) {
+        const int step = direction == 0 ? 1 : direction;
+        const int style = (static_cast<int>(VideoCore::GetPromptStyle()) + step + 4) % 4;
+        prompt_save_failed = !VideoCore::SetPromptStyle(static_cast<VideoCore::PromptStyle>(style));
+    } else if (row < bindings_start + actions) {
         if (direction == 0) {
             capturing = true;
         }
-    } else if (row == graphics_count + actions) {
+    } else if (row == bindings_start + actions) {
         // Language, the line after the graphics ones in the old Graphics page.
         AdjustGraphics(graphics_count, direction == 0 ? 1 : direction);
     } else if (direction == 0) {
@@ -1057,7 +1073,11 @@ std::string SectionOf(Page of, const std::string& label, int index) {
 
 /// Width of one "[key] Label" hint.
 float HintWidth(float scale, const char* keyboard, const char* pad, const char* label) {
-    const bool keys = VideoCore::ActivePromptSet() == VideoCore::PromptSet::Keyboard;
+    const auto prompts = VideoCore::ActivePromptSet();
+    const bool keys = prompts == VideoCore::PromptSet::Keyboard;
+    if (prompts == VideoCore::PromptSet::Xbox) {
+        pad = std::string_view(pad) == "X" ? "A" : std::string_view(pad) == "O" ? "B" : pad;
+    }
     const float size = 26.0f * scale;
     const float cap_height = 30.0f * scale;
     const float cap_width =
@@ -1068,7 +1088,11 @@ float HintWidth(float scale, const char* keyboard, const char* pad, const char* 
 /// One "[key] Label" hint, right aligned at `right_x`. Returns the width used.
 float Hint(ImDrawList* draw, float right_x, float y, float scale, const char* keyboard,
            const char* pad, const char* label) {
-    const bool keys = VideoCore::ActivePromptSet() == VideoCore::PromptSet::Keyboard;
+    const auto prompts = VideoCore::ActivePromptSet();
+    const bool keys = prompts == VideoCore::PromptSet::Keyboard;
+    if (prompts == VideoCore::PromptSet::Xbox) {
+        pad = std::string_view(pad) == "X" ? "A" : std::string_view(pad) == "O" ? "B" : pad;
+    }
     const char* name = keys ? keyboard : pad;
     const float size = 26.0f * scale;
     const float label_width = TextSize(size, label).x * EntrySqueeze;
@@ -1144,7 +1168,7 @@ bool OnEvent(const SDL_Event& event) {
                 return true;
             }
             const std::string name = NameOf(event);
-            const int action = selected - graphics_count;
+            const int action = selected - bindings_start;
             if (!name.empty() && page == Page::Pc && action >= 0 &&
                 action < static_cast<int>(Actions.size())) {
                 Bind(Actions[action].pad, name);

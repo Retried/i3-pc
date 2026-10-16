@@ -33,11 +33,15 @@ class PageManager;
 
 /// Button prompt style, following the input device the player last used.
 enum class PromptSet : u32 { PlayStation, Keyboard, Xbox };
+enum class PromptStyle : u32 { Auto, PlayStation, Xbox, Keyboard };
 extern std::atomic<PromptSet> g_prompt_set;
 /// Set after the replacement files changed on disk: they are read again and the images
 /// they replace are uploaded again.
 extern std::atomic<bool> g_pack_reload;
 PromptSet ActivePromptSet();
+PromptStyle GetPromptStyle();
+/// Persist before publishing the new style. False leaves the current setting intact.
+bool SetPromptStyle(PromptStyle style);
 
 class TextureCache {
     static constexpr s64 DEFAULT_PRESSURE_GC_MEMORY = 1_GB + 512_MB;

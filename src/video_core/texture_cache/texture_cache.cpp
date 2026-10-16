@@ -5,7 +5,6 @@
 #include <atomic>
 #include <fstream>
 #include <limits>
-#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -18,6 +17,7 @@
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/div_ceil.h"
+#include "common/elf_info.h"
 #include "common/hash.h"
 #include "common/io_file.h"
 #include "common/path_util.h"
@@ -995,50 +995,159 @@ std::atomic<PromptSet> g_prompt_set{PromptSet::PlayStation};
 std::atomic<bool> g_pack_reload{false};
 static std::atomic<bool> g_pack_files_stale{false};
 
-PromptSet ActivePromptSet() {
-    // user/sotc_textures/force.txt pins the style: keyboard, xbox or playstation.
-    static const std::optional<PromptSet> forced = []() -> std::optional<PromptSet> {
+namespace {
+constexpr std::array<const char*, 4> PromptStyleKeys{"auto", "playstation", "xbox", "keyboard"};
+
+std::atomic<PromptStyle>& StoredPromptStyle() {
+    // Retain the existing force.txt values; missing or unknown values select Auto.
+    static std::atomic<PromptStyle> style{[] {
         const auto path =
             Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "sotc_textures" / "force.txt";
         std::ifstream file{path};
         std::string word;
         file >> word;
-        if (word == "keyboard") {
-            return PromptSet::Keyboard;
-        } else if (word == "xbox") {
-            return PromptSet::Xbox;
-        } else if (word == "playstation") {
-            return PromptSet::PlayStation;
+        for (size_t i = 0; i < PromptStyleKeys.size(); ++i) {
+            if (word == PromptStyleKeys[i]) {
+                return static_cast<PromptStyle>(i);
+            }
         }
-        return std::nullopt;
-    }();
-    return forced.value_or(g_prompt_set.load(std::memory_order_relaxed));
+        return PromptStyle::Auto;
+    }()};
+    return style;
+}
+} // namespace
+
+PromptStyle GetPromptStyle() {
+    return StoredPromptStyle().load(std::memory_order_relaxed);
+}
+
+bool SetPromptStyle(PromptStyle style) {
+    if (size_t(style) >= PromptStyleKeys.size()) {
+        return false;
+    }
+    const auto dir = Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "sotc_textures";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec) {
+        return false;
+    }
+    std::ofstream file{dir / "force.txt"};
+    file << PromptStyleKeys[size_t(style)] << '\n';
+    file.close();
+    if (!file) {
+        return false;
+    }
+    StoredPromptStyle().store(style, std::memory_order_relaxed);
+    return true;
+}
+
+PromptSet ActivePromptSet() {
+    switch (GetPromptStyle()) {
+    case PromptStyle::PlayStation:
+        return PromptSet::PlayStation;
+    case PromptStyle::Xbox:
+        return PromptSet::Xbox;
+    case PromptStyle::Keyboard:
+        return PromptSet::Keyboard;
+    default:
+        return g_prompt_set.load(std::memory_order_relaxed);
+    }
 }
 
 void TextureCache::ApplyTexturePack(Image& image) {
+    static const bool enabled = Common::ElfInfo::Instance().GameSerial() == "CUSA00004";
+    if (!enabled) {
+        return;
+    }
     // File name: <hash of the guest data, 16 hex digits>.bin, holding the mip chain as
     // consecutive untiled levels in the image's own format.
     static const auto dir =
         Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "sotc_textures";
     static const bool dumping = std::getenv("SOTC_TEXDUMP") != nullptr;
+    static const bool dump_unknown = std::getenv("SOTC_DUMP_UNKNOWN_GLYPHS") != nullptr;
     // One set of replacements per prompt style (see PromptSet): <dir>/keyboard and <dir>/xbox.
     // Loose files in <dir> itself count as keyboard glyphs. PlayStation prompts are the
     // game's own textures, so that set stays empty.
-    using PackFiles = std::unordered_map<u64, std::vector<u8>>;
+    struct PackTexture {
+        std::vector<u8> data;
+        std::vector<vk::BufferImageCopy> regions;
+    };
+    using PackFiles = std::unordered_map<u64, PackTexture>;
     const auto load_packs = [] {
         std::array<PackFiles, 3> sets;
         const auto load = [](const std::filesystem::path& from, PackFiles& files) {
             std::error_code ec;
             for (const auto& entry : std::filesystem::directory_iterator(from, ec)) {
                 const auto path = entry.path();
-                if (path.extension() != ".bin") {
+                const bool patch = path.extension() == ".patch";
+                if (path.extension() != ".bin" && !patch) {
+                    continue;
+                }
+                const std::string stem = path.stem().string();
+                if (stem.size() != 16 ||
+                    stem.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos) {
                     continue;
                 }
                 Common::FS::IOFile file{path, Common::FS::FileAccessMode::Read};
+                if (!file.IsOpen() || file.GetSize() == 0 || file.GetSize() > 8_MB) {
+                    continue;
+                }
                 std::vector<u8> data(file.GetSize());
-                file.ReadRaw<u8>(data.data(), data.size());
-                files.emplace(std::strtoull(path.stem().string().c_str(), nullptr, 16),
-                              std::move(data));
+                if (file.ReadRaw<u8>(data.data(), data.size()) != data.size()) {
+                    continue;
+                }
+                PackTexture texture;
+                if (!patch) {
+                    texture.data = std::move(data);
+                } else {
+                    // Sparse RGBA atlas patches retain all unsupported guest artwork.
+                    // I3P1, width, height, count; then x/y/w/h and bottom-up RGBA per region.
+                    if (stem != "7824aa19ec8ef328" || data.size() < 16 ||
+                        std::memcmp(data.data(), "I3P1", 4) != 0) {
+                        continue;
+                    }
+                    const auto word = [&](size_t at) {
+                        return u32(data[at]) | (u32(data[at + 1]) << 8) |
+                               (u32(data[at + 2]) << 16) | (u32(data[at + 3]) << 24);
+                    };
+                    const u32 count = word(12);
+                    if (word(4) != 512 || word(8) != 512 || count == 0 || count > 64) {
+                        continue;
+                    }
+                    size_t cursor = 16;
+                    for (u32 i = 0; i < count && cursor + 16 <= data.size(); ++i) {
+                        const u32 x = word(cursor), y = word(cursor + 4);
+                        const u32 w = word(cursor + 8), h = word(cursor + 12);
+                        cursor += 16;
+                        if (!w || !h || w > 512 || h > 512 || x > 512 - w || y > 512 - h ||
+                            cursor + u64(w) * h * 4 > data.size()) {
+                            break;
+                        }
+                        texture.regions.push_back(vk::BufferImageCopy{
+                            .bufferOffset = texture.data.size(),
+                            .imageSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                                                 .mipLevel = 0,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = 1},
+                            .imageOffset = {s32(x), s32(y), 0},
+                            .imageExtent = {w, h, 1},
+                        });
+                        const size_t bytes = size_t(w) * h * 4;
+                        texture.data.insert(texture.data.end(), data.begin() + cursor,
+                                            data.begin() + cursor + bytes);
+                        cursor += bytes;
+                    }
+                    if (texture.regions.size() != count || cursor != data.size()) {
+                        LOG_WARNING(Render, "Ignoring invalid prompt patch {}", path.string());
+                        continue;
+                    }
+                }
+                const u64 hash = std::strtoull(stem.c_str(), nullptr, 16);
+                if (patch) {
+                    files.insert_or_assign(hash, std::move(texture));
+                } else {
+                    files.emplace(hash, std::move(texture));
+                }
             }
         };
         load(dir, sets[size_t(PromptSet::Keyboard)]);
@@ -1084,13 +1193,12 @@ void TextureCache::ApplyTexturePack(Image& image) {
                             std::max(info.size.height >> level, 1u), 1},
         };
     };
-    // Button glyphs are 128x128 RGBA with a full mip chain. One that no set replaces yet is
-    // saved once to <dir>/unknown, so the missing prompts can be drawn for it later.
+    // Unknown glyph readbacks are diagnostic only: do not stall normal prompt rendering.
     const bool glyph_like = info.size.width == 128 && info.size.height == 128 &&
                             info.resources.levels == 8 &&
                             info.pixel_format == vk::Format::eR8G8B8A8Srgb;
     const bool unknown_glyph =
-        !dumping && glyph_like &&
+        dump_unknown && !dumping && glyph_like &&
         std::ranges::none_of(packs, [&](const PackFiles& files) { return files.contains(hash); });
     if (dumping || unknown_glyph) {
         // SOTC_TEXDUMP=<n> with n > 1 dumps only n x n textures (128 = button glyphs).
@@ -1132,17 +1240,31 @@ void TextureCache::ApplyTexturePack(Image& image) {
             pack_ranges.push_back(range);
         }
     }
-    const PackFiles& pack = packs[size_t(ActivePromptSet())];
-    pack_applied_set = ActivePromptSet();
+    const PromptSet prompt_set = ActivePromptSet();
+    const PackFiles& pack = packs[size_t(prompt_set)];
     const auto it = pack.find(hash);
     if (it == pack.end()) {
         return;
     }
-    const std::vector<u8>& data = it->second;
+    const auto& texture = it->second;
+    if (!texture.regions.empty() && (info.size.width != 512 || info.size.height != 512 ||
+                                     (info.pixel_format != vk::Format::eR8G8B8A8Srgb &&
+                                      info.pixel_format != vk::Format::eR8G8B8A8Unorm))) {
+        return;
+    }
+    const std::vector<u8>& data = texture.data;
     const auto upload = runtime.GetStagingPool().Request(data.size(), MemoryType::HostUncached, 16);
     std::memcpy(upload.mapped, data.data(), data.size());
     upload.Flush();
-    SmallVector<vk::BufferImageCopy, 14> copies;
+    SmallVector<vk::BufferImageCopy, 64> copies;
+    if (!texture.regions.empty()) {
+        for (auto copy : texture.regions) {
+            copy.bufferOffset += upload.offset;
+            copies.push_back(copy);
+        }
+        runtime.UploadImage(&image, upload.buffer, copies);
+        return;
+    }
     u64 offset = 0;
     for (u32 level = 0; level < info.resources.levels && offset + level_size(level) <= data.size();
          ++level) {
@@ -1400,8 +1522,9 @@ void TextureCache::RunGarbageCollector() {
     if (reload) {
         g_pack_files_stale = true;
     }
-    if ((reload || pack_applied_set != ActivePromptSet()) && !pack_ranges.empty()) {
-        pack_applied_set = ActivePromptSet();
+    const PromptSet prompt_set = ActivePromptSet();
+    if ((reload || pack_applied_set != prompt_set) && !pack_ranges.empty()) {
+        pack_applied_set = prompt_set;
         for (const auto& [address, size] : pack_ranges) {
             InvalidateMemory(address, size);
         }

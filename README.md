@@ -30,11 +30,20 @@ For a Release build with link-time optimization, use `build-lto.bat` and pass
 Packages are written to `packages/`. Extract a package to a writable folder and
 follow its `START-HERE.txt` instructions.
 
+Use the recursive clone above on a second PC to obtain both the wrapper and the
+pinned runtime sources. Compiled executables, local build directories and ZIP
+packages are ignored by Git; build and package locally using the commands above.
+To update an existing checkout, run `git pull --ff-only`, followed by
+`git submodule update --init --recursive`.
+
 Content, saves, keys and proprietary system components are not distributed with
 this project. You must supply your own legally obtained compatible content; see
 the [detailed setup and usage guide](docs/LEGACY_README.md#how-to-play-step-by-step).
 
 ## Documentation
+
+Project documentation is maintained in English. Chat and collaboration may
+continue in Polish or the user's preferred language.
 
 - [Build and packaging](docs/W1_WINDOWS.md)
 - [Setup, controls and historical captures](docs/LEGACY_README.md)

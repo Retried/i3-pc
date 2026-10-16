@@ -65,7 +65,21 @@ user data, source dependencies, metadata-repair backup and raw W2-W4 evidence
 remain. Reconfigure the old build directory before any incremental rebuild;
 the retained executable remains usable.
 
-## New second-PC build
+### Later cleanup (2026-10-16)
+
+The PC2 attempt subsequently recorded exit 1 because the source state changed
+during the build. Its artifact is not accepted. Removed that rejected build
+directory and generated build files from the retained W1 Release/LTO and W2
+RelWithDebInfo directories: 6125 files, 1,133,413,518 logical bytes (about 1.06 GiB).
+Resolved every deletion target under runtime/Build, checked for reparse points
+and confirmed no build/emulator was active. Kept both retained executables,
+the W2 PDB, their build-info files and the W1 ZIP; SHA-256 checks confirmed they
+were unchanged. User data, benchmark captures and raw validation evidence remain.
+Reconfigure the retained build directories before another incremental build.
+Records, logs and rejected build metadata remain in
+`runtime/Build/pc2-20261016/`; deletion and preserved hashes are in `cleanup.json`.
+
+## New second-PC build (original launch record)
 
 The final action starts a new clean-source Windows x64 Release/LTO job with
 three workers, then automatically packages and verifies it. Old artifacts are
@@ -77,7 +91,8 @@ not overwritten. Intended locations:
 - New package: `packages/i3-pc-PC2-20261016.zip`.
 
 The launch record, not this document, provides the actual PID/start time and
-source SHAs after publication. Build/package completion is pending until exit 0,
+source SHAs after publication. This attempt failed as recorded above; a replacement
+build/package is required. Any replacement succeeds only with exit 0,
 the expected executable and matching metadata/ZIP verification are recorded.
 No second-PC launch is performed remotely; no second PC is available.
 Use [PC2_ACCEPTANCE.md](PC2_ACCEPTANCE.md) with that machine when available.

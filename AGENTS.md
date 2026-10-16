@@ -8,6 +8,8 @@ Target: Windows x86-64, AMD Ryzen, NVIDIA Vulkan, CUSA00004 v1.07.
 
 - Preserve rendering correctness and existing optimizations; require evidence for removal.
 - Keep changes focused. No FPS claims without benchmarks. Scripts/comments use ASCII.
+- Write and maintain project documentation in English. Chat may continue in Polish;
+  respond in the user's chosen language unless they request otherwise.
 - Read `docs/ROADMAP.md` for priorities and `docs/HANDOFF.md` for pending work.
   Read linked detail only when relevant to the task; do not reload unchanged rules.
 - Runtime sources are in the `runtime` submodule; read its AGENTS.md before editing.

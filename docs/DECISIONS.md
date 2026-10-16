@@ -30,7 +30,8 @@ findings rather than disabling CI or reformatting the repository.
 REUSE copyright annotations for the 11 reported files use the recorded Git
 author `i3-pc-port` and year 2026. Preserve their original GPL-2.0-or-later
 declarations and list the exact paths in `runtime/REUSE.toml`.
-Provenance and validation are in [CI_RUN_38766554875.md](CI_RUN_38766554875.md).
+The original CI evidence is
+[run 38766554875](https://github.com/Retried/i3-pc/actions/runs/38766554875).
 
 ## 2026-10-15: Separate emulator and test builds
 
@@ -63,8 +64,10 @@ Preserve the Windows `GetThreadTimes` path and use POSIX
 `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` on Linux and macOS for the renderer's
 freeze-log counter. Both return microseconds to the existing diagnostics.
 Retain the previous counter if the OS query fails. This portability fix does
-not alter GPU synchronization or rendering. See
-[CI_RUN_38805748119.md](CI_RUN_38805748119.md) for the failed run and validation.
+not alter GPU synchronization or rendering. The original failure is recorded in
+[run 38805748119](https://github.com/Retried/i3-pc/actions/runs/38805748119);
+the subsequent full build/test matrix passed in
+[run 38812901885](https://github.com/Retried/i3-pc/actions/runs/38812901885).
 
 ## 2026-10-15: W1 build and package boundaries
 

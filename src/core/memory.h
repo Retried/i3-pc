@@ -248,7 +248,7 @@ public:
         return size_to_validate <= 0;
     }
 
-    u64 ClampRangeSize(VAddr virtual_addr, u64 size);
+    u64 ClampRangeSize(VAddr virtual_addr, u64 size, bool strict = false);
 
     /// Hashes guest memory, skipping pages without backing.
     u64 HashSparseMemory(VAddr virtual_addr, u64 size);

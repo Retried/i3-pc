@@ -104,24 +104,35 @@ void MemoryManager::SetupMemoryRegions(u64 flexible_size, bool use_extended_mem1
              total_flexible_size, total_direct_size);
 }
 
-u64 MemoryManager::ClampRangeSize(VAddr virtual_addr, u64 size) {
+u64 MemoryManager::ClampRangeSize(VAddr virtual_addr, u64 size, bool strict) {
+    if (size == 0) {
+        return 0;
+    }
     static constexpr u64 MinSizeToClamp = 1_GB;
     // Dont bother with clamping if the size is small so we dont pay a map lookup on every buffer.
-    if (size < MinSizeToClamp) {
+    if (!strict && size < MinSizeToClamp) {
         return size;
     }
 
     std::shared_lock lk{mutex};
+    // Index bindings need exact bounds even for small ranges and unmapped bases.
+    if (strict && !IsValidMapping(virtual_addr)) {
+        return 0;
+    }
     ASSERT_MSG(IsValidMapping(virtual_addr), "Attempted to access invalid address {:#x}",
                virtual_addr);
 
     // Clamp size to the remaining size of the current VMA.
     auto vma = FindVMA(virtual_addr);
+    if (strict && (!vma->second.IsMapped() || !vma->second.Contains(virtual_addr, 1))) {
+        return 0;
+    }
     u64 clamped_size = vma->second.base + vma->second.size - virtual_addr;
     ++vma;
 
     // Keep adding to the size while there is contigious virtual address space.
-    while (vma != vma_map.end() && vma->second.IsMapped() && clamped_size < size) {
+    while (vma != vma_map.end() && vma->second.IsMapped() && clamped_size < size &&
+           (!strict || vma->second.base == virtual_addr + clamped_size)) {
         clamped_size += vma->second.size;
         ++vma;
     }

@@ -23,6 +23,7 @@ struct OrbisKernelTimeval {
 };
 
 struct OrbisKernelTimezone {
+    // Guest ABI: standard offset east of UTC and seasonal adjustment, both in minutes.
     s32 tz_minuteswest;
     s32 tz_dsttime;
 };

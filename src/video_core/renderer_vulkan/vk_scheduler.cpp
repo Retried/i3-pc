@@ -146,6 +146,7 @@ void Scheduler::PopPendingOperations() {
     work_semaphore.Refresh();
     while (!pending_ops.empty() && work_semaphore.IsFree(pending_ops.front().gpu_tick)) {
         pending_ops.front().callback();
+        stream.NotifyDescriptorResourcesChanged();
         pending_ops.pop();
     }
 }
@@ -163,6 +164,7 @@ void Scheduler::BeginSession() {
 
     // Invalidate dynamic state so it gets applied to the new command buffer.
     dynamic_state.Invalidate();
+    stream.InvalidateDescriptorCache(CommandStream::DescriptorInvalidation::Session);
 
 #if TRACY_GPU_ENABLED
     auto* profiler_ctx = instance.GetProfilerContext();
@@ -192,6 +194,7 @@ void Scheduler::EndSession() {
     // Everything queued belongs to this command buffer and must be in it before it ends.
     stream.Drain();
     Check(session.primary.end());
+    stream.ReportDescriptorCacheStats();
 }
 
 void Scheduler::SubmitExecution(SubmitInfo& info) {

@@ -690,6 +690,9 @@ void ToggleKeyInList(InputID input) {
 void ControllerOutput::ResetUpdate() {
     state_changed = false;
     new_button_state = false;
+    analog_source = false;
+    analog_present = false;
+    digital_source = false;
     *new_param = 0; // bruh
 }
 void ControllerOutput::AddUpdate(InputEvent event) {
@@ -724,6 +727,9 @@ void ControllerOutput::AddUpdate(InputEvent event) {
             value = 0;
         }
         *new_param = static_cast<s16>(std::clamp(value + *new_param, -127, 127));
+        analog_source |= event.active && event.analog_source && value != 0;
+        analog_present |= event.active && event.analog_source;
+        digital_source |= event.active && !event.analog_source && value != 0;
     }
 }
 
@@ -736,12 +742,16 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
             SDL_PushEvent(&e);
         }
     };
-    state_changed = old_button_state != new_button_state || old_param != *new_param;
+    // An idle pad must not disable keyboard smoothing; its own return to center stays immediate.
+    const bool smooth = !analog_source && (!analog_present || digital_source);
+    state_changed = old_button_state != new_button_state || old_param != *new_param ||
+                    (IsAxis() && old_smooth != smooth);
     if (!state_changed) {
         return;
     }
     old_button_state = new_button_state;
     old_param = *new_param;
+    old_smooth = smooth;
     GameController* controller;
     if (gamepad_index < 5)
         controller = controllers[gamepad_index];
@@ -898,18 +908,18 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
             break;
         case Axis::TriggerLeft:
             ApplyDeadzone(new_param, lefttrigger_deadzone[gamepad_index]);
-            controller->Axis(c_axis, GetAxis(0x0, 0x7f, *new_param));
+            controller->Axis(c_axis, GetAxis(0x0, 0x7f, *new_param), smooth);
             controller->Button(OrbisPadButtonDataOffset::L2, *new_param > 0x20);
             return;
         case Axis::TriggerRight:
             ApplyDeadzone(new_param, righttrigger_deadzone[gamepad_index]);
-            controller->Axis(c_axis, GetAxis(0x0, 0x7f, *new_param));
+            controller->Axis(c_axis, GetAxis(0x0, 0x7f, *new_param), smooth);
             controller->Button(OrbisPadButtonDataOffset::R2, *new_param > 0x20);
             return;
         default:
             break;
         }
-        controller->Axis(c_axis, GetAxis(-0x80, 0x7f, *new_param * multiplier));
+        controller->Axis(c_axis, GetAxis(-0x80, 0x7f, *new_param * multiplier), smooth);
     }
 }
 
@@ -1017,6 +1027,7 @@ InputEvent BindingConnection::ProcessBinding() {
                 }
                 if (pressed_it->first.input.type == InputType::Axis) {
                     event.axis_value = pressed_it->first.axis_value;
+                    event.analog_source = true;
                 }
                 ++pressed_it;
                 break;

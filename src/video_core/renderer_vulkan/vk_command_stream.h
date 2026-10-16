@@ -4,6 +4,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstring>
 #include <memory>
@@ -26,13 +27,34 @@ namespace Vulkan {
 /// order of commands never changes. SOTC_WORKER_RECORD=0 makes every call run in place.
 class CommandStream {
 public:
+    enum class DescriptorInvalidation {
+        Target,
+        Session,
+        DescriptorSet,
+        Generic,
+        DirectAccess,
+        Unsupported,
+        ResourceLifetime,
+        Count,
+    };
+
     CommandStream();
     ~CommandStream();
 
     /// The command buffer the following calls go to. Changing it requires a Drain() first.
     void SetTarget(vk::CommandBuffer cmdbuf) {
+        if (target != cmdbuf) {
+            InvalidateDescriptorCache(DescriptorInvalidation::Target);
+        }
         target = cmdbuf;
     }
+
+    void InvalidateDescriptorCache(DescriptorInvalidation reason);
+    // Deferred reclamation may be driven outside the recording producer.
+    void NotifyDescriptorResourcesChanged() {
+        descriptor_resources_changed.store(true, std::memory_order_release);
+    }
+    void ReportDescriptorCacheStats();
 
     /// Returns once every queued command has been recorded into its command buffer.
     void Drain();
@@ -88,6 +110,10 @@ public:
     void bindIndexBuffer(vk::Buffer buffer, vk::DeviceSize offset, vk::IndexType type) {
         Push(0, [=](vk::CommandBuffer c) { c.bindIndexBuffer(buffer, offset, type); });
     }
+    void bindIndexBuffer2KHR(vk::Buffer buffer, vk::DeviceSize offset, vk::DeviceSize size,
+                             vk::IndexType type) {
+        Push(0, [=](vk::CommandBuffer c) { c.bindIndexBuffer2KHR(buffer, offset, size, type); });
+    }
     void bindVertexBuffers(u32 first, u32 count, const vk::Buffer* buffers,
                            const vk::DeviceSize* offsets) {
         Reserve(count * (sizeof(vk::Buffer) + sizeof(vk::DeviceSize)));
@@ -123,6 +149,7 @@ public:
                               std::span<const vk::WriteDescriptorSet> writes);
     void bindDescriptorSets(vk::PipelineBindPoint point, vk::PipelineLayout layout, u32 first,
                             vk::DescriptorSet set) {
+        InvalidateDescriptorCache(DescriptorInvalidation::DescriptorSet);
         Push(0, [=](vk::CommandBuffer c) { c.bindDescriptorSets(point, layout, first, set, {}); });
     }
     void beginRendering(const vk::RenderingInfo& info);
@@ -230,10 +257,43 @@ public:
     /// Any other state setter that takes plain values: stream.Set([=](auto c) { c.setX(v); }).
     template <typename F>
     void Set(F&& func) {
+        InvalidateDescriptorCache(DescriptorInvalidation::Generic);
         Push(0, std::forward<F>(func));
     }
 
 private:
+    static constexpr size_t MaxCachedDescriptorBindings = 64;
+    struct CachedDescriptor {
+        vk::DescriptorType type{};
+        vk::DescriptorImageInfo image{};
+        vk::DescriptorBufferInfo buffer{};
+        vk::BufferView texel{};
+        bool valid{};
+
+        bool Update(const vk::WriteDescriptorSet& write);
+    };
+    struct DescriptorCache {
+        vk::PipelineLayout layout{};
+        std::array<CachedDescriptor, MaxCachedDescriptorBindings> bindings{};
+        u64 hit_run{};
+    };
+    std::array<DescriptorCache, 2> descriptor_caches{};
+    std::array<vk::WriteDescriptorSet, MaxCachedDescriptorBindings> changed_descriptor_writes{};
+    bool descriptor_cache_enabled{};
+    std::atomic_bool descriptor_resources_changed{false};
+    bool descriptor_stats_enabled{};
+    struct DescriptorStats {
+        u64 calls{};
+        u64 writes{};
+        u64 forwarded{};
+        u64 cacheable_calls{};
+        u64 skipped_calls{};
+        u64 layout_changes{};
+        u64 max_hit_run{};
+        std::array<u64, static_cast<size_t>(DescriptorInvalidation::Count)> invalidations{};
+    } descriptor_stats;
+    std::chrono::steady_clock::time_point last_descriptor_report{};
+
     struct Record {
         void (*invoke)(const void* closure, vk::CommandBuffer cmdbuf);
         u32 size; // of the whole record, aligned

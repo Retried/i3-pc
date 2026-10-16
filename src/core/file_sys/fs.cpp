@@ -5,6 +5,7 @@
 #include <array>
 #include <unordered_set>
 #include "common/assert.h"
+#include "common/logging/log.h"
 #include "common/string_util.h"
 #include "core/file_sys/backends/host_fs.h"
 #include "core/file_sys/backends/zarchive_fs.h"
@@ -41,7 +42,7 @@ bool MntPoints::ignore_game_patches = false;
 std::string RemoveTrailingSlashes(const std::string& path) {
     // Remove trailing slashes to make comparisons simpler.
     std::string path_sanitized = path;
-    while (path_sanitized.ends_with("/")) {
+    while (path_sanitized.size() > 1 && path_sanitized.ends_with("/")) {
         path_sanitized.pop_back();
     }
     return path_sanitized;
@@ -111,7 +112,17 @@ std::shared_ptr<IBackend> MntPoints::CreateBackend(const std::filesystem::path& 
 void MntPoints::Mount(const std::filesystem::path& host_folder, const std::string& guest_folder,
                       bool read_only) {
     std::scoped_lock lock{m_mutex};
-    const auto guest_folder_sanitized = RemoveTrailingSlashes(guest_folder);
+    const auto normalized = SanitizeGuestPath(guest_folder);
+    if (!normalized || !normalized->starts_with("/")) {
+        LOG_ERROR(Kernel_Fs, "Invalid guest mount path: {}", guest_folder);
+        return;
+    }
+    const auto guest_folder_sanitized = RemoveTrailingSlashes(*normalized);
+    const auto existing = std::ranges::find(m_mnt_pairs, guest_folder_sanitized, &MntPair::mount);
+    if (existing != m_mnt_pairs.end() && existing->host_path == host_folder &&
+        existing->read_only == read_only) {
+        return;
+    }
     // Build the backend stack for this mount.
     std::vector<std::shared_ptr<IBackend>> stack;
     const bool eligible_for_overlays =
@@ -141,35 +152,102 @@ void MntPoints::Mount(const std::filesystem::path& host_folder, const std::strin
     ASSERT_MSG(base, "Mount: base path does not resolve to a backend: {}", host_folder.string());
     stack.push_back(std::move(base));
 
-    m_mnt_pairs.emplace_back(host_folder, guest_folder_sanitized, read_only, std::move(stack));
+    if (existing != m_mnt_pairs.end()) {
+        *existing = MntPair{host_folder, guest_folder_sanitized, read_only, std::move(stack)};
+    } else {
+        m_mnt_pairs.emplace_back(host_folder, guest_folder_sanitized, read_only, std::move(stack));
+    }
+    path_cache.clear();
 }
 
 void MntPoints::Unmount(const std::string& guest_folder) {
     std::scoped_lock lock{m_mutex};
-    const auto guest_folder_sanitized = RemoveTrailingSlashes(guest_folder);
+    const auto normalized = SanitizeGuestPath(guest_folder);
+    if (!normalized) {
+        return;
+    }
+    const auto guest_folder_sanitized = RemoveTrailingSlashes(*normalized);
     auto it = std::remove_if(m_mnt_pairs.begin(), m_mnt_pairs.end(), [&](const MntPair& pair) {
         return pair.mount == guest_folder_sanitized;
     });
     m_mnt_pairs.erase(it, m_mnt_pairs.end());
+    path_cache.clear();
 }
 
 void MntPoints::UnmountAll() {
     std::scoped_lock lock{m_mutex};
     m_mnt_pairs.clear();
+    path_cache.clear();
+}
+
+std::optional<std::string> MntPoints::SanitizeGuestPath(std::string_view path) {
+    if (path.empty() || path.size() > 255 || path.find('\0') != std::string_view::npos) {
+        return std::nullopt;
+    }
+#ifdef _WIN32
+    // Guest separators are '/', never Windows drive, stream or UNC syntax.
+    if (path.find_first_of("\\:") != std::string_view::npos) {
+        return std::nullopt;
+    }
+#endif
+    const bool absolute = path.starts_with('/');
+    std::vector<std::string_view> parts;
+    size_t start = 0;
+    while (start < path.size()) {
+        const auto end = path.find('/', start);
+        const auto part = path.substr(start, end == std::string_view::npos ? end : end - start);
+        if (part == "..") {
+            if (!parts.empty() && parts.back() != "..") {
+                parts.pop_back();
+            } else if (!absolute) {
+                parts.push_back(part);
+            }
+        } else if (!part.empty() && part != ".") {
+            parts.push_back(part);
+        }
+        if (end == std::string_view::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+    std::string normalized = absolute ? "/" : "";
+    for (const auto part : parts) {
+        if (!normalized.empty() && !normalized.ends_with('/')) {
+            normalized += '/';
+        }
+        normalized += part;
+    }
+    if (normalized.empty()) {
+        normalized = ".";
+    }
+    if (!parts.empty() && parts.back() != ".." &&
+        (path.ends_with('/') || path.ends_with("/.") || path.ends_with("/.."))) {
+        normalized += '/';
+    }
+    return normalized;
+}
+
+// Strip the mount prefix only after normalization and component-boundary matching.
+std::string_view RelativeToMount(const std::string& corrected, const MntPoints::MntPair& mount) {
+    const auto offset = mount.mount == "/" ? 1 : mount.mount.size() + 1;
+    return corrected.size() <= offset ? std::string_view{}
+                                      : std::string_view{corrected}.substr(offset);
 }
 
 std::filesystem::path MntPoints::GetHostPath(std::string_view path, bool* is_read_only,
                                              HostPathType path_type) {
-    // Evil games like Turok2 pass double slashes e.g /app0//game.kpf
-    std::string corrected_path(path);
-    size_t pos = corrected_path.find("//");
-    while (pos != std::string::npos) {
-        corrected_path.replace(pos, 2, "/");
-        pos = corrected_path.find("//", pos + 1);
+    const auto sanitized = SanitizeGuestPath(path);
+    if (!sanitized) {
+        return {};
     }
-
-    if (path.length() > 255)
-        return "";
+    const auto& corrected_path = *sanitized;
+    if (corrected_path == "/") {
+        if (is_read_only) {
+            *is_read_only = true;
+        }
+        // The guest root is virtual; never return the host drive's root.
+        return {};
+    }
 
     const auto* mount = GetMount(corrected_path);
     if (!mount) {
@@ -207,7 +285,7 @@ std::filesystem::path MntPoints::GetHostPath(std::string_view path, bool* is_rea
     }
 
     // Remove device (e.g /app0) from path to retrieve relative path.
-    const auto rel_path = std::string_view{corrected_path}.substr(mount->mount.size() + 1);
+    const auto rel_path = RelativeToMount(corrected_path, *mount);
     host_path /= rel_path;
     patch_path /= rel_path;
     mods_path /= rel_path;
@@ -218,12 +296,12 @@ std::filesystem::path MntPoints::GetHostPath(std::string_view path, bool* is_rea
         return patch_path;
     }
 
-    if ((corrected_path.starts_with("/app0") || corrected_path.starts_with("/hostapp")) &&
+    if ((mount->mount == "/app0" || mount->mount == "/hostapp") &&
         path_type != HostPathType::Base && std::filesystem::exists(mods_path)) {
         return mods_path;
     }
 
-    if ((corrected_path.starts_with("/app0") || corrected_path.starts_with("/hostapp")) &&
+    if ((mount->mount == "/app0" || mount->mount == "/hostapp") &&
         path_type != HostPathType::Base && !ignore_game_patches &&
         std::filesystem::exists(patch_path)) {
         return patch_path;
@@ -296,7 +374,7 @@ std::filesystem::path MntPoints::GetHostPath(std::string_view path, bool* is_rea
         return std::optional<std::filesystem::path>(current_path);
     };
 
-    if ((corrected_path.starts_with("/app0") || corrected_path.starts_with("/hostapp")) &&
+    if ((mount->mount == "/app0" || mount->mount == "/hostapp") &&
         path_type != HostPathType::Base) {
         if (const auto path = search(mods_path)) {
             return *path;
@@ -317,26 +395,18 @@ std::filesystem::path MntPoints::GetHostPath(std::string_view path, bool* is_rea
     return host_path;
 }
 
-// Normalize a guest path
-std::optional<std::string> SanitizeGuestPath(std::string_view path) {
-    if (path.length() > 255) {
-        return std::nullopt;
+std::vector<DirEntry> MntPoints::RootEntries() {
+    std::scoped_lock lock{m_mutex};
+    std::vector<DirEntry> entries;
+    std::unordered_set<std::string> seen;
+    for (const auto& mount : m_mnt_pairs) {
+        const auto name = std::string_view{mount.mount}.substr(1);
+        const std::string child{name.substr(0, name.find('/'))};
+        if (!child.empty() && seen.insert(child).second) {
+            entries.push_back(DirEntry{.name = child, .is_directory = true});
+        }
     }
-    std::string corrected(path);
-    size_t pos = corrected.find("//");
-    while (pos != std::string::npos) {
-        corrected.replace(pos, 2, "/");
-        pos = corrected.find("//", pos + 1);
-    }
-    return corrected;
-}
-
-// Strip the mount prefix from a corrected guest path
-std::string_view RelativeToMount(const std::string& corrected, const MntPoints::MntPair& mount) {
-    if (corrected.size() <= mount.mount.size() + 1) {
-        return {};
-    }
-    return std::string_view{corrected}.substr(mount.mount.size() + 1);
+    return entries;
 }
 
 void MntPoints::IterateDirectory(std::string_view guest_directory,
@@ -346,6 +416,14 @@ void MntPoints::IterateDirectory(std::string_view guest_directory,
         return;
     }
     const auto& corrected = *corrected_opt;
+    if (corrected == "/") {
+        callback(std::filesystem::path("/."), false);
+        callback(std::filesystem::path("/.."), false);
+        for (const auto& entry : RootEntries()) {
+            callback(std::filesystem::path("/") / entry.name, false);
+        }
+        return;
+    }
     const auto mount = GetMount(corrected);
     if (!mount || mount->backends.empty()) {
         return;
@@ -422,6 +500,9 @@ bool MntPoints::Exists(std::string_view guest_path) {
     if (!corrected) {
         return false;
     }
+    if (*corrected == "/") {
+        return true;
+    }
     const auto mount = GetMount(*corrected);
     if (!mount || mount->backends.empty()) {
         return false;
@@ -439,6 +520,9 @@ bool MntPoints::IsDirectory(std::string_view guest_path) {
     const auto corrected = SanitizeGuestPath(guest_path);
     if (!corrected) {
         return false;
+    }
+    if (*corrected == "/") {
+        return true;
     }
     const auto mount = GetMount(*corrected);
     if (!mount || mount->backends.empty()) {
@@ -461,7 +545,7 @@ std::unique_ptr<IFile> MntPoints::Open(std::string_view guest_path, bool writabl
 std::unique_ptr<IFile> MntPoints::Open(std::string_view guest_path,
                                        Common::FS::FileAccessMode mode) {
     const auto corrected = SanitizeGuestPath(guest_path);
-    if (!corrected) {
+    if (!corrected || *corrected == "/") {
         return nullptr;
     }
     const auto mount = GetMount(*corrected);
@@ -491,6 +575,9 @@ std::unique_ptr<IDirectory> MntPoints::OpenDir(std::string_view guest_path) {
     const auto corrected = SanitizeGuestPath(guest_path);
     if (!corrected) {
         return nullptr;
+    }
+    if (*corrected == "/") {
+        return std::make_unique<MergedDirectory>(RootEntries());
     }
     const auto mount = GetMount(*corrected);
     if (!mount || mount->backends.empty()) {

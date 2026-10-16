@@ -2,6 +2,10 @@
 
 Target: Windows x86-64, AMD Ryzen, NVIDIA Vulkan, CUSA00004 v1.07.
 
+- Build and runtime validation targets are AMD CPUs with NVIDIA Vulkan GPUs only.
+  Do not schedule AMD/Intel GPU or Intel CPU builds, launches, benchmarks or
+  compatibility checks. Keep existing renderer portability paths intact.
+
 - Preserve rendering correctness and existing optimizations; require evidence for removal.
 - Keep changes focused. No FPS claims without benchmarks. Scripts/comments use ASCII.
 - Read `docs/ROADMAP.md` for priorities and `docs/HANDOFF.md` for pending work.

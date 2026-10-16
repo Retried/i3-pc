@@ -88,6 +88,38 @@ only. macOS, Linux Clang and Linux GCC emulator jobs require the manual
 build_non_windows input. Cross-platform unit tests and existing checks remain.
 The upstream release gate stays unchanged, but depends only on Windows artifacts.
 
+## 2026-10-16: W1 package from existing CI artifact
+
+Reuse the successful Windows CI executable for the exact clean runtime revision
+instead of launching another build. Check the downloaded artifact archive against
+GitHub's SHA-256 digest, preserve its executable bytes, and apply the existing
+package allowlist and dependency inspection. Reconstruct missing build metadata
+from CI evidence with an explicit origin and run/job/artifact identifiers;
+distinguish the wrapper packaging revision from the compiled runtime revision.
+Do not invent an exact build timestamp. Verify the extracted ZIP and CLI with
+developer tools absent from PATH. Second-PC gameplay remains a separate
+acceptance requirement. See [W1_PACKAGE_20261016.md](W1_PACKAGE_20261016.md).
+
+## 2026-10-16: W2 diagnostics and validation boundaries
+
+Retain existing NVIDIA shader adaptations and upload/readback synchronization.
+Add bounded startup diagnostics and stop initialization after a failed device
+creation, rather than continuing with an invalid device. Record actual feature
+values and limits already used by the renderer; distinguish requested validation
+from an explicitly enabled layer. Keep the standalone capability collector
+read-only with respect to drivers, game data and emulator settings.
+
+The observed NVIDIA/AMD capabilities do not justify speculative fallbacks or
+removing existing optimizations. The inherited FP32 atomic min/max fallback's
+two side effects require a separate behavior investigation with hardware cases;
+startup success does not validate it. Preserve the active build's source snapshot.
+Treat APP_VER and VERSION as distinct metadata: the local 01.00 application
+could not establish acceptance for the requested 1.07 update without inspecting
+the merged dump's provenance; the later local metadata repair is recorded in
+[APP_VERSION_REPAIR_20261016.md](APP_VERSION_REPAIR_20261016.md). Keep capability
+inventory, baseline smoke, candidate validation and performance claims separate.
+Evidence and remaining acceptance: [W2_NVIDIA_VULKAN.md](W2_NVIDIA_VULKAN.md).
+
 Long builds run in detached hidden processes with persistent logs and exit
 status. The next user prompt checks the previous results; the current response
 does not wait or repeatedly poll. Pending builds are not passing builds and
@@ -113,3 +145,18 @@ Keep recurring context split by purpose: AGENTS contains rules, ROADMAP contains
 priorities, HANDOFF contains unresolved operational state. Store build provenance
 in launch records and retain historical implementation detail in Git/reports,
 not in instructions loaded every prompt.
+
+## 2026-10-16: AMD CPU and NVIDIA GPU target; local merged metadata repair
+
+Future build/run/validation work targets AMD CPUs and NVIDIA Vulkan GPUs only.
+Do not schedule AMD/Intel GPU or Intel CPU compatibility or benchmark runs.
+Keep inherited cross-vendor renderer paths; the target restriction does not
+justify removing them. Restrict detailed diagnostic capabilities to the NVIDIA
+device selected from enumeration, without relying on a fixed adapter index.
+
+Correct the corroborated local merged CUSA00004 dump's stale APP_VER in its SFO
+with a backup and one-byte verified write. Preserve VERSION, executable/assets
+and the original package. Keep the emulator's normal APP_VER parsing; do not
+add a VERSION override or title-specific version hack. This fixes identification
+and does not install an update or establish full gameplay correctness.
+Evidence and recovery: [APP_VERSION_REPAIR_20261016.md](APP_VERSION_REPAIR_20261016.md).

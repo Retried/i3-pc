@@ -10,6 +10,11 @@ NVIDIA. Ich numeracja jest odrębna od dotychczasowych priorytetów renderera 1�
 
 ## Podstawa i znaczenie statusów
 
+Current hardware scope (2026-10-16): build, launch and validation targets are
+AMD CPUs with NVIDIA Vulkan GPUs only. Historical references below to checking
+other GPU vendors do not add them to the current scope. Both benchmark PCs must
+use this target hardware; see AGENTS.md and docs/BENCHMARK_PROTOCOL.md.
+
 Przejrzano lokalny checkout podmodułu `runtime`, przypięty do commita
 `81b6211695fe3d1dc1b7712d7e6dcdef2c908275`. `.gitmodules` wskazuje gałąź
 `runtime`; checkout ma odłączony HEAD. Analiza dotyczy tego lokalnego kodu,

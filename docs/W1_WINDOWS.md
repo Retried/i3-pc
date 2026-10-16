@@ -119,7 +119,27 @@ this build or package work. Preserve the existing PC's saves before testing.
 - Fresh Release/LTO compilation and linking passed in `w1-lto-build.log`, but
   that older script process failed while writing metadata with Get-FileHash.
   The current script uses .NET SHA-256; its incremental validation already passed.
-  Final normal/LTO wrapper refreshes are tracked asynchronously in HANDOFF.md.
+  Final normal/LTO wrapper refreshes completed with exit 0. Their source revisions
+  predate the upstream merge/formatting; they do not validate current sources.
 - Runtime CI 38812901885 completed successfully; all emulator builds and C++
   tests passed. The 44 inherited clang-format findings remain.
 - No second-PC launch, game session, NVIDIA validation or benchmark has been run.
+
+## Current second-PC package (2026-10-16)
+
+The current package uses the existing successful Windows SDL artifact from
+[CI 38862336590](https://github.com/Retried/i3-pc/actions/runs/38862336590),
+runtime `b499ca72329ab179c365ca695570d6d79e57a998`. This is a Release/LTO build
+with clang-cl 20.1.8 on `windows-2025-vs2026`, rather than the older local
+Clang 19.1.5 build. No new build is required to package this artifact.
+
+For this CI artifact, `build-info.json` is reconstructed from the artifact API,
+workflow and job log. It records CI origin, run/job/artifact identifiers, archive
+digest and executable hash. The wrapper revision and changes describe packaging
+inputs; the runtime revision describes the compiled source. The exact build
+completion timestamp is unavailable and is recorded as null; artifact creation
+time is recorded separately. This does not claim a local wrapper build.
+
+Package identity, verification results and the second-PC acceptance record are
+tracked in [W1_PACKAGE_20261016.md](W1_PACKAGE_20261016.md). The second-PC check
+above remains necessary before closing W1.

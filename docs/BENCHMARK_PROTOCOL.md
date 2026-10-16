@@ -1,6 +1,8 @@
 # Benchmark protocol
 
 Target Windows x86-64, AMD Ryzen and NVIDIA Vulkan with CUSA00004 v1.07.
+Both PCs must use an AMD CPU and NVIDIA GPU. AMD/Intel GPUs and Intel CPUs are
+outside the build/run/benchmark target matrix.
 Validate correctness before interpreting a performance result. A successful
 build or unit-test run is not evidence of correct gameplay or improved FPS.
 

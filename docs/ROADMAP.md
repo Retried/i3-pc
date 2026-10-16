@@ -1,36 +1,15 @@
-# Project roadmap
+# Priorities
 
-The detailed plan and implementation history are maintained in
-[PERFORMANCE_ROADMAP.md](PERFORMANCE_ROADMAP.md). Read it before selecting work;
-this page is the entry point, not a second copy of the full plan.
-For the current checkout, validation results and continuation notes, read
-[HANDOFF.md](HANDOFF.md).
+Work only on the requested scope. W1-W4 are distinct from renderer priorities 1-7.
 
-## Development stages
+| Stage | Remaining acceptance/work |
+| --- | --- |
+| W1: Windows build/package | Second-PC launch and gameplay acceptance; commands in [W1_WINDOWS.md](W1_WINDOWS.md). |
+| W2: NVIDIA Vulkan | Target-hardware compatibility and diagnostics validation. |
+| W3: Benchmarks | Portable, repeatable two-PC measurements and comparison. |
+| W4: CPU/draw calls | Profile first; validate existing optimizations against a baseline. |
 
-| Stage | Scope | Current status |
-| --- | --- | --- |
-| W1 | Portable Windows build, toolchain discovery, packaging and launch | Implemented wrapper and package tooling; validation in progress, second-PC acceptance pending. See W1_WINDOWS.md. |
-| W2 | NVIDIA Vulkan compatibility and diagnostics | Basic device diagnostics exist; target hardware validation remains pending. |
-| W3 | Repeatable benchmarks and profiling on two PCs | Existing scripts need portability, metadata and comparison improvements. |
-| W4 | CPU and draw-call optimization guided by measurements | Existing optimizations need validation against a baseline on both PCs. |
-
-W1-W4 are distinct from the renderer priorities numbered 1-7 in the detailed
-plan. Renderer priority 2 has a source implementation and a successful Windows
-build; game validation and performance measurements remain pending. The
-priority 1 push-descriptor patch remains experimental and unapplied.
-
-CI portability fixes and their validation are documented in
-[CI_RUN_38812901885.md](CI_RUN_38812901885.md). The remaining 44 inherited
-clang-format findings are listed in [the original report](CI_RUN_38766554875.md);
-they are not new optimization work. W1 usage and validation are in
-[W1_WINDOWS.md](W1_WINDOWS.md).
-
-Automatic emulator artifact builds now target Windows; Linux/macOS jobs are
-manual opt-in. Cross-platform C++ tests remain enabled. Per AGENTS.md, long
-builds are checked on the next user prompt using the pending records in HANDOFF.md.
-
-Work on the stage requested by the user. A roadmap entry alone does not authorize
-implementation of every stage. Use [BENCHMARK_PROTOCOL.md](BENCHMARK_PROTOCOL.md)
-for measurements, [DECISIONS.md](DECISIONS.md) for design decisions and
-[PERFORMANCE_LOG.md](PERFORMANCE_LOG.md) for measured outcomes.
+Renderer priority 2 is implemented; gameplay and measurements remain unverified.
+Priority 1 remains an unapplied experimental patch.
+Read the relevant section of [PERFORMANCE_ROADMAP.md](PERFORMANCE_ROADMAP.md)
+only when planning renderer work. Pending execution state is in [HANDOFF.md](HANDOFF.md).

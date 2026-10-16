@@ -103,3 +103,13 @@ formatting separately. See [UPSTREAM_6D2A7388.md](UPSTREAM_6D2A7388.md) for scop
 rejected paths, correctness evidence and validation limits. Do not infer a
 performance win from source inspection. Prepare changes outside the source tree
 of pending local builds and defer checkout synchronization until they finish.
+
+## 2026-10-16: Windows tests and compact continuation context
+
+Per user request, C++ test CI now targets Windows only; non-Windows emulator
+artifacts remain manual opt-in. This supersedes the earlier cross-platform-test
+policy. Fix formatting with clang-format 19 rather than weakening its check.
+Keep recurring context split by purpose: AGENTS contains rules, ROADMAP contains
+priorities, HANDOFF contains unresolved operational state. Store build provenance
+in launch records and retain historical implementation detail in Git/reports,
+not in instructions loaded every prompt.

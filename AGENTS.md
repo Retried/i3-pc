@@ -1,56 +1,29 @@
-# i3-pc Development Rules
+# i3-pc rules
 
-## Target
+Target: Windows x86-64, AMD Ryzen, NVIDIA Vulkan, CUSA00004 v1.07.
 
-- Windows x86-64.
-- AMD Ryzen CPU.
-- NVIDIA GPU with Vulkan.
-- inFAMOUS Second Son CUSA00004 v1.07.
+- Preserve rendering correctness and existing optimizations; require evidence for removal.
+- Keep changes focused. No FPS claims without benchmarks. Scripts/comments use ASCII.
+- Read `docs/ROADMAP.md` for priorities and `docs/HANDOFF.md` for pending work.
+  Read linked detail only when relevant to the task; do not reload unchanged rules.
+- Runtime sources are in the `runtime` submodule; read its AGENTS.md before editing.
+  Documentation paths here are relative to this wrapper repository.
+- Before performance tests use `docs/BENCHMARK_PROTOCOL.md`; record measurements in
+  `docs/PERFORMANCE_LOG.md` and non-obvious design decisions in `docs/DECISIONS.md`.
+- Keep HANDOFF limited to pending checks, blockers and context not recoverable from
+  code/Git. Link durable reports and launch records instead of copying them.
+  Remove resolved entries; do not repeat rules, commit history or file inventories.
 
-## Requirements
+## Builds
 
-- Preserve game compatibility and rendering correctness.
-- Do not remove existing optimizations without evidence.
-- Avoid unrelated refactoring.
-- Keep changes small and reviewable.
-- Never claim FPS improvements without benchmarks.
-- Verify completed builds and report pending builds and untested runtime behavior explicitly.
-- Do not use Polish characters in scripts or comments.
-
-## Workflow
-
-- Read `docs/ROADMAP.md` for project priorities.
-- Read `docs/HANDOFF.md` when continuing work from another chat.
-- Use `docs/BENCHMARK_PROTOCOL.md` for performance tests.
-- Record important design decisions in `docs/DECISIONS.md`.
-- Record measured performance changes in `docs/PERFORMANCE_LOG.md`.
-
-## Non-blocking build verification
-
-- At the start of the next user prompt, check builds and CI runs recorded as
-  pending in `docs/HANDOFF.md` before starting another build of the same revision.
-- Launch long local builds in a detached, hidden process with persistent stdout,
-  stderr and an exit-status file. Do not use an in-memory background job that
-  disappears when the shell exits. For CI, record the run URL and commit SHA.
-- Do not wait for compilation or repeatedly poll it during the current response.
-  Complete independent work, record the pending result, and return to the user.
-  Wait only when the user explicitly requests waiting for that build.
-- Record the source revision and dirty state, exact command, configuration,
-  process ID (when local), log/status paths and remaining checks in `docs/HANDOFF.md`.
-- On the next prompt, inspect the exit code and final logs. If still running,
-  keep it pending and continue independent work; do not launch a duplicate.
-  Treat a missing status file and a dead process as interrupted/unknown, not PASS.
-- Build success requires a successful exit and the expected executable. Packaging
-  requires matching build metadata; do not package an incomplete candidate.
-- Publishing an authorized source change may precede build completion. Label its
-  validation pending and follow up on failures at the next prompt. Never describe
-  a started build, configuration-only check or old build as validation of new code.
-- Automated emulator artifact builds target Windows only. Linux/macOS artifact
-  builds are opt-in manual checks; preserve existing cross-platform C++ tests.
-
-## Repository layout
-
-These documentation paths are relative to this top-level repository, including
-when working inside the `runtime` Git submodule. The main repository contains
-scripts and documentation; emulator sources are in `runtime` on the fork's
-`runtime` branch. Also read `runtime/AGENTS.md` before editing runtime sources.
+- At the next prompt, check recorded pending local/CI results once. Do not wait or
+  repeatedly poll builds unless explicitly asked; do not start duplicate jobs.
+- Launch long local builds detached and hidden, with persistent stdout/stderr and
+  exit status. Store command, PID/start time, configuration, source SHA/dirty state
+  in a launch record; put its path in HANDOFF. For CI record run URL and source SHA.
+- Missing status plus dead process means interrupted/unknown. Success requires
+  exit 0 and the expected executable; packaging also requires matching metadata.
+- Do not edit sources used by running builds. Authorized source publication may
+  precede completion, but report pending validation and untested runtime behavior.
+- Automatic emulator builds and C++ tests target Windows. Linux/macOS emulator
+  artifacts remain manual opt-in; do not reintroduce non-Windows tests unrequested.

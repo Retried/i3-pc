@@ -211,12 +211,13 @@ build completion can name the newer commit, while the generated build revision
 can still describe the original launch state. Neither publication nor that
 revision change establishes a passing build.
 [CI 38896616489](https://github.com/Retried/i3-pc/actions/runs/38896616489)
-for f88d3b6f was still in progress at the single W3 prompt check; check it once
-at the next prompt. Do not start a duplicate job.
+for f88d3b6f completed successfully, confirmed at the single delivery-prompt
+check on 2026-10-16. The detached local build/smoke pipeline also records exit 0.
 
 ## Remaining acceptance
 
-1. Check the recorded CI result once at the next prompt.
+1. Check the newer PC2 release artifact and its actual second-PC acceptance;
+   the f88d3b6f Windows CI result is already successful.
 2. Use the corrected, corroborated CUSA00004 01.07 dump for target acceptance
    runs; retain the repair provenance.
 3. Supply a compatible Khronos validation layer and run core/synchronization

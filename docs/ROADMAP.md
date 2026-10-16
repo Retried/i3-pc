@@ -1,13 +1,24 @@
 # Priorities
 
-Work only on the requested scope. W1-W4 are distinct from renderer priorities 1-7.
+Work only on the requested scope. Delivered W1-W4 implementation work has been
+removed from the implementation checklist; its evidence is consolidated in
+[W_DELIVERY_20261016.md](W_DELIVERY_20261016.md). W1-W4 are distinct from renderer
+priorities 1-7. Complete acceptance is not claimed.
 
-| Stage | Remaining acceptance/work |
-| --- | --- |
-| W1: Windows build/package | Second-PC launch and gameplay acceptance; commands in [W1_WINDOWS.md](W1_WINDOWS.md). |
-| W2: NVIDIA Vulkan | Candidate Windows build and repeated NVIDIA title startups passed; validation-layer runs and target-version gameplay remain. See [W2_NVIDIA_VULKAN.md](W2_NVIDIA_VULKAN.md). |
-| W3: Benchmarks | Portable runner and local cold/warm control measurements implemented. Second PC and representative scenes remain; see [W3_BENCHMARKS.md](W3_BENCHMARKS.md). |
-| W4: CPU/draw calls | Local CPU profile and direct-draw A/B recorded in [W4_CPU_DRAWS.md](W4_CPU_DRAWS.md). Representative gameplay, priority-2 isolation and second-PC validation remain. |
+## Remaining release acceptance
+
+- Check the new second-PC build/package result once, then launch it on a second
+  AMD/NVIDIA PC and record gameplay acceptance using [PC2_ACCEPTANCE.md](PC2_ACCEPTANCE.md).
+- Supply a Khronos layer for separate core/synchronization and GPU-assisted runs;
+  record the release's rendering, save/load/readback and stability checks.
+  Only one PC is currently available.
+- Complete matching two-PC benchmarks and isolate priority-2 commit `9a719c45`
+  with a matching pre-change baseline. Existing title-control A/B does not do this.
+  Investigate the documented atomic fallback with hardware reference cases.
+
+These unperformed checks are retained as release acceptance, not marked done
+by moving the delivered implementation milestones out of the checklist.
+Historical upstream investigation items are outside this delivery's scope.
 
 Renderer priority 2 is implemented; gameplay and measurements remain unverified.
 Priority 1 remains an unapplied experimental patch.

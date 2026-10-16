@@ -1,0 +1,153 @@
+{
+  "date": "2026-10-16",
+  "all_w_acceptance_complete": false,
+  "second_pc_available": false,
+  "ci": {
+    "run_url": "https://github.com/Retried/i3-pc/actions/runs/38896616489",
+    "head_sha": "f88d3b6f331272ce854bda5875c11386b180f94f",
+    "status": "completed",
+    "conclusion": "success",
+    "checked_once_this_prompt": true
+  },
+  "validation_prerequisite": {
+    "status": "blocked",
+    "exitCode": null,
+    "mode": "core-sync",
+    "gameplayAcceptance": false,
+    "error": "Khronos validation layer unavailable. Supply a local SDK layer directory; no validation run was performed.",
+    "finishedAtUtc": "2026-10-16T12:53:44.6437981Z"
+  },
+  "opening_smoke": {
+    "status": {
+      "status": "captured",
+      "exitCode": 0,
+      "mode": "smoke",
+      "gameplayAcceptance": false,
+      "logSha256": "BF9AA94019B190DAC2673C9B0917037D471A7FDF00F367518E4909B511F694CF",
+      "validationMessages": [],
+      "visualReview": "pending; screenshots do not establish full gameplay acceptance",
+      "finishedAtUtc": "2026-10-16T13:05:37.9109670Z"
+    },
+    "visual_review": "Reviewed four screenshots: loading/black, introduction text, coastal geometry/foliage/water/light. Opening transition exercised; further interactive gameplay/readbacks/reference correctness not assessed by this bounded capture.",
+    "script": "10:shot,20:cross,40:cross,50:shot,60:cross,100:shot,125:shot,130:quit",
+    "executable_sha256": "DC983DB65BE1F9585E183EA2D1F5B6F59C673728FC8E264A015500CA1F729EE0",
+    "runtime_source": "f88d3b6f331272ce854bda5875c11386b180f94f",
+    "binary_build_info": {
+      "mainCommit": "4c3433f74710f1725d0aa2ff7b7d4be19d06e791",
+      "runtimeCommit": "f88d3b6f331272ce854bda5875c11386b180f94f",
+      "mainChanges": [],
+      "runtimeChanges": [],
+      "configuration": "RelWithDebInfo",
+      "lto": false,
+      "compiler": [
+        "clang version 19.1.5",
+        "Target: x86_64-pc-windows-msvc",
+        "Thread model: posix",
+        "InstalledDir: C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin"
+      ],
+      "builtAtUtc": "2026-10-16T11:56:17.4029925Z",
+      "executableSha256": "DC983DB65BE1F9585E183EA2D1F5B6F59C673728FC8E264A015500CA1F729EE0"
+    },
+    "evidence_directory": "runtime/Build/w-delivery-20261016/ordered-opening-ps5",
+    "screenshots": {
+      "CUSA00004_20261016_150336_557_game_000000.png": "F833F805EE97377AEF973212B52C66FBBE7B77A7130FC393D7287F920BF5511F",
+      "CUSA00004_20261016_150416_633_game_000001.png": "E4FD63D7E846218120155F6EC19AB750E9FD9B1BD7671643B9E4C3B893A226BA",
+      "CUSA00004_20261016_150506_601_game_000002.png": "FB77078AE04B0A8AFF59C60A754ACBD2B327DF2967E3340B6621227781FB3B49",
+      "CUSA00004_20261016_150531_585_game_000003.png": "ABA4857D21E1A7EBA5E9FC0DE9E8DA5DD9CCDE11B56FC62C7C5EE5E356B78B5B"
+    },
+    "process_sampling": {
+      "samples": 133,
+      "working_set_bytes_min": 110051328,
+      "working_set_bytes_max": 6218309632,
+      "interpretation": "Startup/opening sample only; not a leak analysis or performance benchmark"
+    }
+  },
+  "prior_capture": {
+    "status": {
+      "status": "captured",
+      "exitCode": 0,
+      "mode": "smoke",
+      "gameplayAcceptance": false,
+      "logSha256": "F049E955B6D1D7BFB7159114923BE939F477049E120E54278EE04A7F8ED9F760",
+      "validationMessages": [],
+      "visualReview": "pending; screenshots do not establish full gameplay acceptance",
+      "finishedAtUtc": "2026-10-16T13:02:49.8462668Z"
+    },
+    "accepted_as_opening_route": false,
+    "reason": "Original action serialization unordered; fixed and separately rechecked"
+  },
+  "package_preview": {
+    "status": "verified",
+    "files": 14,
+    "zip_sha256": "8c1ee5a93ddaa34259fa798f9220dda43357cbb12d32417dba9d10daab5ebc2c",
+    "scope": "Packaging/ZIP contents only; old executable used to verify packaging, not the new PC2 Release build"
+  },
+  "cleanup": {
+    "atUtc": "2026-10-16T12:58:19.4622310Z",
+    "scope": "Completed W2 generated compilation intermediates only",
+    "removed": [
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\CMakeFiles",
+        "files": 472,
+        "bytes": 375616944.0
+      },
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\externals",
+        "files": 2070,
+        "bytes": 1082823846.0
+      },
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\src",
+        "files": 63,
+        "bytes": 69476151.0
+      },
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\include",
+        "files": 71,
+        "bytes": 1186545.0
+      },
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\shadnet_proto_gen",
+        "files": 2,
+        "bytes": 3691866.0
+      },
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\_cmrc",
+        "files": 1,
+        "bytes": 9421.0
+      },
+      {
+        "path": "E:\\Ziutkowanie\\i3-pc\\runtime\\Build\\w2-x64-Clang-RelWithDebInfo\\__cmrc_embedded-resources",
+        "files": 18,
+        "bytes": 3860153.0
+      }
+    ],
+    "preserved": [
+      {
+        "path": "shadps4.exe",
+        "hash": "DC983DB65BE1F9585E183EA2D1F5B6F59C673728FC8E264A015500CA1F729EE0"
+      },
+      {
+        "path": "shadps4.pdb",
+        "hash": "1BBDCD7E34FB6770FFDD985D5ED3AD7EE48190268FCD9AFD939E731CB3940D87"
+      },
+      {
+        "path": "build-info.json",
+        "hash": "39E5406AA32A3F490471364514ECEFBFFF4172D8BDFD98209DAB1A345C188E8D"
+      }
+    ],
+    "note": "Old executable/PDB/metadata, packages, raw evidence, user data and dependency downloads retained. Reconfigure before rebuilding this old directory."
+  },
+  "old_package": {
+    "path": "packages/i3-pc-W1-b499ca7-20261016.zip",
+    "sha256": "5A07125EB29784DC1CB185ABC12C289BFCBA5403E12A103397810E6B86B89B8F",
+    "preserved": true
+  },
+  "new_release_build": {
+    "status": "Final action launches after source publication; completion pending",
+    "launch_record": "runtime/Build/pc2-20261016/launch.json",
+    "status_record": "runtime/Build/pc2-20261016/status.json",
+    "planned_package": "packages/i3-pc-PC2-20261016.zip"
+  },
+  "scope": "Available local AMD/NVIDIA validation and tooling delivery; historical upstream investigation items excluded"
+}

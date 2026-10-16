@@ -65,6 +65,19 @@ logs/exit status and a HANDOFF.md entry. The next user prompt checks the result;
 the agent does not wait for compilation during the launching response. The batch
 wrappers themselves remain synchronous when run directly by a developer.
 
+For the detached PC2 Release/LTO build and automatic verified package, use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/start-windows-build.ps1 -BuildDirectory runtime/Build/pc2-x64-Clang-Release-lto-20261016 -PackageDirectory packages/i3-pc-PC2-20261016 -LaunchDirectory runtime/Build/pc2-20261016 -Configuration Release -Lto -Jobs 3 -PythonExecutable 'C:/Tools/Python/python.exe'
+```
+
+Supply an existing Python path and new output paths. The launcher requires a
+clean checkout and AMD/NVIDIA host, refuses overlapping builds/emulators, records
+launch/source state and returns immediately. The hidden worker writes persistent
+stdout.log, stderr.log and status.json, then packages with acceptance tools and
+checks executable/manifest/ZIP hashes. Only status complete/exitCode 0 with the
+expected artifact confirms success; runtime behavior still needs acceptance.
+
 ## Package and launch
 
 ```powershell

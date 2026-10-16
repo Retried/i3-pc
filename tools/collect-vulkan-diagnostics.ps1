@@ -17,6 +17,9 @@ function Get-Sha256([string]$Path) {
 }
 
 function Get-GitState([string]$Directory) {
+    if (-not (Test-Path -LiteralPath (Join-Path $Directory '.git'))) {
+        return @{ commit = $null; changes = $null; status = 'source checkout unavailable' }
+    }
     $git = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $git) { return @{ commit = $null; changes = $null; status = 'git unavailable' } }
     $revision = & $git.Source -C $Directory rev-parse HEAD 2>$null

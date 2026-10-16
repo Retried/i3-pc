@@ -181,3 +181,30 @@ resets counts every ten seconds; snapshots are independent intervals and must
 not be subtracted as cumulative totals. Stack scans are approximate, not an
 exclusive time breakdown.
 Method and commands: [W3_BENCHMARKS.md](W3_BENCHMARKS.md).
+
+## 2026-10-16: release handoff and bounded cleanup
+
+Separate delivered W1-W4 tooling/local evidence from unperformed external
+acceptance. Removing implementation milestones from the checklist does not turn
+missing second-PC or Vulkan validation checks into
+passing results. Use one explicit release-acceptance list and a durable report.
+Historical upstream investigation items are excluded from this delivery scope;
+do not carry them into the current implementation checklist.
+
+Start the new PC2 build only after source publication, in a new directory, with
+a detached hidden worker and persistent launch/source/configuration/log/status
+records. Package automatically only after matching executable metadata, verify
+package and ZIP file hashes, and retain the old executable and package. Require
+clean source at launch and an unchanged source state at build completion.
+
+Acceptance tools run only on AMD/NVIDIA, verify CUSA00004 APP_VER 01.07, isolate
+user data and distinguish blocked layer prerequisites from actual validation.
+Keep core/synchronization, GPU-assisted validation and performance runs separate.
+Use .NET hashing rather than depending on Get-FileHash module availability in
+Windows PowerShell 5.1. Do not install an SDK or change global layer registration.
+
+Clean only verified generated intermediates of a completed local build, with no
+active compiler/build process, checked workspace-contained targets and no reparse
+points. Retain artifacts, source dependencies, old packages, saves, metadata
+repair backups and raw measurement evidence. Record removed sizes and verify
+preserved artifact hashes.

@@ -2,7 +2,8 @@ param(
     [string]$BuildDirectory = (Join-Path (Split-Path $PSScriptRoot -Parent) 'runtime\Build\w1-x64-Clang-RelWithDebInfo'),
     [string]$OutputDirectory,
     [string]$DumpbinPath,
-    [string[]]$DllDirectory = @()
+    [string[]]$DllDirectory = @(),
+    [switch]$IncludeAcceptanceTools
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,16 +83,27 @@ try {
     Copy-Item -LiteralPath $metadataPath -Destination $OutputDirectory
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $OutputDirectory
     Copy-Item -LiteralPath (Join-Path $repo 'docs\W1_WINDOWS.md') -Destination $OutputDirectory
+    if ($IncludeAcceptanceTools) {
+        $toolOutput = Join-Path $OutputDirectory 'tools'
+        New-Item -ItemType Directory -Path $toolOutput | Out-Null
+        foreach ($name in @('accept-windows.ps1','collect-vulkan-diagnostics.ps1')) {
+            Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $toolOutput
+        }
+        Copy-Item -LiteralPath (Join-Path $repo 'docs/PC2_ACCEPTANCE.md') -Destination $OutputDirectory
+    }
     @'
 Create game_path.txt here with the full path to your own CUSA00004 v1.07 eboot.bin.
 Start Play.bat. Settings and saves will be created in the user directory.
 Requires Windows 10/11 x64, an x86-64-v3 CPU (target: AMD Ryzen), a compatible
-Vulkan GPU/driver and Microsoft Visual C++ 2015-2022 x64 Redistributable.
+Vulkan GPU/driver (target: NVIDIA) and Microsoft Visual C++ 2015-2022 x64 Redistributable.
 Visual Studio, CMake, Ninja, Python and LLVM are not required to play.
 No game data, firmware, saves or private settings are included.
 Source: https://github.com/Retried/i3-pc (see build-info.json for exact commits).
 The second-PC gameplay check is still required; this is a validation package.
 '@ | Set-Content -LiteralPath (Join-Path $OutputDirectory 'START-HERE.txt') -Encoding ascii
+    if ($IncludeAcceptanceTools) {
+        Add-Content -LiteralPath (Join-Path $OutputDirectory 'START-HERE.txt') -Value 'Optional isolated capture and second-PC checks: see PC2_ACCEPTANCE.md.' -Encoding ascii
+    }
     [ordered]@{
         systemDependencies = @($systemDependencies.Keys | Sort-Object)
         bundledDependencies = @($dlls.Keys | Sort-Object)

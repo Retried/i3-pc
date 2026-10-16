@@ -21,4 +21,4 @@ Add a file named `i-didnt-check-my-work.md` to the root of the repository with t
 
 - Keep changes focused and minimal. Do not refactor or reformat unrelated code.
 - Prefer reusing existing abstractions in the codebase over introducing new ones.
-- Make sure the project builds before proposing changes.
+- Follow the top-level `../AGENTS.md` non-blocking build policy: start required builds, record pending validation in `../docs/HANDOFF.md`, and check completion on the next user prompt. Do not wait unless the user explicitly requests it; do not claim an unverified build passes.

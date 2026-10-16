@@ -16,6 +16,12 @@ on:
       - "**/*.md"
 
   workflow_dispatch:
+    inputs:
+      build_non_windows:
+        description: Build Linux and macOS emulator artifacts (manual opt-in)
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
@@ -187,6 +193,7 @@ jobs:
         path: ${{github.workspace}}/build/shadPS4.exe
 
   macos-sdl:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_non_windows == true
     runs-on: macos-26
     needs: get-info
     steps:
@@ -247,6 +254,7 @@ jobs:
         path: upload/
 
   linux-sdl:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_non_windows == true
     runs-on: ubuntu-24.04
     needs: get-info
     steps:
@@ -311,6 +319,7 @@ jobs:
         path: Shadps4-sdl.AppImage
 
   linux-sdl-gcc:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_non_windows == true
     runs-on: ubuntu-24.04
     needs: get-info
     steps:
@@ -351,18 +360,13 @@ jobs:
 
   pre-release:
     if: github.ref == 'refs/heads/main' && github.repository == 'shadps4-emu/shadPS4' && github.event_name == 'push'
-    needs: [get-info, windows-sdl, macos-sdl, linux-sdl]
+    needs: [get-info, windows-sdl]
     runs-on: ubuntu-latest
     steps:
     - name: Download all artifacts
       uses: actions/download-artifact@v8
       with:
         path: ./artifacts
-
-    - name: Make SDL artifacts executable
-      run: |
-        chmod -R a+x ./artifacts/shadps4-linux-sdl-*
-        chmod -R a+x ./artifacts/shadps4-macos-sdl-*
 
     - name: Compress individual directories (without parent directory)
       run: |

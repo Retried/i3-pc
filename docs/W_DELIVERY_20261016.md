@@ -102,5 +102,7 @@ Use [PC2_ACCEPTANCE.md](PC2_ACCEPTANCE.md) with that machine when available.
 Actual second-PC play, two-PC repeated comparisons, separate Vulkan layer runs, readback/long-gameplay
 coverage and the atomic-fallback hardware reference checks remain unperformed.
 The priority-2 optimization also needs a matching pre-change baseline; the
-direct-draw environment switch does not isolate it. The priority-1 patch remains
-unapplied. These are acceptance requirements, not implied successes.
+direct-draw environment switch does not isolate it. Priority 1 was unapplied at
+this delivery's baseline; its later source integration is tracked in
+[roadmap item 8](ROADMAP8_PUSH_DESCRIPTORS_20261017.md). These are acceptance
+requirements, not implied successes.

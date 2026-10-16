@@ -25,7 +25,8 @@ The baseline executable does not include the new W2 source changes.
 No renderer optimization, shader fallback, upload scheduling or guest readback
 algorithm was replaced. Subsequent W3/W4 local work is recorded in
 [W3_BENCHMARKS.md](W3_BENCHMARKS.md) and [PERFORMANCE_LOG.md](PERFORMANCE_LOG.md).
-The priority-1 patch remains unapplied.
+Priority 1 was unapplied at this baseline; its later integration is tracked in
+[roadmap item 8](ROADMAP8_PUSH_DESCRIPTORS_20261017.md), with runtime acceptance pending.
 
 ## Hardware and capabilities observed
 

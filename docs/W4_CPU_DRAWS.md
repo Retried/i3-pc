@@ -77,8 +77,9 @@ machine, no two-PC coverage and null for missing cases.
 
 Keep existing renderer optimizations. Priority-2 `9a719c45` needs a separate
 matching pre-change build because this runtime has no switch isolating that
-cache. The priority-1 patch at `docs/patches/priority1-push-descriptor-cache.patch`
-still passes the applicability check, but remains unapplied and unvalidated.
+cache. At this report's baseline the priority-1 patch passed the applicability
+check but remained unapplied. It is now integrated as
+[roadmap item 8](ROADMAP8_PUSH_DESCRIPTORS_20261017.md), with runtime acceptance pending.
 It filters descriptor writes rather than eliminating resource preparation or
 combining draws; the measured fast-path comparison cannot establish its benefit.
 

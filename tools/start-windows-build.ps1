@@ -7,6 +7,7 @@ param(
     [switch]$Lto,
     [ValidateRange(1,256)][int]$Jobs = 3,
     [string]$PythonExecutable = $env:PYTHON3_EXECUTABLE,
+    [switch]$Detach,
     [switch]$Worker
 )
 $ErrorActionPreference = 'Stop'
@@ -47,7 +48,7 @@ if (-not $Worker) {
     if ($source.wrapper.changes.Count -or $source.runtime.changes.Count) { throw 'Publish or finish source changes before starting the release build.' }
     New-Item -ItemType Directory -Path $LaunchDirectory | Out-Null
     $inputRecord = [ordered]@{repo=$repo;buildDirectory=$BuildDirectory;packageDirectory=$PackageDirectory;configuration=$Configuration;lto=[bool]$Lto;jobs=$Jobs;pythonExecutable=$PythonExecutable;source=$source;createdAtUtc=[DateTime]::UtcNow.ToString('o');target='Windows x64; AMD Ryzen; NVIDIA Vulkan';scriptHashes=@{}}
-    foreach ($name in @('start-windows-build.ps1','build-windows.ps1','package-windows.ps1','accept-windows.ps1','collect-vulkan-diagnostics.ps1')) {
+    foreach ($name in @('start-windows-build.ps1','open-windows-build-console.ps1','show-windows-build.ps1','build-windows.ps1','package-windows.ps1','accept-windows.ps1','collect-vulkan-diagnostics.ps1')) {
         $inputRecord.scriptHashes[$name] = Get-Sha256 (Join-Path $PSScriptRoot $name)
     }
     $inputRecord | ConvertTo-Json -Depth 9 | Set-Content -LiteralPath (Join-Path $LaunchDirectory 'inputs.json') -Encoding UTF8
@@ -55,6 +56,9 @@ if (-not $Worker) {
     $child = Start-Process -FilePath $hostExe -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput (Join-Path $LaunchDirectory 'stdout.log') -RedirectStandardError (Join-Path $LaunchDirectory 'stderr.log') -PassThru
     [ordered]@{pid=$child.Id;startedAtUtc=$child.StartTime.ToUniversalTime().ToString('o');command=@($hostExe)+$arguments;configuration=$Configuration;lto=[bool]$Lto;source=$source;inputs='inputs.json';stdout='stdout.log';stderr='stderr.log';status='status.json'} | ConvertTo-Json -Depth 9 | Set-Content -LiteralPath (Join-Path $LaunchDirectory 'launch.json') -Encoding UTF8
     Write-Output "Started PID $($child.Id). Launch record: $LaunchDirectory\launch.json"
+    if (-not $Detach) {
+        & (Join-Path $PSScriptRoot 'open-windows-build-console.ps1') -LaunchDirectory $LaunchDirectory
+    }
     exit 0
 }
 $status = [ordered]@{status='running';phase='build';exitCode=$null;startedAtUtc=[DateTime]::UtcNow.ToString('o')}

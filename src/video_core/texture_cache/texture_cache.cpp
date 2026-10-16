@@ -49,7 +49,7 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
       tile_manager{instance, scheduler, runtime, buffer_cache.GetStreamBuffer()},
       readback_linear_images{EmulatorSettings.IsReadbackLinearImagesEnabled()} {
 
-    u32 max_samplers = instance.GetMaxSamplerAllocationCount();
+    const u32 max_samplers = std::min(instance.GetMaxSamplerAllocationCount(), MAX_SAMPLERS);
     trigger_gc_samplers = max_samplers * 3 / 4;
     pressure_gc_samplers = max_samplers * 7 / 8;
     critical_gc_samplers = max_samplers * 15 / 16;
@@ -1286,10 +1286,11 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
 }
 
 void TextureCache::GarbageCollectImages() {
+    const auto image_pool_pressured = [&] { return slot_images.Size() >= MAX_IMAGES / 2; };
     if (instance.CanReportMemoryUsage()) {
         total_used_memory = instance.GetDeviceMemoryUsage();
     }
-    if (total_used_memory < trigger_gc_memory) {
+    if (total_used_memory < trigger_gc_memory && !image_pool_pressured()) {
         return;
     }
     bool pressured = false;
@@ -1298,7 +1299,7 @@ void TextureCache::GarbageCollectImages() {
     size_t num_deletions = 0;
 
     const auto configure = [&](bool allow_aggressive) {
-        pressured = total_used_memory >= pressure_gc_memory;
+        pressured = image_pool_pressured() || total_used_memory >= pressure_gc_memory;
         aggresive = allow_aggressive && total_used_memory >= critical_gc_memory;
         ticks_to_destroy = aggresive ? 160 : pressured ? 80 : 16;
         ticks_to_destroy = std::min(ticks_to_destroy, gc_tick);
@@ -1329,7 +1330,7 @@ void TextureCache::GarbageCollectImages() {
                 aggresive = false;
                 return false;
             }
-            if (pressured && total_used_memory < pressure_gc_memory) {
+            if (pressured && total_used_memory < pressure_gc_memory && !image_pool_pressured()) {
                 num_deletions >>= 1;
                 pressured = false;
             }

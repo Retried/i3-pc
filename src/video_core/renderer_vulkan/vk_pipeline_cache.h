@@ -50,6 +50,16 @@ struct Program {
     Shader::Info info;
     ModuleList modules{};
 
+    // The inputs of the last variant match (see PipelineCache::GetProgram): when a draw brings
+    // the same ones again, the same variant is taken without building its specialization.
+    struct LastMatch {
+        size_t perm_idx = SIZE_MAX;
+        std::vector<u32> flat_buf;
+        Shader::RuntimeInfo runtime_info{};
+        Shader::Backend::Bindings start{};
+        boost::container::small_vector<std::array<u32, 4>, 16> vs_sharps;
+    } last_match;
+
     Program() = default;
     Program(Shader::HwStage stage, Shader::SwStage l_stage, Shader::ShaderParams params)
         : info{stage, l_stage, params} {}

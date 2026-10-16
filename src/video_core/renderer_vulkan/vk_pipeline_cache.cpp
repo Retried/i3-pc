@@ -708,6 +708,51 @@ PipelineCache::Result PipelineCache::GetProgram(HwStage hw_stage, SwStage sw_sta
     info.pgm_base = params.Base(); // Needs to be actualized for inline cbuffer address fixup
     info.user_data = params.user_data;
     info.RefreshFlatBuf();
+
+    // The specialization depends only on the flattened user data, the runtime info, the first
+    // bindings and, for a vertex shader, the vertex buffer descriptors its fetch shader reads
+    // from guest memory. Tessellation stages also read constants from memory: never reused.
+    // I3_NO_VARIANT_REUSE=1 always builds the specialization.
+    static const bool reuse_on = std::getenv("I3_NO_VARIANT_REUSE") == nullptr;
+    static u64 reuse_hits = 0, reuse_misses = 0;
+    auto& last = program->last_match;
+    const bool reusable = reuse_on && sw_stage != SwStage::TessellationControl &&
+                          sw_stage != SwStage::TessellationEval;
+    const auto vs_sharps_match = [&](bool store) {
+        const auto& fetch = program->modules[last.perm_idx].spec.fetch_shader_data;
+        if (store) {
+            last.vs_sharps.clear();
+        } else if (last.vs_sharps.size() != fetch.attributes.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < fetch.attributes.size(); ++i) {
+            const auto sharp = fetch.attributes[i].GetSharp(info);
+            std::array<u32, 4> words;
+            static_assert(sizeof(sharp) == sizeof(words));
+            std::memcpy(words.data(), &sharp, sizeof(words));
+            if (store) {
+                last.vs_sharps.push_back(words);
+            } else if (last.vs_sharps[i] != words) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (reusable && last.perm_idx < program->modules.size() && last.start == binding &&
+        last.runtime_info == runtime_info && last.flat_buf == info.flattened_ud_buf &&
+        vs_sharps_match(false)) {
+        ++reuse_hits;
+        auto& hit = program->modules[last.perm_idx];
+        info.AddBindings(binding);
+        if (!hit.spec.fetch_shader_data.Empty()) {
+            fetch_shader = &hit.spec.fetch_shader_data;
+        }
+        return std::make_tuple(&info, hit.module, HashCombine(params.hash, hit.key));
+    }
+    if (reusable && ((++reuse_misses) & 0xffff) == 0) {
+        LOG_INFO(Render_Vulkan, "variant reuse: {} hits, {} misses", reuse_hits, reuse_misses);
+    }
+    const auto start_binding = binding;
     auto spec = Shader::StageSpecialization(info, runtime_info, profile, binding);
 
     size_t perm_idx = program->modules.size();
@@ -731,6 +776,13 @@ PipelineCache::Result PipelineCache::GetProgram(HwStage hw_stage, SwStage sw_sta
         module = it->module;
         perm_idx = std::distance(program->modules.begin(), it);
         perm_hash = HashCombine(params.hash, it->key);
+    }
+    if (reusable) {
+        last.perm_idx = perm_idx;
+        last.flat_buf = info.flattened_ud_buf;
+        last.runtime_info = runtime_info;
+        last.start = start_binding;
+        vs_sharps_match(true);
     }
     if (auto& fetch = program->modules[perm_idx].spec.fetch_shader_data; !fetch.Empty()) {
         fetch_shader = &fetch;

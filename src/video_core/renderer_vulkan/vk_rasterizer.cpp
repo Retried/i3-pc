@@ -466,6 +466,9 @@ struct DrawStats {
             last_good_args = 0;
         }
         LOG_ERROR(Render, "deferred labels: blocking completions {}", deferred_waits);
+        LOG_ERROR(Render, "recorder drains: waited {}, before guest writes {}",
+                  CommandStream::waited_drains, CommandStream::host_drains);
+        CommandStream::waited_drains = CommandStream::host_drains = 0;
         deferred_waits = 0;
         for (auto& v : unflushed_signal) {
             v = 0;

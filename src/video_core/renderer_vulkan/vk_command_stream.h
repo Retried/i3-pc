@@ -12,6 +12,8 @@
 #include <thread>
 #include <type_traits>
 
+#include <absl/container/flat_hash_set.h>
+
 #include "common/types.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 
@@ -41,21 +43,44 @@ public:
         return async;
     }
     /// Runs host work (a trivially copyable callable) on the worker, in order with the commands.
+    /// It reads guest memory [read_addr, read_addr + read_size): see DrainForWrite.
     template <typename F>
-    void RunInOrder(F&& func) {
-        host_work_pending = async;
+    void RunInOrder(F&& func, VAddr read_addr, u64 read_size) {
+        if (async) {
+            host_work_pending = true;
+            for (u64 page = read_addr >> 12; page <= (read_addr + read_size - 1) >> 12; ++page) {
+                read_pages.insert(page);
+            }
+        }
         Push(0, [func](vk::CommandBuffer) { func(); });
     }
     /// Drains only when host work was queued since the last drain.
     void DrainHostWork() {
         if (host_work_pending) {
+            ++host_drains;
             Drain();
         }
     }
+    /// Before guest memory is written on the command thread: drains only when queued host work
+    /// reads one of the written pages.
+    void DrainForWrite(VAddr addr, u64 size) {
+        if (!host_work_pending) {
+            return;
+        }
+        for (u64 page = addr >> 12; page <= (addr + size - 1) >> 12; ++page) {
+            if (read_pages.contains(page)) {
+                ++host_drains;
+                Drain();
+                return;
+            }
+        }
+    }
     bool host_work_pending{};
+    absl::flat_hash_set<u64> read_pages;
+    static inline u64 host_drains{};
     /// Counters for the periodic statistics line: commands queued and drains that had to wait.
     u64 queued_commands{};
-    u64 waited_drains{};
+    static inline u64 waited_drains{};
 
     // ---- Queued commands. Signatures follow vk::CommandBuffer where the renderer uses them. ----
 

@@ -28,21 +28,48 @@ namespace AmdGpu {
 
 // Packets that write guest memory on this thread. Stream copies still queued on the command
 // recorder (BufferCache::ObtainBuffer) read that memory for earlier draws: they finish first.
-static void FinishQueuedReads(Vulkan::Rasterizer* rasterizer, PM4ItOpcode opcode) {
+// Labels and WRITE_DATA (tens of thousands a second in fights) name what they write: only a
+// write to a page a queued copy reads waits for the recorder.
+static void FinishQueuedReads(Vulkan::Rasterizer* rasterizer, PM4ItOpcode opcode,
+                              const PM4Header* header) {
+    if (!rasterizer) {
+        return;
+    }
+    auto& stream = rasterizer->GetScheduler().Stream();
     switch (opcode) {
-    case PM4ItOpcode::DumpConstRam:
+    case PM4ItOpcode::WriteData: {
+        const u32 count = header->type3.count.Value();
+        if (count > 2) {
+            stream.DrainForWrite(
+                reinterpret_cast<const PM4CmdWriteData*>(header)->Address<VAddr>(),
+                (count - 2) * 4);
+        }
+        break;
+    }
     case PM4ItOpcode::EventWriteEos:
     case PM4ItOpcode::EventWriteEop:
     case PM4ItOpcode::ReleaseMem:
-    case PM4ItOpcode::DmaData:
-    case PM4ItOpcode::WriteData:
+        // End-of-pipe labels tell the guest CPU it may reuse memory the queued copies still read.
+        stream.DrainHostWork();
+        break;
+    case PM4ItOpcode::DumpConstRam: {
+        const auto* dump = reinterpret_cast<const PM4DumpConstRam*>(header);
+        stream.DrainForWrite(dump->Address<VAddr>(), dump->Size());
+        break;
+    }
+    case PM4ItOpcode::DmaData: {
+        // Only a write to memory can overwrite what a queued copy still has to read.
+        const auto* dma = reinterpret_cast<const PM4DmaData*>(header);
+        if (dma->dst_sel != DmaDataDst::Gds && dma->NumBytes() != 0) {
+            stream.DrainForWrite(dma->DstAddress<VAddr>(), dma->NumBytes());
+        }
+        break;
+    }
     case PM4ItOpcode::CopyData:
     case PM4ItOpcode::AtomicGds:
     case PM4ItOpcode::MemSemaphore:
     case PM4ItOpcode::CondWrite:
-        if (rasterizer) {
-            rasterizer->GetScheduler().Stream().DrainHostWork();
-        }
+        stream.DrainHostWork();
         break;
     default:
         break;
@@ -203,7 +230,7 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
         }
 
         const PM4ItOpcode opcode = header->type3.opcode;
-        FinishQueuedReads(rasterizer, opcode);
+        FinishQueuedReads(rasterizer, opcode, header);
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         state_changed_since_draw = true;
         ++VideoCore::g_stream_epoch;
@@ -297,7 +324,7 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
         case 3:
             const u32 count = header->type3.NumWords();
             const PM4ItOpcode opcode = header->type3.opcode;
-            FinishQueuedReads(rasterizer, opcode);
+            FinishQueuedReads(rasterizer, opcode, header);
             switch (opcode) {
             case PM4ItOpcode::Nop:
             case PM4ItOpcode::SetBase:
@@ -1053,7 +1080,7 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
         }
 
         const PM4ItOpcode opcode = header->type3.opcode;
-        FinishQueuedReads(rasterizer, opcode);
+        FinishQueuedReads(rasterizer, opcode, header);
 
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         state_changed_since_draw = true;

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
-#include "common/recording.h"
 #include <numeric>
+#include "common/recording.h"
 
 #include "common/alignment.h"
 #include "common/assert.h"

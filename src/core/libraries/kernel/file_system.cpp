@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
-#include "common/recording.h"
-#include <chrono>
 #include <climits>
 #include <cstdint>
 #include <map>
@@ -11,6 +9,7 @@
 #include <thread>
 #include <vector>
 #include <magic_enum/magic_enum.hpp>
+#include "common/recording.h"
 
 #include "common/assert.h"
 #include "common/error.h"

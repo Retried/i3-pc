@@ -7,6 +7,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <utility>
+#include <boost/container/small_vector.hpp>
 #include "common/adaptive_mutex.h"
 #include "common/assert.h"
 #include "common/debug.h"
@@ -15,9 +16,8 @@
 #include "common/multi_level_page_table.h"
 #include "common/signal_context.h"
 #include "common/thread.h"
-#include "core/emulator_settings.h"
-#include <boost/container/small_vector.hpp>
 #include "core/direct_aliases.h"
+#include "core/emulator_settings.h"
 #include "core/memory.h"
 #include "core/signals.h"
 #include "video_core/page_manager.h"
@@ -484,8 +484,9 @@ struct SignalImpl : public PageManager::Impl {
                 repeats = 0;
                 static std::atomic<u32> seen{0};
                 if (const u32 count = ++seen; count <= 20 || count % 256 == 0) {
-                    LOG_INFO(Render, "read fault at {:#x} while a mapping was being changed, "
-                                     "tried again ({} so far)",
+                    LOG_INFO(Render,
+                             "read fault at {:#x} while a mapping was being changed, "
+                             "tried again ({} so far)",
                              addr, count);
                 }
             }
@@ -511,8 +512,9 @@ struct SignalImpl : public PageManager::Impl {
             }
             if (logged.load(std::memory_order_relaxed) < 600 || n % 4096 == 0 || first_of_shader) {
                 ++logged;
-                LOG_ERROR(Render, "cpu read of gpu-written memory at {:#x}: shader {:#x} output "
-                                  "{:#x} size {:#x} ({} reads so far)",
+                LOG_ERROR(Render,
+                          "cpu read of gpu-written memory at {:#x}: shader {:#x} output "
+                          "{:#x} size {:#x} ({} reads so far)",
                           addr, hash, base, out_size, n);
             }
         }

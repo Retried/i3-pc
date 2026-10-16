@@ -280,9 +280,9 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
 
     const u64 key = VariantKey(spec);
     std::vector<u32> spv{};
-    Storage::DataBase::Instance().Load(Storage::BlobType::ShaderBinary,
-                                       fmt::format("{:#018x}_k{:016x}", program->info.pgm_hash, key),
-                                       spv);
+    Storage::DataBase::Instance().Load(
+        Storage::BlobType::ShaderBinary,
+        fmt::format("{:#018x}_k{:016x}", program->info.pgm_hash, key), spv);
     if (spv.empty()) {
         // Stored before variants were named by their content: compiled when first needed.
         return false;

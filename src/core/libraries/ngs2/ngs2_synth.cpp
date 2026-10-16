@@ -529,7 +529,8 @@ void ApplyParam(Voice& v, const OrbisNgs2VoiceParamHeader* p) {
             if (IsSampler(v) && traced < 60 && m.port == 0) {
                 ++traced;
                 LOG_ERROR(Lib_Ngs2, "voice {:x} port0 volume {:.4f} (calls zero {} nonzero {})",
-                          reinterpret_cast<uintptr_t>(&v) & 0xfffff, m.level, vol_zero, vol_nonzero);
+                          reinterpret_cast<uintptr_t>(&v) & 0xfffff, m.level, vol_zero,
+                          vol_nonzero);
             }
         }
         break;
@@ -539,16 +540,15 @@ void ApplyParam(Voice& v, const OrbisNgs2VoiceParamHeader* p) {
         GetPort(v, m.port).dest = FindVoice(m.destHandle);
         break;
     }
-    case VoiceKickEvent:
-        {
-            static int events = 0;
-            if (IsSampler(v) && events++ < 400) {
-                LOG_ERROR(Lib_Ngs2, "voice {:x} event {} state {:#x} decoded {} render {}",
-                          reinterpret_cast<uintptr_t>(&v) & 0xfffff,
-                          As<OrbisNgs2VoiceEventParam>(p).eventId, v.state, v.decoded_samples,
-                          g_diag.renders);
-            }
+    case VoiceKickEvent: {
+        static int events = 0;
+        if (IsSampler(v) && events++ < 400) {
+            LOG_ERROR(Lib_Ngs2, "voice {:x} event {} state {:#x} decoded {} render {}",
+                      reinterpret_cast<uintptr_t>(&v) & 0xfffff,
+                      As<OrbisNgs2VoiceEventParam>(p).eventId, v.state, v.decoded_samples,
+                      g_diag.renders);
         }
+    }
         switch (As<OrbisNgs2VoiceEventParam>(p).eventId) {
         case Play:
             v.state = (v.state | InUse | Playing) & ~(Stopped | Paused | Empty);
@@ -599,7 +599,8 @@ void ApplyParam(Voice& v, const OrbisNgs2VoiceParamHeader* p) {
                                         blk.dataOffset, blk.dataSize, blk.numRepeats,
                                         blk.numSkipSamples, blk.numSamples, blk.userData);
                 }
-                LOG_ERROR(Lib_Ngs2, "voice {:x} blocks data {} flags {:#x} n {} queued {} state {:#x}: {}",
+                LOG_ERROR(Lib_Ngs2,
+                          "voice {:x} blocks data {} flags {:#x} n {} queued {} state {:#x}: {}",
                           reinterpret_cast<uintptr_t>(&v) & 0xfffff, fmt::ptr(m.data), m.flags,
                           m.numBlocks, v.blocks.size(), v.state, text);
             }
@@ -706,7 +707,7 @@ s32 VoiceControl(OrbisNgs2Handle voice_handle, const OrbisNgs2VoiceParamHeader* 
             break;
         }
         p = reinterpret_cast<const OrbisNgs2VoiceParamHeader*>(reinterpret_cast<const u8*>(p) +
-                                                                 p->next);
+                                                               p->next);
     }
     return ORBIS_OK;
 }
@@ -735,7 +736,11 @@ s32 VoiceGetState(OrbisNgs2Handle voice_handle, OrbisNgs2VoiceState* out_state, 
             sampler->decodedDataSize +=
                 voice->format.waveformType == Atrac9
                     ? voice->block_off
-                    : (total ? size * std::min<u64>(voice->pcm_pos * voice->format.numChannels, total) / total : 0);
+                    : (total
+                           ? size *
+                                 std::min<u64>(voice->pcm_pos * voice->format.numChannels, total) /
+                                 total
+                           : 0);
         }
         sampler->userData = voice->user_data;
         sampler->waveformData = voice->waveform_data;
@@ -837,8 +842,7 @@ s32 Render(const OrbisNgs2RenderBufferInfo* buffers, u32 num_buffers) {
         }
     }
 
-    std::ranges::stable_sort(bus_voices,
-                             [](Voice* a, Voice* b) { return Depth(*a) > Depth(*b); });
+    std::ranges::stable_sort(bus_voices, [](Voice* a, Voice* b) { return Depth(*a) > Depth(*b); });
     for (Voice* voice : bus_voices) {
         if (!voice->bus_used) {
             continue;
@@ -883,14 +887,16 @@ s32 Render(const OrbisNgs2RenderBufferInfo* buffers, u32 num_buffers) {
         Route(*voice, scratch.data(), ch, frames);
     }
     if (++g_diag.renders % 1000 == 0) {
-        LOG_ERROR(Lib_Ngs2, "synth diag: sampler peak {:.3f} patched ports {} port vol {:.2f} "
-                            "matrix peak {:.3f} pcm {} blocks {} | bus voices used {} patched {} "
-                            "peak after fx {:.3f}",
+        LOG_ERROR(Lib_Ngs2,
+                  "synth diag: sampler peak {:.3f} patched ports {} port vol {:.2f} "
+                  "matrix peak {:.3f} pcm {} blocks {} | bus voices used {} patched {} "
+                  "peak after fx {:.3f}",
                   g_diag.sampler_peak, g_diag.sampler_ports, g_diag.sampler_port_volume,
                   g_diag.matrix_peak, g_diag.pcm_frames, g_diag.blocks, g_diag.bus_voices_used,
                   g_diag.bus_ports, g_diag.bus_peak);
-        LOG_ERROR(Lib_Ngs2, "synth diag2: matrices {} ports with matrix {} send peak {:.3f} bus "
-                            "peak before fx {:.3f}",
+        LOG_ERROR(Lib_Ngs2,
+                  "synth diag2: matrices {} ports with matrix {} send peak {:.3f} bus "
+                  "peak before fx {:.3f}",
                   g_diag.matrices, g_diag.ports_with_matrix, g_diag.send_peak, g_diag.bus_peak_pre);
         const u32 renders = g_diag.renders;
         g_diag = {};
@@ -931,8 +937,9 @@ s32 Render(const OrbisNgs2RenderBufferInfo* buffers, u32 num_buffers) {
                 }
                 playing_max = std::max(playing_max, playing);
                 if (++renders % 1000 == 0) {
-                    LOG_ERROR(Lib_Ngs2, "audio/1000 grains: peak out0 {:.3f} out1 {:.3f} out2 {:.3f}, "
-                                        "max playing sampler voices {}",
+                    LOG_ERROR(Lib_Ngs2,
+                              "audio/1000 grains: peak out0 {:.3f} out1 {:.3f} out2 {:.3f}, "
+                              "max playing sampler voices {}",
                               peak[0], peak[1], peak[2], playing_max);
                     peak[0] = peak[1] = peak[2] = peak[3] = 0;
                     playing_max = 0;

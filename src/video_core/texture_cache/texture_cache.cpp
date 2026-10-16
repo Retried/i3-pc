@@ -1,26 +1,26 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "common/recording.h"
-#include <optional>
-#include <fstream>
-#include <atomic>
 #include <array>
+#include <atomic>
+#include <fstream>
 #include <limits>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <xxhash.h>
+#include "common/recording.h"
 
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include "common/assert.h"
-#include "common/path_util.h"
-#include "common/io_file.h"
 #include "common/debug.h"
 #include "common/div_ceil.h"
 #include "common/hash.h"
+#include "common/io_file.h"
+#include "common/path_util.h"
 #include "core/emulator_settings.h"
 #include "core/memory.h"
 #include "video_core/buffer_cache/buffer_cache.h"
@@ -132,9 +132,8 @@ void TextureCache::DebugDumpImages() {
             runtime.DownloadImage(&image, dl.buffer, std::span{&copy, 1});
             scheduler.Finish();
             dl.Invalidate();
-            Common::FS::IOFile out{dir / fmt::format("arr_{:x}_16x16x{}_{}.raw",
-                                                     info.guest_address, layers,
-                                                     vk::to_string(info.pixel_format)),
+            Common::FS::IOFile out{dir / fmt::format("arr_{:x}_16x16x{}_{}.raw", info.guest_address,
+                                                     layers, vk::to_string(info.pixel_format)),
                                    Common::FS::FileAccessMode::Create};
             out.WriteRaw<u8>(dl.mapped, bytes);
             continue;
@@ -168,8 +167,8 @@ void TextureCache::DebugDumpImages() {
         scheduler.Finish();
         download.Invalidate();
         const auto name = fmt::format("{:03}_{:x}_{}x{}_p{}_b{}_{}", count++, info.guest_address,
-                                      info.size.width, info.size.height, info.pitch,
-                                      info.num_bits, vk::to_string(info.pixel_format));
+                                      info.size.width, info.size.height, info.pitch, info.num_bits,
+                                      vk::to_string(info.pixel_format));
         Common::FS::IOFile file{dir / (name + ".raw"), Common::FS::FileAccessMode::Create};
         const u32 texel_bytes = info.props.is_depth
                                     ? (info.pixel_format == vk::Format::eD16Unorm ? 2 : 4)
@@ -671,13 +670,14 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         static const bool on = std::getenv("SOTC_FINDLOG") != nullptr;
         static std::unordered_set<u64> seen;
         if (on && info.size.width == 16 && info.size.height == 16 &&
-            seen.insert(info.guest_address ^ (u64(info.guest_size) << 36) ^
-                        (u64(desc.type) << 60) ^ (u64(info.pixel_format) << 8) ^
+            seen.insert(info.guest_address ^ (u64(info.guest_size) << 36) ^ (u64(desc.type) << 60) ^
+                        (u64(info.pixel_format) << 8) ^
                         (u64(desc.view_info.range.base.layer) << 24) ^
                         (u64(desc.view_info.range.extent.layers) << 50))
                 .second) {
-            LOG_ERROR(Render, "findlog addr {:#x} size {:#x} layers {} fmt {} binding {} "
-                              "viewlayer {} n {} type {}",
+            LOG_ERROR(Render,
+                      "findlog addr {:#x} size {:#x} layers {} fmt {} binding {} "
+                      "viewlayer {} n {} type {}",
                       info.guest_address, info.guest_size, info.resources.layers,
                       vk::to_string(info.pixel_format), u32(desc.type),
                       desc.view_info.range.base.layer, desc.view_info.range.extent.layers,
@@ -687,10 +687,9 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
 
     // I3_NO_FIND_MEMO=1 turns the lookup memo off (A/B measurement).
     static const bool memo = std::getenv("I3_NO_FIND_MEMO") == nullptr;
-    FoundImage& found =
-        found_images[((info.guest_address >> 12) ^ (info.guest_address >> 23) ^ info.guest_size ^
-                      (u64(info.pixel_format) << 3)) &
-                     (found_images.size() - 1)];
+    FoundImage& found = found_images[((info.guest_address >> 12) ^ (info.guest_address >> 23) ^
+                                      info.guest_size ^ (u64(info.pixel_format) << 3)) &
+                                     (found_images.size() - 1)];
     if (memo && found.generation == image_set_generation &&
         found.guest_address == info.guest_address && found.guest_size == info.guest_size &&
         found.size == info.size && found.pixel_format == info.pixel_format &&
@@ -776,7 +775,7 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
     // just now (which changed the generation), goes through the full path again.
     if (memo && perfect_match && slot_images[image_id].info.guest_address == info.guest_address) {
         found = {image_set_generation, info.guest_address, info.guest_size, info.size,
-                 info.pixel_format, info.type, exact_fmt, image_id};
+                 info.pixel_format,    info.type,          exact_fmt,       image_id};
     }
 
     // If the image requested is a subresource of the image from cache record its location.
@@ -1015,7 +1014,8 @@ PromptSet ActivePromptSet() {
 void TextureCache::ApplyTexturePack(Image& image) {
     // File name: <hash of the guest data, 16 hex digits>.bin, holding the mip chain as
     // consecutive untiled levels in the image's own format.
-    static const auto dir = Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "sotc_textures";
+    static const auto dir =
+        Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "sotc_textures";
     static const bool dumping = std::getenv("SOTC_TEXDUMP") != nullptr;
     // One set of replacements per prompt style (see PromptSet): <dir>/keyboard and <dir>/xbox.
     // Loose files in <dir> itself count as keyboard glyphs. PlayStation prompts are the
@@ -1110,11 +1110,11 @@ void TextureCache::ApplyTexturePack(Image& image) {
         runtime.DownloadImage(&image, download.buffer, std::span{&copy, 1});
         scheduler.Finish();
         download.Invalidate();
-        const auto name = unknown_glyph
-                              ? fmt::format("{:016x}.raw", hash)
-                              : fmt::format("{:016x}_{}x{}_m{}_{}.raw", hash, info.size.width,
-                                            info.size.height, info.resources.levels,
-                                            vk::to_string(info.pixel_format));
+        const auto name =
+            unknown_glyph
+                ? fmt::format("{:016x}.raw", hash)
+                : fmt::format("{:016x}_{}x{}_m{}_{}.raw", hash, info.size.width, info.size.height,
+                              info.resources.levels, vk::to_string(info.pixel_format));
         Common::FS::IOFile file{dir / folder / name, Common::FS::FileAccessMode::Create};
         file.WriteRaw<u8>(download.mapped, size);
         if (dumping) {

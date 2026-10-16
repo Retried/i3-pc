@@ -1,18 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "common/singleton.h"
-#include "core/debug_state.h"
-#include "core/file_sys/fs.h"
-#include "core/libraries/pad/pad.h"
-#include "emulator.h"
-#include "input/controller.h"
-#include <cstdlib>
-#include <ctime>
-#include "core/i3/achievements.h"
 #include <algorithm>
-#include <cctype>
 #include <array>
 #include <atomic>
+#include <cctype>
+#include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -22,15 +15,22 @@
 #include <SDL3/SDL.h>
 #include <fmt/format.h>
 #include <imgui.h>
+#include "common/singleton.h"
+#include "core/debug_state.h"
+#include "core/file_sys/fs.h"
+#include "core/i3/achievements.h"
+#include "core/libraries/pad/pad.h"
+#include "emulator.h"
+#include "input/controller.h"
 
-#include "common/recording.h"
-#include "core/i3/first_run.h"
-#include "core/i3/lang.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
-#include "core/emulator_settings.h"
-#include "core/i3/menu.h"
 #include "common/path_util.h"
+#include "common/recording.h"
+#include "core/emulator_settings.h"
+#include "core/i3/first_run.h"
+#include "core/i3/lang.h"
+#include "core/i3/menu.h"
 #include "input/input_handler.h"
 #include "video_core/pass_filter.h"
 #include "video_core/texture_cache/texture_cache.h"
@@ -88,7 +88,14 @@ int closed_stick_direction = 0;
 int graphics_count = 0;
 // Controller input for the menu, taken from the pad events themselves (ImGui's own gamepad
 // navigation is not switched on in this program): bits up, down, left, right, confirm, back.
-enum PadNav : int { NavUp = 1, NavDown = 2, NavLeft = 4, NavRight = 8, NavConfirm = 16, NavBack = 32 };
+enum PadNav : int {
+    NavUp = 1,
+    NavDown = 2,
+    NavLeft = 4,
+    NavRight = 8,
+    NavConfirm = 16,
+    NavBack = 32
+};
 std::atomic<int> pad_nav{0};
 int stick_direction = 0;
 // The start screen, shown once per launch when the game presents its first frame.
@@ -195,17 +202,28 @@ std::vector<std::string> ReadLines() {
 /// How a binding-file key name is shown to the player.
 std::string DisplayName(const std::string& key) {
     static const std::vector<std::pair<const char*, const char*>> names{
-        {"leftbutton", "Left Mouse"},     {"rightbutton", "Right Mouse"},
-        {"middlebutton", "Middle Mouse"}, {"sidebuttonback", "Mouse 4"},
-        {"sidebuttonforward", "Mouse 5"}, {"mousewheelup", "Wheel Up"},
-        {"mousewheeldown", "Wheel Down"}, {"lshift", "Left Shift"},
-        {"rshift", "Right Shift"},        {"lctrl", "Left Ctrl"},
-        {"rctrl", "Right Ctrl"},          {"lalt", "Left Alt"},
-        {"ralt", "Right Alt"},            {"escape", "Esc"},
-        {"space", "Space"},               {"enter", "Enter"},
-        {"tab", "Tab"},                   {"backspace", "Backspace"},
-        {"up", "Up"},                     {"down", "Down"},
-        {"left", "Left"},                 {"right", "Right"},
+        {"leftbutton", "Left Mouse"},
+        {"rightbutton", "Right Mouse"},
+        {"middlebutton", "Middle Mouse"},
+        {"sidebuttonback", "Mouse 4"},
+        {"sidebuttonforward", "Mouse 5"},
+        {"mousewheelup", "Wheel Up"},
+        {"mousewheeldown", "Wheel Down"},
+        {"lshift", "Left Shift"},
+        {"rshift", "Right Shift"},
+        {"lctrl", "Left Ctrl"},
+        {"rctrl", "Right Ctrl"},
+        {"lalt", "Left Alt"},
+        {"ralt", "Right Alt"},
+        {"escape", "Esc"},
+        {"space", "Space"},
+        {"enter", "Enter"},
+        {"tab", "Tab"},
+        {"backspace", "Backspace"},
+        {"up", "Up"},
+        {"down", "Down"},
+        {"left", "Left"},
+        {"right", "Right"},
         {"capslock", "Caps Lock"},
     };
     for (const auto& [name, shown] : names) {
@@ -474,8 +492,11 @@ constexpr std::array<int, 14> LanguageIds{1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15
 /// language they are shown in; a language the game lacks counts as English.
 int LanguageIndex() {
     const int stored = EmulatorSettings.GetConsoleLanguage();
-    const int id =
-        stored == 18 ? 1 : stored == 22 ? 2 : stored == 20 ? 3 : stored == 17 ? 7 : stored;
+    const int id = stored == 18   ? 1
+                   : stored == 22 ? 2
+                   : stored == 20 ? 3
+                   : stored == 17 ? 7
+                                  : stored;
     return IndexOf(LanguageIds, id, 0);
 }
 
@@ -509,7 +530,8 @@ std::vector<Row> BuildRows() {
                         has_saves ? Tr("Your last save loads first; the game's Options screen "
                                        "then opens there")
                                   : Tr("Available from the pause menu once a game has started")});
-        rows.push_back({"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
+        rows.push_back(
+            {"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
         rows.push_back({"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
     } else if (page == Page::Achievements) {
         for (int id = 0; id < Achievements::Count(); id++) {
@@ -530,9 +552,8 @@ std::vector<Row> BuildRows() {
         const u32 cap = EmulatorSettings.GetVblankFrequency();
         rows.push_back({"Frame Rate Cap", cap >= 1000 ? Tr("Uncapped") : fmt::format("{}", cap),
                         Tr("Applies the next time the game starts"), true});
-        rows.push_back(
-            {"VSync", EmulatorSettings.GetPresentMode() == "Fifo" ? Tr("On") : Tr("Off"),
-             Tr("Applies the next time the game starts"), true});
+        rows.push_back({"VSync", EmulatorSettings.GetPresentMode() == "Fifo" ? Tr("On") : Tr("Off"),
+                        Tr("Applies the next time the game starts"), true});
         rows.push_back({"Fullscreen", EmulatorSettings.IsFullScreen() ? Tr("On") : Tr("Off"),
                         Tr("Applies at once"), true});
         rows.push_back({"Window Size",
@@ -543,8 +564,8 @@ std::vector<Row> BuildRows() {
                         Tr("Scales the 1080p picture to the window. Applies at once"), true});
         rows.push_back({"Sharpening", Tr(SharpenNames[SharpenIndex()]),
                         Tr("Sharpening pass of the upscaler. Applies at once"), true});
-        rows.push_back({"Frame Rate Counter", fps_shown ? Tr("On") : Tr("Off"),
-                        Tr("Applies at once"), true});
+        rows.push_back(
+            {"Frame Rate Counter", fps_shown ? Tr("On") : Tr("Off"), Tr("Applies at once"), true});
         const int preset = CurrentPreset();
         rows.push_back(
             {"Effects Preset", preset < 0 ? Tr("Custom") : Tr(PresetNames[preset]),
@@ -554,24 +575,26 @@ std::vector<Row> BuildRows() {
             rows.push_back(
                 {effect.label, effect.on ? Tr("On") : Tr("Off"), Tr(effect.description), true});
         }
-        rows.push_back(
-            {"Game Frame Limit", unlock_frame_rate ? Tr("Unlimited") : Tr("Game Setting"),
-             Tr("Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
-                "Rate). Applies at once"),
-             true});
+        rows.push_back({"Game Frame Limit",
+                        unlock_frame_rate ? Tr("Unlimited") : Tr("Game Setting"),
+                        Tr("Unlimited lifts the game's own 30 FPS limit (Options > Video > Frame "
+                           "Rate). Applies at once"),
+                        true});
         const int shadow_preset = CurrentShadowPreset();
         rows.push_back(
             {"Shadow Preset",
              shadow_preset < 0 ? Tr("Custom") : Tr(ShadowPresetNames[shadow_preset]),
              Tr("Sets the three shadow options below. Original keeps the game's picture"), true});
-        rows.push_back({"Sun Shadows", Tr(ShadowRateNames[shadow_rate[0]]),
-                        Tr("How often sun shadows are redrawn: the largest cost of a frame. Applies at once"),
-                        true});
+        rows.push_back(
+            {"Sun Shadows", Tr(ShadowRateNames[shadow_rate[0]]),
+             Tr("How often sun shadows are redrawn: the largest cost of a frame. Applies at once"),
+             true});
         rows.push_back({"Light Shadows", Tr(ShadowRateNames[shadow_rate[1]]),
                         Tr("The same for shadows cast by lamps and fires. Applies at once"), true});
-        rows.push_back({"Shadow Detail", Tr(ShadowDetailNames[shadow_detail]),
-                        Tr("Reduced and Low leave small objects out of the sun's shadows. Applies at once"),
-                        true});
+        rows.push_back(
+            {"Shadow Detail", Tr(ShadowDetailNames[shadow_detail]),
+             Tr("Reduced and Low leave small objects out of the sun's shadows. Applies at once"),
+             true});
         graphics_count = static_cast<int>(rows.size());
         const auto lines = ReadLines();
         for (const auto& action : Actions) {
@@ -581,7 +604,8 @@ std::vector<Row> BuildRows() {
         // The game reads the language when it starts, and so do these screens.
         rows.push_back({"Language", LanguageNames[LanguageIndex()],
                         Tr("Applies the next time the game starts"), true});
-        rows.push_back({"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
+        rows.push_back(
+            {"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
         rows.push_back({"RETURN TO MAIN MENU", quit_armed ? Tr("Press again to confirm") : "",
                         quit_armed ? Tr("Progress since the last checkpoint is lost, and the game "
                                         "loads again (about 40 seconds)")
@@ -602,7 +626,7 @@ void AdjustGraphics(int row, int step) {
     }
     case 1:
         EmulatorSettings.SetPresentMode(EmulatorSettings.GetPresentMode() == "Fifo" ? "Immediate"
-                                                                                     : "Fifo");
+                                                                                    : "Fifo");
         restart_note = true;
         break;
     case 2: {
@@ -1012,19 +1036,19 @@ std::string SectionOf(Page of, const std::string& label, int index) {
         return index == 0 ? "GAME" : label == "OPTIONS" ? "SETUP" : label == "QUIT" ? "EXIT" : "";
     case Page::Pc:
         // Continuing the game's list (its last section is VIDEO).
-        return index == 0                                    ? "DISPLAY"
-               : label == "Upscaling (FSR)"                  ? "IMAGE"
-               : label == "Effects Preset"                   ? "EFFECTS"
-               : label == "Game Frame Limit"                 ? "FRAME RATE"
-               : label == "Shadow Preset"                    ? "SHADOWS"
-               : index == graphics_count                     ? "CONTROLS"
-               : label == "L3"                               ? "BUTTONS"
-               : label == "Move Forward"                     ? "MOVEMENT"
+        return index == 0                                        ? "DISPLAY"
+               : label == "Upscaling (FSR)"                      ? "IMAGE"
+               : label == "Effects Preset"                       ? "EFFECTS"
+               : label == "Game Frame Limit"                     ? "FRAME RATE"
+               : label == "Shadow Preset"                        ? "SHADOWS"
+               : index == graphics_count                         ? "CONTROLS"
+               : label == "L3"                                   ? "BUTTONS"
+               : label == "Move Forward"                         ? "MOVEMENT"
                : label == "Hold Controller Sideways (Spray Can)" ? "MOTION AND TOUCHPAD"
-               : label == "Language"                         ? "LANGUAGE"
-               : label == "ACHIEVEMENTS"                     ? "ACHIEVEMENTS"
-               : label == "RETURN TO MAIN MENU"              ? "EXIT"
-                                                             : "";
+               : label == "Language"                             ? "LANGUAGE"
+               : label == "ACHIEVEMENTS"                         ? "ACHIEVEMENTS"
+               : label == "RETURN TO MAIN MENU"                  ? "EXIT"
+                                                                 : "";
     case Page::Achievements:
         return index == 0 ? "TROPHIES" : "";
     }
@@ -1049,8 +1073,7 @@ float Hint(ImDrawList* draw, float right_x, float y, float scale, const char* ke
     const float size = 26.0f * scale;
     const float label_width = TextSize(size, label).x * EntrySqueeze;
     const float cap_height = 30.0f * scale;
-    const float cap_width =
-        std::max(cap_height, TextSize(size * 0.8f, name).x + 18.0f * scale);
+    const float cap_width = std::max(cap_height, TextSize(size * 0.8f, name).x + 18.0f * scale);
     const float label_x = right_x - label_width;
     const float cap_x = label_x - 10.0f * scale - cap_width;
     draw->AddRectFilled({cap_x, y}, {cap_x + cap_width, y + cap_height}, White,
@@ -1156,7 +1179,9 @@ bool OnEvent(const SDL_Event& event) {
     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
         // The left stick moves the selection too: one step each time it leaves the centre.
         if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
-            const int direction = event.gaxis.value < -20000 ? -1 : event.gaxis.value > 20000 ? 1 : 0;
+            const int direction = event.gaxis.value < -20000  ? -1
+                                  : event.gaxis.value > 20000 ? 1
+                                                              : 0;
             if (direction != stick_direction && direction != 0) {
                 pad_nav |= direction < 0 ? NavUp : NavDown;
             }
@@ -1185,8 +1210,8 @@ void Draw() {
     }
     if (start_state == StartState::Unknown) {
         // Test runs go straight into the game unless they ask for the start screen.
-        static const bool skip = std::getenv("SOTC_HEADLESS") != nullptr &&
-                                 std::getenv("I3_START_SCREEN") == nullptr;
+        static const bool skip =
+            std::getenv("SOTC_HEADLESS") != nullptr && std::getenv("I3_START_SCREEN") == nullptr;
         if (skip) {
             start_state = StartState::Done;
         } else if (g_first_flip_ms.load(std::memory_order_relaxed) != 0) {
@@ -1293,7 +1318,8 @@ void Draw() {
     for (float x = panel_min.x + 12.0f * scale; x < panel_max.x; x += 12.0f * scale) {
         draw->AddLine({x, panel_min.y}, {x, panel_max.y}, IM_COL32(255, 255, 255, 7));
     }
-    for (float line_y = panel_min.y + 12.0f * scale; line_y < panel_max.y; line_y += 12.0f * scale) {
+    for (float line_y = panel_min.y + 12.0f * scale; line_y < panel_max.y;
+         line_y += 12.0f * scale) {
         draw->AddLine({panel_min.x, line_y}, {panel_max.x, line_y}, IM_COL32(255, 255, 255, 7));
     }
     draw->AddRect(panel_min, panel_max, White, 0.0f, 0, 2.0f * scale);
@@ -1356,8 +1382,8 @@ void Draw() {
         const std::string section = SectionOf(page, row.label, i);
         // A heading cut by the top edge of the list is left out rather than drawn in part.
         if (!section.empty() && section != " " && row_y - heading_height >= view_top - 1.0f) {
-            Narrow(draw, heading_size, {heading_x, row_y - heading_height}, White,
-                   Heading(section), HeadingSqueeze);
+            Narrow(draw, heading_size, {heading_x, row_y - heading_height}, White, Heading(section),
+                   HeadingSqueeze);
         }
         const bool hovered = mouse.x >= left && mouse.x <= right && mouse.y >= row_y &&
                              mouse.y < row_y + row_height && mouse.y >= view_top &&
@@ -1384,9 +1410,8 @@ void Draw() {
             value = "<  " + value + "  >";
         }
         if (!value.empty()) {
-            Narrow(draw, text_size,
-                   {right - TextSize(text_size, value).x * EntrySqueeze, text_y}, color, value,
-                   EntrySqueeze);
+            Narrow(draw, text_size, {right - TextSize(text_size, value).x * EntrySqueeze, text_y},
+                   color, value, EntrySqueeze);
         }
     }
     draw->PopClipRect();

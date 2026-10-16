@@ -95,7 +95,8 @@ void CommandStream::WorkerLoop(std::stop_token stop) {
         }
         if (published.load(std::memory_order_acquire) == next) {
             std::unique_lock lock{mutex};
-            wake.wait(lock, stop, [&] { return published.load(std::memory_order_acquire) != next; });
+            wake.wait(lock, stop,
+                      [&] { return published.load(std::memory_order_acquire) != next; });
             if (stop.stop_requested()) {
                 break;
             }

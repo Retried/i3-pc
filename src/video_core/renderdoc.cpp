@@ -3,11 +3,10 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <string>
 #include "common/assert.h"
 #include "common/logging/formatter.h"
 #include "core/emulator_settings.h"
-#include <cstdlib>
-#include <string>
 #include "video_core/renderdoc.h"
 
 #include <atomic>

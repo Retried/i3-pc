@@ -35,7 +35,8 @@ inline void StartThreadSampler() {
     }
     HANDLE target{};
     DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &target,
-                    THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, 0);
+                    THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
+                    0);
     std::thread([target] {
         // Bounds of this executable image, to tell our frames from driver and system frames.
         const auto base = reinterpret_cast<u64>(GetModuleHandleW(nullptr));

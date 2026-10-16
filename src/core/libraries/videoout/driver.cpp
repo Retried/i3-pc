@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <atomic>
-#include <SDL3/SDL_timer.h>
 #include <chrono>
-#include "common/recording.h"
+#include <SDL3/SDL_timer.h>
 #include "common/assert.h"
 #include "common/debug.h"
+#include "common/recording.h"
 #include "common/thread.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"

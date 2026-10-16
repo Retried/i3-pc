@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <optional>
-#include <queue>
 #include <unordered_set>
+#include <queue>
 #include "common/elf_info.h"
 #include "common/logging/classes.h"
 #include "shader_recompiler/info.h"

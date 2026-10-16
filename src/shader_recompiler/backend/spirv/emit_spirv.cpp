@@ -181,8 +181,8 @@ void Traverse(EmitContext& ctx, const IR::Program& program) {
     const auto get_loop_counter = [&] {
         if (!Sirit::ValidId(loop_counter)) {
             const Id ptr_type{ctx.TypePointer(spv::StorageClass::Private, ctx.U32[1])};
-            loop_counter = ctx.AddGlobalVariable(ptr_type, spv::StorageClass::Private,
-                                                 ctx.u32_zero_value);
+            loop_counter =
+                ctx.AddGlobalVariable(ptr_type, spv::StorageClass::Private, ctx.u32_zero_value);
             ctx.interfaces.push_back(loop_counter);
         }
         return loop_counter;

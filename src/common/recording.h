@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <chrono>
 #include <atomic>
+#include <chrono>
 
 namespace Common {
 

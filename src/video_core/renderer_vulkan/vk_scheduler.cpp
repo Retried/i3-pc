@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
-#include "common/recording.h"
 #include "common/assert.h"
 #include "common/debug.h"
+#include "common/recording.h"
 #include "common/thread.h"
 #include "imgui/renderer/texture_manager.h"
 #include "video_core/op_trace.h"

@@ -12,12 +12,12 @@
 #include <fmt/xchar.h>
 #include <hwinfo/hwinfo.h>
 
-#include "core/i3/first_run.h"
 #include "common/debug.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
 #include "common/thread.h"
 #include "core/emulator_settings.h"
+#include "core/i3/first_run.h"
 #include "core/ipc/ipc.h"
 #ifdef ENABLE_DISCORD_RPC
 #include "common/discord_rpc_handler.h"

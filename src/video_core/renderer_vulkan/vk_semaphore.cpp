@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: Copyright 2020 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "common/elf_info.h"
 #include <chrono>
 #include <cstdlib>
-#include <immintrin.h>
 #include <limits>
+#include <immintrin.h>
+#include "common/elf_info.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
 

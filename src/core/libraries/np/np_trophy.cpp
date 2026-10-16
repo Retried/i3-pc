@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "common/elf_info.h"
-#include "core/i3/achievements.h"
 #include <algorithm>
 #include <thread>
 #include <unordered_map>
@@ -13,6 +11,7 @@
 #include "common/path_util.h"
 #include "common/slot_vector.h"
 #include "core/emulator_settings.h"
+#include "core/i3/achievements.h"
 #include "core/libraries/libs.h"
 #include "core/libraries/np/np_error.h"
 #include "core/libraries/np/np_handler.h"

@@ -50,7 +50,9 @@ public:
         Push(0, [=](vk::CommandBuffer c) { c.bindPipeline(point, pipeline); });
     }
     void draw(u32 vertices, u32 instances, u32 first_vertex, u32 first_instance) {
-        Push(0, [=](vk::CommandBuffer c) { c.draw(vertices, instances, first_vertex, first_instance); });
+        Push(0, [=](vk::CommandBuffer c) {
+            c.draw(vertices, instances, first_vertex, first_instance);
+        });
     }
     void drawIndexed(u32 indices, u32 instances, u32 first_index, s32 vertex_offset,
                      u32 first_instance) {

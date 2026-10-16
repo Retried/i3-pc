@@ -9,11 +9,11 @@
 #include <imgui.h>
 
 #include <filesystem>
-#include "core/i3/menu.h"
 #include "common/path_util.h"
 #include "core/debug_state.h"
 #include "core/devtools/layer.h"
 #include "core/emulator_settings.h"
+#include "core/i3/menu.h"
 #include "font_data.h"
 #include "font_stack.h"
 #include "imgui/imgui_layer.h"
@@ -104,8 +104,7 @@ void Initialize(const ::Vulkan::Instance& instance, const Frontend::WindowSDL& w
 
     // Condensed face for the PC options overlay of the inFAMOUS build (a Windows system
     // font; the default UI font is used when it is missing).
-    for (const char* path :
-         {"C:/Windows/Fonts/bahnschrift.ttf", "C:/Windows/Fonts/arialnb.ttf"}) {
+    for (const char* path : {"C:/Windows/Fonts/bahnschrift.ttf", "C:/Windows/Fonts/arialnb.ttf"}) {
         std::error_code ec;
         if (std::filesystem::exists(path, ec)) {
             ImFontConfig overlay_cfg{};

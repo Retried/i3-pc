@@ -6,10 +6,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <fmt/format.h>
-#include "common/elf_info.h"
 #include "common/alignment.h"
 #include "common/arch.h"
 #include "common/assert.h"
+#include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "common/memory_patcher.h"
 #include "common/sha1.h"

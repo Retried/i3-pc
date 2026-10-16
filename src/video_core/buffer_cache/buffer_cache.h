@@ -3,15 +3,15 @@
 
 #pragma once
 
-#include <tuple>
-#include <span>
-#include <utility>
 #include <deque>
+#include <span>
+#include <tuple>
+#include <utility>
 #include <boost/container/small_vector.hpp>
 
-#include "common/unique_function.h"
 #include "common/interval_set.h"
 #include "common/types.h"
+#include "common/unique_function.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/buffer_cache/fault_manager.h"
 #include "video_core/buffer_cache/range_set.h"

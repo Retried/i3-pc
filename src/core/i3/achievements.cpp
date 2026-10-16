@@ -145,8 +145,8 @@ void EnsureLoaded() {
         if (id >= entries.size()) {
             continue;
         }
-        entries[id].name = line.substr(
-            first + 1, second == std::string::npos ? std::string::npos : second - first - 1);
+        entries[id].name = line.substr(first + 1, second == std::string::npos ? std::string::npos
+                                                                              : second - first - 1);
         entries[id].description =
             second == std::string::npos ? std::string{} : line.substr(second + 1);
     }

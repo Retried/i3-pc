@@ -21,8 +21,8 @@
 #include "core/i3/menu.h"
 
 #ifdef _WIN32
-#include <windows.h>
 #include <dxgi.h>
+#include <windows.h>
 #pragma comment(lib, "dxgi")
 #endif
 
@@ -86,13 +86,12 @@ System Detect() {
     }
     // The adapter with the most dedicated memory is the one games run on.
     IDXGIFactory1* factory = nullptr;
-    if (SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory1),
-                                     reinterpret_cast<void**>(&factory)))) {
+    if (SUCCEEDED(
+            CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory)))) {
         IDXGIAdapter1* adapter = nullptr;
         for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
             DXGI_ADAPTER_DESC1 desc{};
-            if (SUCCEEDED(adapter->GetDesc1(&desc)) &&
-                !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
+            if (SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
                 (desc.DedicatedVideoMemory >> 20) > system.vram_mb) {
                 system.vram_mb = desc.DedicatedVideoMemory >> 20;
                 std::string name;

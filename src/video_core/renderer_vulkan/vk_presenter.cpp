@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cstdio>
-#include "common/recording.h"
 #include "common/debug.h"
 #include "common/elf_info.h"
 #include "common/io_file.h"
 #include "common/path_util.h"
+#include "common/recording.h"
 #include "common/singleton.h"
 #include "core/debug_state.h"
 #include "core/devtools/layer.h"
 #include "core/emulator_settings.h"
+#include "core/i3/menu.h"
 #include "core/libraries/system/systemservice.h"
 #include "imgui/friends_layer.h"
 #include "imgui/invitation_prompt_layer.h"
@@ -23,7 +24,6 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
-#include "core/i3/menu.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/texture_cache/image.h"
 
@@ -447,7 +447,8 @@ static void SaveRecordedFrame(const ScreenshotReadback& readback) {
         for (u32 x = 0; x < width; ++x) {
             for (u32 c = 0; c < 3; ++c) {
                 out[x * 3 + c] = u8((row0[x * 8 + c] + row0[x * 8 + 4 + c] + row1[x * 8 + c] +
-                                     row1[x * 8 + 4 + c] + 2) / 4);
+                                     row1[x * 8 + 4 + c] + 2) /
+                                    4);
             }
         }
     }
@@ -800,9 +801,8 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         if (x1 > x0 && y1 > y0) {
             probe_area = {x0, y0, x1 - x0, y1 - y0, scale, left, kind};
             auto& readback = probe.emplace(instance, ScreenshotKind::GameOnly,
-                                           std::vector<std::filesystem::path>{},
-                                           probe_area.width, probe_area.height, view_info.format,
-                                           false);
+                                           std::vector<std::filesystem::path>{}, probe_area.width,
+                                           probe_area.height, view_info.format, false);
             const vk::BufferImageCopy copy_region = {
                 .imageSubresource{.aspectMask = vk::ImageAspectFlagBits::eColor,
                                   .mipLevel = 0,
@@ -858,13 +858,12 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     DebugState.output_resolution = {frame->width, frame->height};
 
     if (probe) {
-        draw_scheduler.DeferPriorityOperation(
-            [deferred_probe = std::move(probe), probe_area]() {
-                std::vector<u8> rgba;
-                if (ConvertReadbackToRgba8(deferred_probe.value(), rgba)) {
-                    I3::Menu::OnProbe(rgba.data(), probe_area);
-                }
-            });
+        draw_scheduler.DeferPriorityOperation([deferred_probe = std::move(probe), probe_area]() {
+            std::vector<u8> rgba;
+            if (ConvertReadbackToRgba8(deferred_probe.value(), rgba)) {
+                I3::Menu::OnProbe(rgba.data(), probe_area);
+            }
+        });
     }
     if (recorded_frame) {
         draw_scheduler.DeferPriorityOperation([deferred_frame = std::move(recorded_frame)]() {

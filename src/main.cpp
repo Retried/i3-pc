@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -13,7 +13,6 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include "core/i3/first_run.h"
 #include "common/arch.h"
 #include "common/key_manager.h"
 #include "common/logging/log.h"
@@ -23,6 +22,7 @@
 #include "core/emulator_settings.h"
 #include "core/emulator_state.h"
 #include "core/file_sys/fs.h"
+#include "core/i3/first_run.h"
 #include "core/ipc/ipc.h"
 #include "core/user_settings.h"
 #include "emulator.h"

@@ -56,8 +56,9 @@ s32 PS4_SYSV_ABI sceNgs2RackCreate(OrbisNgs2Handle systemHandle, u32 rackId,
                                    OrbisNgs2Handle* outHandle) {
     LOG_ERROR(Lib_Ngs2, "rackId = {}", rackId);
     if (option) {
-        LOG_ERROR(Lib_Ngs2, "rack {:#x} opt size {} name {} maxVoices {} maxPorts {} maxMatrices {}",
-                  rackId, option->size, option->name, option->maxVoices, option->maxPorts,
+        LOG_ERROR(Lib_Ngs2,
+                  "rack {:#x} opt size {} name {} maxVoices {} maxPorts {} maxMatrices {}", rackId,
+                  option->size, option->name, option->maxVoices, option->maxPorts,
                   option->maxMatrices);
     }
     if (!systemHandle) {
@@ -73,13 +74,15 @@ s32 PS4_SYSV_ABI sceNgs2RackCreateWithAllocator(OrbisNgs2Handle systemHandle, u3
                                                 OrbisNgs2Handle* outHandle) {
     LOG_ERROR(Lib_Ngs2, "rackId = {}", rackId);
     if (option) {
-        LOG_ERROR(Lib_Ngs2, "rack {:#x} opt size {} name {} maxVoices {} maxPorts {} maxMatrices {}",
-                  rackId, option->size, option->name, option->maxVoices, option->maxPorts,
+        LOG_ERROR(Lib_Ngs2,
+                  "rack {:#x} opt size {} name {} maxVoices {} maxPorts {} maxMatrices {}", rackId,
+                  option->size, option->name, option->maxVoices, option->maxPorts,
                   option->maxMatrices);
     }
     if (option) {
-        LOG_ERROR(Lib_Ngs2, "rack {:#x} opt size {} name {} maxVoices {} maxPorts {} maxMatrices {}",
-                  rackId, option->size, option->name, option->maxVoices, option->maxPorts,
+        LOG_ERROR(Lib_Ngs2,
+                  "rack {:#x} opt size {} name {} maxVoices {} maxPorts {} maxMatrices {}", rackId,
+                  option->size, option->name, option->maxVoices, option->maxPorts,
                   option->maxMatrices);
     }
     if (!systemHandle) {

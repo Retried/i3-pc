@@ -4,9 +4,9 @@
 #include <cstdlib>
 #include <boost/preprocessor/stringize.hpp>
 
-#include "common/elf_info.h"
 #include "common/assert.h"
 #include "common/debug.h"
+#include "common/elf_info.h"
 #include "common/polyfill_thread.h"
 #include "common/thread.h"
 #include "core/debug_state.h"
@@ -303,7 +303,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 const auto* set_data = reinterpret_cast<const PM4CmdSetData*>(header);
                 const u32 first = set_data->reg_offset;
                 const u32 last = first + count - 2;
-                const bool user_data = (first >= 0xC && last < 0x1C) || (first >= 0x4C && last < 0x5C);
+                const bool user_data =
+                    (first >= 0xC && last < 0x1C) || (first >= 0x4C && last < 0x5C);
                 change_mask_since_draw |= user_data ? 4 : 2;
                 break;
             }
@@ -481,7 +482,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 static int traced = 0;
                 if (traced < 12) {
                     ++traced;
-                    LOG_WARNING(Render, "Unimplemented IT_SET_PREDICATION {:#x} {:#x}", reinterpret_cast<const u32*>(header)[1],
+                    LOG_WARNING(Render, "Unimplemented IT_SET_PREDICATION {:#x} {:#x}",
+                                reinterpret_cast<const u32*>(header)[1],
                                 reinterpret_cast<const u32*>(header)[2]);
                 }
                 break;
@@ -730,8 +732,7 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 const auto* event_eos = reinterpret_cast<const PM4CmdEventWriteEos*>(header);
                 // With results the game reads next still on their way, the event is signalled
                 // once they have landed (the packet is copied: the game reuses its buffer).
-                if (rasterizer &&
-                    event_eos->command != PM4CmdEventWriteEos::Command::GdsStore) {
+                if (rasterizer && event_eos->command != PM4CmdEventWriteEos::Command::GdsStore) {
                     // Ahead of OnFence, which would copy them back with a blocking wait.
                     if (rasterizer->DeferSignal([packet = *event_eos] {
                             packet.SignalFence([](void* address, u64 data, u32 num_bytes) {
@@ -1234,7 +1235,8 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
                 rasterizer->OnFence();
                 release_mem->SignalFence(
                     [pipe_id = queue.pipe_id] {
-                        Platform::IrqC::Instance()->Signal(static_cast<Platform::InterruptId>(pipe_id));
+                        Platform::IrqC::Instance()->Signal(
+                            static_cast<Platform::InterruptId>(pipe_id));
                     },
                     [](VAddr, u16, u16) {});
                 break;

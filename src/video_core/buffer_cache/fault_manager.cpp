@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
-#include "common/recording.h"
 #include "common/div_ceil.h"
+#include "common/recording.h"
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/buffer_cache/fault_manager.h"
 #include "video_core/renderer_vulkan/vk_instance.h"

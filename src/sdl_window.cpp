@@ -1,12 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "core/i3/achievements.h"
-#include "video_core/pass_filter.h"
-#include "core/i3/menu.h"
-#include "common/recording.h"
-#include <fstream>
 #include <cstdlib>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -19,6 +15,10 @@
 #include <SDL3/SDL_video.h>
 #include <cmrc/cmrc.hpp>
 #include <stb_image.h>
+#include "common/recording.h"
+#include "core/i3/achievements.h"
+#include "core/i3/menu.h"
+#include "video_core/pass_filter.h"
 
 #include "common/assert.h"
 #include "common/elf_info.h"

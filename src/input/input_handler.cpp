@@ -850,9 +850,12 @@ void ControllerOutput::FinalizeUpdate(u8 gamepad_index) {
         case TOUCH_SWIPE_LEFT:
         case TOUCH_SWIPE_RIGHT:
             if (new_button_state) {
-                controller->StartTouchSwipe(
-                    button == TOUCH_SWIPE_LEFT ? -1.0f : button == TOUCH_SWIPE_RIGHT ? 1.0f : 0.0f,
-                    button == TOUCH_SWIPE_UP ? -1.0f : button == TOUCH_SWIPE_DOWN ? 1.0f : 0.0f);
+                controller->StartTouchSwipe(button == TOUCH_SWIPE_LEFT    ? -1.0f
+                                            : button == TOUCH_SWIPE_RIGHT ? 1.0f
+                                                                          : 0.0f,
+                                            button == TOUCH_SWIPE_UP     ? -1.0f
+                                            : button == TOUCH_SWIPE_DOWN ? 1.0f
+                                                                         : 0.0f);
             }
             break;
         case TOUCH_TWO_FINGERS:

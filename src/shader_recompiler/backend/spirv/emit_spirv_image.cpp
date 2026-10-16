@@ -142,8 +142,7 @@ Id EmitImageHandle(EmitContext& ctx, Id, Id) {
 /// A sampler whose force_unnormalized bit the shader sets takes its coordinates in texels.
 /// Vulkan's unnormalized samplers are too restricted to map that onto, so the coordinates
 /// are divided by the size of the base level here instead.
-static Id NormalizeCoords(EmitContext& ctx, u32 handle, const auto& texture, Id image,
-                          Id coords) {
+static Id NormalizeCoords(EmitContext& ctx, u32 handle, const auto& texture, Id image, Id coords) {
     const u32 sampler_index = handle >> 16;
     if (sampler_index >= ctx.info.samplers.size() ||
         ctx.info.samplers[sampler_index].post_op != SharpFetchPostOp::ForceUnnormalizedCoords ||
@@ -166,8 +165,8 @@ Id EmitImageSampleImplicitLod(EmitContext& ctx, IR::Inst* inst, u32 handle, Id c
     const Id result_type = texture.data_types->Get(4);
     const Id sampler = ctx.OpLoad(ctx.sampler_type, ctx.samplers[handle >> 16]);
     const Id sampled_image = ctx.OpSampledImage(texture.sampled_type, image, sampler);
-    const Id fixed_coords = NormalizeCoords(
-        ctx, handle, texture, image, FixImageCoords<true>(ctx, coords, texture.view_type));
+    const Id fixed_coords = NormalizeCoords(ctx, handle, texture, image,
+                                            FixImageCoords<true>(ctx, coords, texture.view_type));
     ImageOperands operands;
     operands.Add(spv::ImageOperandsMask::Bias, bias);
     operands.AddOffset(ctx, texture.view_type, offset);
@@ -183,8 +182,8 @@ Id EmitImageSampleExplicitLod(EmitContext& ctx, IR::Inst* inst, u32 handle, Id c
     const Id result_type = texture.data_types->Get(4);
     const Id sampler = ctx.OpLoad(ctx.sampler_type, ctx.samplers[handle >> 16]);
     const Id sampled_image = ctx.OpSampledImage(texture.sampled_type, image, sampler);
-    const Id fixed_coords = NormalizeCoords(
-        ctx, handle, texture, image, FixImageCoords<true>(ctx, coords, texture.view_type));
+    const Id fixed_coords = NormalizeCoords(ctx, handle, texture, image,
+                                            FixImageCoords<true>(ctx, coords, texture.view_type));
     ImageOperands operands;
     operands.Add(spv::ImageOperandsMask::Lod, lod);
     operands.AddOffset(ctx, texture.view_type, offset);
@@ -236,8 +235,8 @@ Id EmitImageGather(EmitContext& ctx, IR::Inst* inst, u32 handle, Id coords,
     const Id result_type = texture.data_types->Get(4);
     const Id sampler = ctx.OpLoad(ctx.sampler_type, ctx.samplers[handle >> 16]);
     const Id sampled_image = ctx.OpSampledImage(texture.sampled_type, image, sampler);
-    const Id fixed_coords = NormalizeCoords(
-        ctx, handle, texture, image, FixImageCoords<true>(ctx, coords, texture.view_type));
+    const Id fixed_coords = NormalizeCoords(ctx, handle, texture, image,
+                                            FixImageCoords<true>(ctx, coords, texture.view_type));
     const u32 comp = inst->Flags<IR::TextureInstInfo>().gather_comp.Value();
     ImageOperands operands;
     operands.AddOffset(ctx, texture.view_type, offset, true);

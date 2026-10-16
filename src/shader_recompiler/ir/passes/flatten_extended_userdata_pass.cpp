@@ -16,11 +16,11 @@
 #include "common/path_util.h"
 #include "common/signal_context.h"
 #include "core/emulator_settings.h"
+#include "core/memory.h"
 #include "core/signals.h"
 #include "shader_recompiler/info.h"
 #include "shader_recompiler/ir/ir_emitter.h"
 #include "shader_recompiler/ir/opcodes.h"
-#include "core/memory.h"
 #include "shader_recompiler/ir/passes/srt.h"
 #include "shader_recompiler/ir/program.h"
 #include "shader_recompiler/ir/reg.h"
@@ -64,8 +64,7 @@ static void EnsureSrtWalkerFaultHandler() {
         g_srt_codegen_start = g_srt_codegen.getCode();
         // Call after the memory invalidation handler
         constexpr u32 priority = 1;
-        Core::Signals::Instance()->RegisterAccessViolationHandler(SrtWalkerSignalHandler,
-                                                                  priority);
+        Core::Signals::Instance()->RegisterAccessViolationHandler(SrtWalkerSignalHandler, priority);
     }
 }
 
@@ -89,15 +88,16 @@ bool NoCleanLoad(u64, u32, u64*) {
 
 SrtWalkerContext& WalkerContext() {
     static SrtWalkerContext context{
-        .clean_pages = [] {
-            // One bit per 4 KiB page; untouched parts of the bitmap are never committed. Always
-            // allocated: walkers restored from the pipeline cache test it unconditionally
-            // (SOTC_CLEAN_READS=0 only stops marking pages).
-            auto* const pages =
-                static_cast<u64*>(std::calloc(SrtCleanPageLimit >> 18, sizeof(u64)));
-            ASSERT_MSG(pages, "No memory for the SRT clean page bitmap");
-            return pages;
-        }(),
+        .clean_pages =
+            [] {
+                // One bit per 4 KiB page; untouched parts of the bitmap are never committed. Always
+                // allocated: walkers restored from the pipeline cache test it unconditionally
+                // (SOTC_CLEAN_READS=0 only stops marking pages).
+                auto* const pages =
+                    static_cast<u64*>(std::calloc(SrtCleanPageLimit >> 18, sizeof(u64)));
+                ASSERT_MSG(pages, "No memory for the SRT clean page bitmap");
+                return pages;
+            }(),
         .clean_load = &NoCleanLoad,
     };
     return context;

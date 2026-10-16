@@ -109,9 +109,9 @@ public:
     /// Motion gestures for input devices without sensors (keyboard, pads without gyro): while a
     /// gesture is on, the reported acceleration, angular velocity and orientation are replaced.
     enum MotionGesture : u32 {
-        MotionSideways = 1,     ///< pad rolled 90 degrees, left end down
-        MotionShake = 2,        ///< pad shaken along the axis gravity currently acts on
-        MotionSidewaysAlt = 4,  ///< pad rolled 90 degrees the other way
+        MotionSideways = 1,    ///< pad rolled 90 degrees, left end down
+        MotionShake = 2,       ///< pad shaken along the axis gravity currently acts on
+        MotionSidewaysAlt = 4, ///< pad rolled 90 degrees the other way
     };
     void SetMotionGesture(u32 gesture, bool on);
     /// Two fingers resting on the touchpad, left and right of the middle, while held. A swipe

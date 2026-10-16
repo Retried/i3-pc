@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include <cstdlib>
 #include <chrono>
+#include <cstdlib>
 #include <unordered_set>
 #include <xxhash.h>
 #include "gnm_error.h"
@@ -2177,35 +2177,35 @@ static inline s32 PatchFlipRequest(u32* cmdbuf, u32 size, u32 vo_handle, u32 buf
 
 /// Test aid (I3_SUBMITSTAT=1): how the game hands over its frame.
 static void SubmitStat(u32 count, const u32* dcb_gpu_addrs[], u32* dcb_sizes_in_bytes) {
-        // Test aid (I3_SUBMITSTAT=1): how the game hands over its frame. Per interval: submit
-        // calls, command buffers, their bytes, and how many buffers had exactly the same
-        // contents as some buffer of the previous interval (candidates for reuse).
-        static const bool stat = std::getenv("I3_SUBMITSTAT") != nullptr;
-        if (stat) {
-            static u64 calls = 0, buffers = 0, bytes = 0, repeated = 0, largest = 0;
-            static std::unordered_set<u64> previous, current;
-            static auto last = std::chrono::steady_clock::now();
-            ++calls;
-            for (u32 i = 0; i < count; i++) {
-                ++buffers;
-                bytes += dcb_sizes_in_bytes[i];
-                largest = std::max<u64>(largest, dcb_sizes_in_bytes[i]);
-                const u64 hash = XXH3_64bits(dcb_gpu_addrs[i], dcb_sizes_in_bytes[i]);
-                repeated += previous.contains(hash);
-                current.insert(hash);
-            }
-            if (const auto now = std::chrono::steady_clock::now();
-                now - last >= std::chrono::seconds(3)) {
-                LOG_ERROR(Lib_GnmDriver,
-                          "submit/3s: calls {} buffers {} bytes {} largest {} same-as-before {}",
-                          calls, buffers, bytes, largest, repeated);
-                calls = buffers = bytes = repeated = largest = 0;
-                previous = std::move(current);
-                current.clear();
-                last = now;
-            }
+    // Test aid (I3_SUBMITSTAT=1): how the game hands over its frame. Per interval: submit
+    // calls, command buffers, their bytes, and how many buffers had exactly the same
+    // contents as some buffer of the previous interval (candidates for reuse).
+    static const bool stat = std::getenv("I3_SUBMITSTAT") != nullptr;
+    if (stat) {
+        static u64 calls = 0, buffers = 0, bytes = 0, repeated = 0, largest = 0;
+        static std::unordered_set<u64> previous, current;
+        static auto last = std::chrono::steady_clock::now();
+        ++calls;
+        for (u32 i = 0; i < count; i++) {
+            ++buffers;
+            bytes += dcb_sizes_in_bytes[i];
+            largest = std::max<u64>(largest, dcb_sizes_in_bytes[i]);
+            const u64 hash = XXH3_64bits(dcb_gpu_addrs[i], dcb_sizes_in_bytes[i]);
+            repeated += previous.contains(hash);
+            current.insert(hash);
+        }
+        if (const auto now = std::chrono::steady_clock::now();
+            now - last >= std::chrono::seconds(3)) {
+            LOG_ERROR(Lib_GnmDriver,
+                      "submit/3s: calls {} buffers {} bytes {} largest {} same-as-before {}", calls,
+                      buffers, bytes, largest, repeated);
+            calls = buffers = bytes = repeated = largest = 0;
+            previous = std::move(current);
+            current.clear();
+            last = now;
         }
     }
+}
 
 static inline s32 PerformSubmit(u32 count, const u32* dcb_gpu_addrs[], u32* dcb_sizes_in_bytes,
                                 const u32* ccb_gpu_addrs[], u32* ccb_sizes_in_bytes) {

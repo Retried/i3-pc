@@ -1,0 +1,14 @@
+{
+  "scenes": [{
+    "name": "seed-control",
+    "description": "Seed-dependent opening gesture control; diagnostic pipeline coverage only",
+    "warmup_seconds": 35,
+    "duration_seconds": 30,
+    "boot": [],
+    "route": []
+  }],
+  "variants": [{
+    "name": "pipeline-baseline-worker-0",
+    "environment": {"SOTC_WORKER_RECORD": "0"}
+  }]
+}

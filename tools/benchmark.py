@@ -163,6 +163,63 @@ def telemetry_summary(path, start, end):
     return result
 
 
+def command_stream_summary(text):
+    samples = {}
+    for match in re.finditer(r'Command (stream|filter|invalidations) total: stream (\S+) ([^\r\n]+)', text):
+        category, stream, payload = match.groups()
+        parts = payload.split()
+        if len(parts) % 2:
+            continue
+        fields = {}
+        for key, value in zip(parts[::2], parts[1::2]):
+            fields[key] = int(value) if value.isdecimal() else value
+        key = (stream, category, fields.get('kind', ''))
+        samples.setdefault(key, []).append(fields)
+    if not samples:
+        return None
+    rows = []
+    for (stream, category, kind), values in sorted(samples.items()):
+        first, last = values[0], values[-1]
+        counters = {key: last[key] - value for key, value in first.items()
+                    if key not in ('cache', 'worker') and isinstance(value, int)
+                    and isinstance(last.get(key), int)}
+        valid = len(values) >= 2 and all(
+            all(isinstance(current.get(key), int) and current[key] >= previous.get(key, current[key])
+                for key in counters)
+            for previous, current in zip(values, values[1:]))
+        rows.append(dict(stream=stream, category=category, kind=kind or None,
+                         snapshots=len(values), first=first, last=last,
+                         delta=counters if valid else None))
+    return dict(method='Deltas between first/last cumulative snapshots inside measurement.log; partial edge intervals excluded',
+                timing='Nested wall-clock regions; do not sum producer, enqueue, inline, drain and worker times',
+                streams=rows)
+
+
+def pipeline_summary(text, window):
+    def fields(payload):
+        return {key: int(value) if value.isdecimal() else value
+                for key, value in re.findall(r'(\w+)=([^\s]+)', payload)}
+
+    def events(log):
+        return dict(graphics=len(re.findall(r'GetGraphicsPipeline: Compiling graphics pipeline', log)),
+                    compute=len(re.findall(r'GetComputePipeline: Compiling compute pipeline', log)),
+                    shader=len(re.findall(r'CompileModule: Compiling \w+ shader', log)))
+
+    startup = [fields(item) for item in re.findall(r'Pipeline startup: ([^\r\n]+)', text)]
+    snapshots = [fields(item) for item in re.findall(r'Pipeline stats: ([^\r\n]+)', window)]
+    delta = None
+    if len(snapshots) >= 2:
+        keys = snapshots[0].keys()
+        if all(all(isinstance(row.get(key), int) and row[key] >= previous[key] for key in keys)
+               for previous, row in zip(snapshots, snapshots[1:])):
+            delta = {key: snapshots[-1][key] - snapshots[0][key] for key in keys}
+    preloaded = [int(value) for value in re.findall(r'WarmUp: Preloaded (\d+) pipelines', text)]
+    return dict(startup=startup or None, legacy_preloaded=preloaded or None,
+                compile_log_events_lower_bound=events(text), measurement_compile_events_lower_bound=events(window),
+                measurement_snapshots=len(snapshots), measurement_delta=delta,
+                note='Compile log counts can be reduced by duplicate suppression. Exact startup timing requires Pipeline startup diagnostics. Counter deltas exclude partial edge intervals; nested times must not be summed.')
+
+
 def capture(args, root, hardware, scene, variant, cache, repeat, primer=False):
     assert_idle()
     label = f"{scene['name']}-{cache}-{variant['name']}-{repeat}" + ('-primer' if primer else '')
@@ -185,11 +242,15 @@ def capture(args, root, hardware, scene, variant, cache, repeat, primer=False):
     config['General'].update(home_dir='', sys_modules_dir='', font_dir='', discord_rpc_enabled=False)
     write_json(run / 'user/config.json', config)
     env = {key: value for key, value in os.environ.items()
-           if not key.startswith(('SOTC_', 'I3_'))}
+           if not key.startswith(('SOTC_', 'I3_', 'SHAD_'))}
     env.update(SOTC_HEADLESS='1', I3_SKIP_FIRST_RUN='1', SOTC_SCRIPT_BOOT_MS='0', SDL_AUDIODRIVER='dummy')
     env.update(variant.get('environment', {}))
     if args.profile:
         env['SOTC_PROFILE'] = '1'
+    diagnostic_enabled = any(key in env for key in
+                             ('SOTC_PROFILE', 'SHAD_COMMAND_STREAM_STATS',
+                              'SHAD_GPU_SYNC_STATS', 'SHAD_PUSH_DESCRIPTOR_STATS',
+                              'SHAD_PIPELINE_STATS', 'SHAD_GC_STATS'))
     start = scene['warmup_seconds']
     end = start + scene['duration_seconds']
     steps = list(scene.get('boot', []))
@@ -199,13 +260,14 @@ def capture(args, root, hardware, scene, variant, cache, repeat, primer=False):
     env['SOTC_SCRIPT'] = ','.join(f'{at}:{action}' for at, action in sorted(steps))
     metadata = dict(schema_version=1, label=label, scene=scene, variant=variant,
                     repeat=repeat, cache=cache, primer=primer, profile_enabled=args.profile,
+                    diagnostic_enabled=diagnostic_enabled,
                     driver_cache='Uncontrolled; only emulator pipeline/shader cache is reset or seeded',
                     cache_seed_hashes=inventory(cache_seed) if cache == 'warm' else {},
                     seed_manifest_sha256=sha(root / 'seed-manifest.json'),
                     executable_sha256=sha(executable), build_info=read_json(root / 'binary/build-info.json'),
                     hardware_file='hardware/diagnostics.json', emulator_settings=config,
                     environment={key: value for key, value in env.items()
-                                 if key.startswith(('SOTC_', 'I3_', 'VK_')) or key == 'SDL_AUDIODRIVER'},
+                                 if key.startswith(('SOTC_', 'I3_', 'SHAD_', 'VK_')) or key == 'SDL_AUDIODRIVER'},
                     game=dict(path=str(args.game), sfo=sfo_fields(args.game.parent / 'sce_sys/param.sfo'),
                               executable_sha256=args.game_sha),
                     correctness_review='pending screenshot/log review',
@@ -253,9 +315,12 @@ def capture(args, root, hardware, scene, variant, cache, repeat, primer=False):
             sampler.terminate()
             sampler.wait()
         sampler_out.close(); sampler_err.close()
+    command_profile = None
+    window = b''
     if all(value is not None for value in window_offsets):
         window = log.read_bytes()[window_offsets[0]:window_offsets[1]]
         (run / 'measurement.log').write_bytes(window)
+        command_profile = command_stream_summary(window.decode('utf-8', errors='replace'))
     text = log.read_text(encoding='utf-8', errors='replace') if log.exists() else ''
     issues = []
     if timed_out or exit_code != 0:
@@ -277,6 +342,8 @@ def capture(args, root, hardware, scene, variant, cache, repeat, primer=False):
         telemetry = telemetry_summary(run / 'telemetry.csv', window_start, window_start+scene['duration_seconds'])
     result = dict(label=label, scene=scene['name'], variant=variant['name'], cache=cache,
                   repeat=repeat, primer=primer, profile_enabled=args.profile,
+                  diagnostic_enabled=diagnostic_enabled, command_stream_profile=command_profile,
+                  pipeline_profile=pipeline_summary(text, window.decode('utf-8', errors='replace')),
                   status='invalid' if issues else 'captured', issues=issues, exit_code=exit_code,
                   metrics=measured, telemetry=telemetry,
                   telemetry_exit_code=sampler.returncode, log_window_byte_offsets=window_offsets,
@@ -298,9 +365,10 @@ def summarize(root):
     for path in root.glob('*/result.json'):
         result = read_json(path)
         reviews[result['label']] = result.get('visual_review', 'pending')
-        if result['primer'] or result['profile_enabled'] or result['status'] != 'captured':
+        if result['primer'] or result['profile_enabled'] or result.get('diagnostic_enabled', False) or result['status'] != 'captured':
             excluded.append(dict(label=result['label'], primer=result['primer'],
                                  profile_enabled=result['profile_enabled'],
+                                 diagnostic_enabled=result.get('diagnostic_enabled', False),
                                  status=result['status'], issues=result['issues']))
             continue
         key = (result['scene'], result['cache'], result['variant'])

@@ -50,3 +50,35 @@
   [ROADMAP8_PUSH_DESCRIPTORS_20261017.md](ROADMAP8_PUSH_DESCRIPTORS_20261017.md).
 - Xbox prompts: game/controller/persistence/GPU validation and incomplete artwork coverage are
   recorded in [XBOX_PROMPTS_20261017.md](XBOX_PROMPTS_20261017.md).
+- Roadmap item 9: exact synchronization
+  counter profiles, legacy/optimized comparisons in both worker modes,
+  readback/signal/Vulkan/gameplay and long pool-pressure checks remain pending;
+  see [ROADMAP9_GPU_SUBMISSIONS_20261017.md](ROADMAP9_GPU_SUBMISSIONS_20261017.md).
+  The pre-change diagnostic seed entered the opening gesture scene rather than
+  the requested title control; its symbol attribution was rejected without PDB.
+- Roadmap item 10: candidate command-filter
+  coverage and producer/worker cost profiles, cache off/on in both worker modes,
+  Vulkan/readback/gameplay and resource-lifetime acceptance remain pending; see
+  [ROADMAP10_COMMAND_FILTERING_20261017.md](ROADMAP10_COMMAND_FILTERING_20261017.md).
+- Roadmap item 11: mapping/physical-alias/CPU-store,
+  ring-wrap and signal-order reference cases, CMask owner/clear-state validation,
+  Vulkan/gameplay and long pressure acceptance remain pending. Scope and the
+  original item-12 boundary are in [ROADMAP11_READBACK_20261017.md](ROADMAP11_READBACK_20261017.md)
+  and [ROADMAP11_CMASK_20261017.md](ROADMAP11_CMASK_20261017.md).
+- Roadmap item 12: full-layout/padding, partial
+  buffer/physical-alias ownership, remapping/CPU overwrite, slot-only pressure,
+  deferred accounting, CMask and 45-minute pressure/recovery runs in both worker
+  modes remain pending. Reference workloads, conservative retention limits and
+  validation records: [ROADMAP12_GC_READBACK_20261017.md](ROADMAP12_GC_READBACK_20261017.md).
+- Roadmap item 13: candidate off/on hit coverage,
+  exact restoration/prewarm timings, representative gameplay, cache compatibility,
+  Vulkan and second-PC/console acceptance remain pending. Baseline profiling only
+  covers the opening gesture scene; speculative prewarming stays opt-in. Details:
+  [ROADMAP13_PIPELINE_PREWARM_20261017.md](ROADMAP13_PIPELINE_PREWARM_20261017.md).
+- Input repair: physical keyboard/Xbox menu, rebinding, opening graffiti and
+  touch/motion acceptance remain pending. Source findings, isolated diagnostic
+  limitations, build/deployment records and OpenOrbis reference cases are in
+  [INPUT_FIX_20261017.md](INPUT_FIX_20261017.md). Do not infer physical-device
+  or gameplay acceptance from the scripted virtual pad checks.
+  Build launch: `runtime/Build/input-fix-20261017/build-launch.json`;
+  installation record: `runtime/Build/input-fix-20261017/deployment.json`.

@@ -1,0 +1,18 @@
+{
+  "scenes": [
+    {
+      "name": "seed-control",
+      "description": "Seed-dependent control scene; confirm screenshots and use the same seed/route for all variants",
+      "warmup_seconds": 35,
+      "duration_seconds": 30,
+      "boot": [],
+      "route": []
+    }
+  ],
+  "variants": [
+    {"name": "worker-off-legacy", "environment": {"SOTC_WORKER_RECORD": "0", "SHAD_DISABLE_GPU_SCHEDULER_OPT": "1"}},
+    {"name": "worker-off-optimized", "environment": {"SOTC_WORKER_RECORD": "0"}},
+    {"name": "worker-on-legacy", "environment": {"SOTC_WORKER_RECORD": "1", "SHAD_DISABLE_GPU_SCHEDULER_OPT": "1"}},
+    {"name": "worker-on-optimized", "environment": {"SOTC_WORKER_RECORD": "1"}}
+  ]
+}

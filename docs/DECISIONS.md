@@ -368,3 +368,134 @@ diagnostic capture is requested. Track style application at cache invalidation,
 not at an individual image upload, so one image cannot suppress other refreshes.
 Coverage, file format, evidence and pending validation:
 [XBOX_PROMPTS_20261017.md](XBOX_PROMPTS_20261017.md).
+
+## 2026-10-17: remove only provably redundant GPU polling
+
+Item 9's initial diagnostic run has no usable exact timeline/submit profile:
+the seed entered the opening gesture scene and the Release/LTO executable has
+no matching PDB. Preserve those limitations rather than interpreting export
+symbol names or the frame counter labelled submits as API measurements.
+
+Implement state-proven reductions: skip callback polls for empty/unsubmitted
+fronts and consume known-complete ticks; let the existing pool-pressure and
+submitted-callback paths perform refreshes instead of refreshing unconditionally
+at submit; publish each Vulkan counter sample with a monotonic CAS loop without
+driver requery. Keep all waits, spin behavior and immediate readback/signal paths.
+Use a per-scheduler periodic budget reset by actual submits, retaining the
+512-call limit and forced boundaries. Do not add a poll timer or enlarge batches
+from this incomplete profile. Add optional exact atomic counters and a
+same-binary legacy switch, with matched worker-off/on diagnostic and timing
+matrices. No descriptor-cache or draw-filter benefit is credited to item 9.
+Evidence and pending reference cases:
+[ROADMAP9_GPU_SUBMISSIONS_20261017.md](ROADMAP9_GPU_SUBMISSIONS_20261017.md).
+
+## 2026-10-17: filter repeated recording commands on the producer
+
+Keep the existing dynamic-state, render-scope, pipeline-selection and item-8
+descriptor filters. Add transient exact-value comparisons before queue copies
+for pipeline/index/legacy-vertex bindings and push constants; do not skip resource
+preparation, barriers or draws. Track graphics/compute pipelines separately and
+retain sized/legacy index distinctions. Keep only the most recent complete
+vertex/constant call, avoiding assumptions about partial-write dependencies.
+
+Invalidate graphics pipeline binding on every named dynamic setter because a
+rebind can reapply static pipeline state. Leave dynamic vertex size/stride binds
+unfiltered and invalidate the legacy vertex tuple on that API. Clear all new
+state for sessions/targets/direct/opaque recording and resource/layout lifetime
+changes. Consume the reclamation notice once but invalidate both command and
+descriptor caches, so no cache misses the event.
+
+Use independent optional per-family producer and per-chunk worker wall-time
+counters, with cache off/on and worker off/on matrices. Exclude diagnostic runs
+from performance summaries even if the stack sampler is not requested. Keep
+descriptor settings constant; total replay/copy savings are not all item-10
+savings. Baseline legacy counters cannot provide exact worker replay cost.
+Source integration is distinct from measured performance acceptance; see
+[ROADMAP10_COMMAND_FILTERING_20261017.md](ROADMAP10_COMMAND_FILTERING_20261017.md).
+
+## 2026-10-17: bind readbacks to mapping and CPU-consumption lifetime
+
+Item 11 starts from a producer-copy-CPU dependency model. A virtual address being
+valid does not identify the original mapping, and GPU completion does not mean
+that a CPU callback has consumed its staging bytes. Add per-backing-page mapping
+generations and transient readback tokens; validate and commit under the mapping
+lock. Use expected-word CAS for known snapshots so a CPU write racing between
+the old comparison and memcpy is checked again, including physical aliases.
+Retain scratch reuse and stretch coalescing. Value ABA remains a stated limit;
+do not infer full write-generation tracking from this change.
+
+Keep existing waits, copy barriers, callbacks and frame-lead limits. Protect both
+urgent and ordinary mirror ring reservations until CPU consumption. Waiting only
+for GPU completion would still allow the ring to overwrite bytes before a
+pending callback reads them. Unknown dispatch snapshots cannot prove safe
+asynchronous merging; use the existing synchronous path instead of silently
+skipping an urgent result or copying whole stale bytes in the background.
+Record this correctness fallback separately from any performance claim.
+
+Port CMask #5046 separately with owner ID/UID, address replacement and clear-mask
+preservation. Reject stale owners and unsupported encodings rather than filling
+zero from an engaged optional. Do not import #3396, change GC pressure thresholds
+or remove waits without equivalence evidence. Image GC ordering, alias watcher
+counts and deferred staging release still require item 12's separate audit.
+Details and pending OpenOrbis/reference workloads:
+[ROADMAP11_READBACK_20261017.md](ROADMAP11_READBACK_20261017.md) and
+[ROADMAP11_CMASK_20261017.md](ROADMAP11_CMASK_20261017.md).
+
+## 2026-10-17: complete GC image commits before address reuse
+
+Adapt #3396 locally instead of merging its buffer API, tracker and hash-based
+ownership policy. Image readback completes on the producer before eviction;
+retain mapping/expected-byte guards and hold staging through CPU consumption.
+This removes image staging release from the priority thread and prevents a
+delayed image callback from overwriting a later producer. Preserve ordinary
+deferred Vulkan destruction and cache lifetime invalidation.
+
+Retain GPU-valid images with uncertain overlapping buffer producers, including
+direct aliases, rather than treating equal hashes as ownership evidence. Keep
+the existing dirty-image eviction policy and clear uncertainty on normal uploads;
+copies propagate it. Notify buffer uploads after readback without clearing
+neighboring GPU ranges or local mirrors. Conservative retention can limit pressure
+recovery and requires explicit long-run acceptance.
+
+Use all mip/layer layouts and existing tilers with guest-seeded padding, guarded
+dispatch and transfer/compute access tracking. Retain unsupported layouts. Charge
+actual VMA bytes until destruction, including parked/alternate/deferred images;
+keep device heap pressure and the local slot trigger. Bound candidate scans and
+evictions, fix LRU callback termination and admit younger images under increased
+pressure while retaining the current tick. Do not add over-budget allocation
+retry as a substitute for recovery evidence. Rationale and reference workloads:
+[ROADMAP12_GC_READBACK_20261017.md](ROADMAP12_GC_READBACK_20261017.md).
+
+## 2026-10-17: separate saved-cache restoration from speculative PSO preparation
+
+Item-13 cold/warm diagnostics confirmed existing compatible-cache restoration:
+382 restored pipelines, no warm graphics compilation, and five newly encountered
+compute programs absent from the seed. Do not guess their shader specializations
+or enable unmeasured speculative work by default. Keep content-based variants and
+all existing shader/PSO lookups. Initialize the shared Vulkan cache before WarmUp.
+
+Add an opt-in, bounded TriangleList/TriangleStrip counterpart prewarmer using
+compatible restored shaders, complete keys and owned fetch/serialization data.
+Exclude geometry/tessellation/patch/no-fragment and pointer-dependent recipes;
+record no guest commands or speculative persistent entries. Save a prepared key
+only after an actual exact-key guest request. Separate restoration, preparation,
+first-use shader/PSO timing and actual hits so unused work remains visible as cost.
+Limits and pending acceptance: [ROADMAP13_PIPELINE_PREWARM_20261017.md](ROADMAP13_PIPELINE_PREWARM_20261017.md).
+
+Per the user's request, syntax-check launches retain hidden workers and durable
+logs but no longer open the additional Checking console. Full build launches
+retain the visible log viewer required by AGENTS.md.
+
+## 2026-10-17: standalone input profile and menu ownership
+
+Import the bundled profile through the runtime's active input-path resolver.
+Migrate only a stock unified default with no existing per-game profile; do not
+overwrite custom bindings or reverse an explicit later unified selection. The
+PC bindings editor uses the same resolver. Xbox gesture substitutes use ordinary
+chords and the existing motion/touch emulation rather than guest/game patches.
+
+Open PC settings directly from the start screen: waiting for native game Options
+requires save loading and cannot serve startup configuration. Route SDL menu
+navigation before capture and exclude NoNavInputs display windows from keyboard
+and gamepad capture, while preserving explicit OSK/IME handling and input releases.
+Evidence and limits: [INPUT_FIX_20261017.md](INPUT_FIX_20261017.md).

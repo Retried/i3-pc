@@ -333,3 +333,9 @@ Separate CPU profiling and direct-draw off/on evaluation are documented in
 [W4_CPU_DRAWS.md](W4_CPU_DRAWS.md). Only opening autosaves and one target PC are
 available. These results do not close representative-scene/two-PC acceptance,
 isolate priority-2 commit 9a719c45, or validate the unapplied priority-1 patch.
+
+The current item-13 delivery adds bounded opt-in PSO counterpart preparation and
+separate startup/first-use diagnostics while preserving compatible restoration.
+Its cold/warm baseline, scope and pending acceptance are in
+[ROADMAP13_PIPELINE_PREWARM_20261017.md](ROADMAP13_PIPELINE_PREWARM_20261017.md).
+The review table above records the earlier intake state.

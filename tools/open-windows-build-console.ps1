@@ -14,6 +14,16 @@ $shell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.e
 if (-not (Test-Path -LiteralPath (Join-Path $LaunchDirectory $LaunchFile))) {
     throw 'Build launch record is missing.'
 }
+$launch = Get-Content -LiteralPath (Join-Path $LaunchDirectory $LaunchFile) -Raw | ConvertFrom-Json
+if (($launch.PSObject.Properties['configuration'] -and $launch.configuration -match 'syntax') -or
+    ($launch.PSObject.Properties['kind'] -and $launch.kind -eq 'syntax-only')) {
+    # Syntax checks keep durable logs but do not open a second build window.
+    [ordered]@{opened=$false;reason='syntax-console-disabled';buildLaunch=$LaunchFile;
+        stdout=$StdoutFile;stderr=$StderrFile} | ConvertTo-Json |
+        Set-Content -LiteralPath (Join-Path $LaunchDirectory 'console-launch.json') -Encoding UTF8
+    Write-Output "Syntax logs: $LaunchDirectory (console disabled)."
+    return
+}
 $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $viewer + '"'),
     '-LaunchDirectory', ('"' + $LaunchDirectory + '"'),
     '-LaunchFile', ('"' + $LaunchFile + '"'), '-StatusFile', ('"' + $StatusFile + '"'),

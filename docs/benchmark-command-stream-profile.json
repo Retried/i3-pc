@@ -1,0 +1,44 @@
+{
+  "scenes": [
+    {
+      "name": "seed-control",
+      "description": "Seed-dependent opening/gesture control; inspect screenshots before interpreting results",
+      "warmup_seconds": 35,
+      "duration_seconds": 30,
+      "boot": [],
+      "route": []
+    }
+  ],
+  "variants": [
+    {
+      "name": "worker-0-cache-off",
+      "environment": {
+        "SOTC_WORKER_RECORD": "0",
+        "SHAD_DISABLE_COMMAND_CACHE": "1",
+        "SHAD_COMMAND_STREAM_STATS": "1"
+      }
+    },
+    {
+      "name": "worker-0-cache-on",
+      "environment": {
+        "SOTC_WORKER_RECORD": "0",
+        "SHAD_COMMAND_STREAM_STATS": "1"
+      }
+    },
+    {
+      "name": "worker-1-cache-off",
+      "environment": {
+        "SOTC_WORKER_RECORD": "1",
+        "SHAD_DISABLE_COMMAND_CACHE": "1",
+        "SHAD_COMMAND_STREAM_STATS": "1"
+      }
+    },
+    {
+      "name": "worker-1-cache-on",
+      "environment": {
+        "SOTC_WORKER_RECORD": "1",
+        "SHAD_COMMAND_STREAM_STATS": "1"
+      }
+    }
+  ]
+}

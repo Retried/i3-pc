@@ -1,0 +1,16 @@
+{
+  "scenes": [{
+    "name": "seed-control",
+    "description": "Seed-dependent opening gesture control; inspect captures and record variant hits",
+    "warmup_seconds": 35,
+    "duration_seconds": 30,
+    "boot": [],
+    "route": []
+  }],
+  "variants": [
+    {"name": "worker-0-prewarm-off", "environment": {"SOTC_WORKER_RECORD": "0", "SHAD_PIPELINE_STATS": "1"}},
+    {"name": "worker-0-prewarm-on", "environment": {"SOTC_WORKER_RECORD": "0", "SHAD_PIPELINE_STATS": "1", "SHAD_PREWARM_PIPELINE_VARIANTS": "1"}},
+    {"name": "worker-1-prewarm-off", "environment": {"SOTC_WORKER_RECORD": "1", "SHAD_PIPELINE_STATS": "1"}},
+    {"name": "worker-1-prewarm-on", "environment": {"SOTC_WORKER_RECORD": "1", "SHAD_PIPELINE_STATS": "1", "SHAD_PREWARM_PIPELINE_VARIANTS": "1"}}
+  ]
+}

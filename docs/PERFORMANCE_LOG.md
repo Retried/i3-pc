@@ -85,3 +85,88 @@ Mean 1-percent low was 28.64 versus 35.59 FPS; mean p99 was 30.522 versus
 24.490 ms. All six exited 0 and their screenshots were identical. This supports
 keeping the existing fast path locally; representative gameplay and second-PC
 acceptance remain open. No new renderer speedup is claimed.
+
+## 2026-10-17: item-9 pre-change diagnostic profile
+
+Ryzen 7 5800X3D / NVIDIA RTX 2070 SUPER, Windows 11 build 26300, driver
+32.0.16.1742; one PC. Preserved Release/LTO executable SHA-256
+`5454EF744091890C7DCB59ED3166369ADF3D27A4D8711C4AC96F8E2C7966EC2C`,
+SOTC_PROFILE enabled, empty emulator cache, uncontrolled driver cache,
+35-second warm-up and 30-second capture. Process/telemetry exit 0.
+
+Screenshot review rejected the requested title-control label: the seed enters
+the opening cinematic/sideways-controller gesture prompt. This is diagnostic
+only, excluded from FPS comparisons. Nine approximately three-second windows
+report 0 ms stream/fault waits and 0-1 ms Scheduler::Wait (rounded inclusive
+totals). Exact timeline-read/queue-submit counts and durations are unavailable;
+the legacy submits field is a frame counter. Export-only symbolization without
+a matching PDB was rejected. No before/after speedup is measured or claimed.
+
+Raw evidence: `runtime/Build/roadmap9-20261017/profile-baseline/`. Durable
+provenance/windows: [measurements/20261017-roadmap9-profile.json](measurements/20261017-roadmap9-profile.json).
+Implementation, exact-counter controls and pending matching acceptance:
+[ROADMAP9_GPU_SUBMISSIONS_20261017.md](ROADMAP9_GPU_SUBMISSIONS_20261017.md).
+
+## 2026-10-17: item-10 command-stream baseline diagnostics
+
+Successful item-9 Windows x64 Release/LTO binary SHA-256
+`CB2F8823595A86D823A311DC4FB46B0B97DC32DCEFE5B35D055AAE64DC46E296`,
+Ryzen 7 5800X3D / NVIDIA RTX 2070 SUPER, Windows 11 build 26300 and driver
+32.0.16.1742. One profiled process per worker mode, isolated identical seed,
+empty emulator caches, uncontrolled driver cache, 35-second warm-up and
+30-second capture. Both modes still use the old command stream; item-10 source
+edits present at capture were not part of the executed binary. Both process
+and telemetry exits were 0; no matched critical/device-loss/assertion messages.
+
+Four 1920x1080 screenshots were inspected and show the opening sideways-controller
+gesture prompt without an evident difference. This is a seed-dependent control,
+not representative gameplay or target-game acceptance. Ten approximately
+three-second render-thread CPU windows per mode range from 391 to 1422 ms
+(worker off) and 500 to 1422 ms (worker on). The old direct-stage times overlap;
+process CPU minus render-thread CPU is not worker CPU. Exact worker replay and
+per-filter producer cost are unavailable in this binary. No PDB attribution,
+unprofiled A/B result or item-10 FPS/CPU gain is claimed.
+
+Raw evidence: `runtime/Build/roadmap10-20261017/profile-baseline/`. Durable
+conditions, CPU/stage windows and hashes:
+[measurements/20261017-roadmap10-profile.json](measurements/20261017-roadmap10-profile.json).
+The new optional counters and matched four-variant matrices enable candidate
+cost measurement after its build; acceptance remains pending as described in
+[ROADMAP10_COMMAND_FILTERING_20261017.md](ROADMAP10_COMMAND_FILTERING_20261017.md).
+
+## 2026-10-17: item-12 validation boundary
+
+The item-11 Windows AMD/NVIDIA Release/LTO baseline completed with exit 0 and
+verified executable SHA-256
+`C84F07B10843E58575DE8913D19211E0D30271DC54162EC7F577F9E21AE96BA7`.
+Item 12 changes GC/readback synchronization and allocation accounting. No candidate
+runtime timing, FPS gain, memory-pressure recovery or long-run stability result is
+claimed. SHAD_GC_STATS diagnostics and compilation are not timing measurements.
+Required 45-minute worker-off/on pressure/reference runs and conditions are in
+[ROADMAP12_GC_READBACK_20261017.md](ROADMAP12_GC_READBACK_20261017.md).
+
+## 2026-10-17: item-13 cold/warm pipeline diagnostics
+
+Item-12 Release/LTO binary SHA-256
+`5B153E66AAEFC816FC1E8BE60960DF26551D26F860D2A219BE39C3C3E6322D06`,
+Ryzen 7 5800X3D / RTX 2070 SUPER, Windows 11 build 26300, driver 32.0.16.1742,
+CUSA00004 v1.07, worker 0, SOTC_PROFILE enabled. Isolated identical seed,
+35-second warm-up plus 30-second capture, empty emulator cache versus frozen
+same-binary primer cache; uncontrolled NVIDIA driver cache. Three processes
+(primer, cold, warm) and telemetry exited 0 with no matched critical/device-loss/
+assertion messages. Inspected cold/warm first screenshots show the opening
+sideways-controller gesture prompt. These profiled diagnostics are excluded from
+FPS comparisons; no candidate gain or representative gameplay acceptance.
+
+Cold capture logged at least 295 graphics, 89 compute and 488 shader compilations.
+Warm capture restored 382 pipelines and logged 0 graphics, 5 compute and 5 shader
+compilations; the five compute program hashes had no keyed binaries in the seed.
+No compile log events occurred in the final 30-second windows. First flip was
+3134 ms cold versus 7290 ms warm (primer 3245 ms). This is whole startup, not
+WarmUp duration; one pair and profiling cannot establish a performance change.
+Exact restoration timing is unavailable in the baseline and is now instrumented.
+
+Raw evidence: `runtime/Build/roadmap13-20261017/profile-baseline/`. Durable
+conditions/counts/hashes: [measurements/20261017-roadmap13-profile.json](measurements/20261017-roadmap13-profile.json).
+Policy, opt-in prewarm controls and pending candidate/two-PC acceptance:
+[ROADMAP13_PIPELINE_PREWARM_20261017.md](ROADMAP13_PIPELINE_PREWARM_20261017.md).

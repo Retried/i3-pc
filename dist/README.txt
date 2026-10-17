@@ -10,7 +10,8 @@ In game:   Esc (Options on a controller) opens the game's own pause screen, as o
            console (in Seattle the map; Triangle / Tab there opens "Options and Saves").
 Menus:     arrow keys or W S, Enter, Esc; the mouse; or a controller (D-pad or left stick,
            cross to select, circle to go back). Left and right change a value.
-Options:   this build's settings are the last sections of the game's own Options screen:
+Options:   the start screen opens PC display, controls and language settings directly.
+           They are also the last sections of the game's own Options screen:
            go down past its last line (Video > HDR Rendering) and the list goes on with
            Display, Image, Effects, Frame Rate, Shadows, Controls, Language, Achievements
            and Exit (Return to Main Menu, Quit; both ask first). Up from the first of them
@@ -55,7 +56,7 @@ Main attack (R2)    left mouse button
 Aim (L2)            right mouse button
 Heavy attack (R1)   middle mouse button / Q
 Special power (L1)  E
-Jump (cross)        Space
+Jump (cross)        Space / Enter
 Dash (circle)       Left Shift / Left Ctrl / Backspace
 Melee (square)      F
 Karmic (triangle)   R
@@ -73,6 +74,15 @@ Hold H              shake
 Spray               hold G, then hold the left mouse button and aim
 
 A controller (Xbox, DualShock, DualSense) works alongside the keyboard.
+Xbox motion/touch substitutes (single buttons retain their usual actions):
+Hold LB+RB          controller held sideways; aim with the right stick, spray with RT
+View+X             shake (keep LB+RB held while shaking the spray can)
+View+D-pad         touchpad swipe in the chosen direction
+L3+R3              touchpad held with both thumbs (press both stick buttons)
+View is the small button to the left of the Xbox logo.
+
+The active bindings are in user\input_config\CUSA00004.ini. Fresh standalone
+setups import the bundled input_config\CUSA00004.ini; custom profiles are preserved.
 
 Runtime hotkeys: F11 fullscreen, F10 FPS counter, F9 pause, F12 screenshot.
 

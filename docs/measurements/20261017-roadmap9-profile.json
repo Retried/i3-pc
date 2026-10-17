@@ -1,0 +1,222 @@
+{
+  "date": "2026-10-17",
+  "kind": "pre-change diagnostic only",
+  "source": {
+    "wrapper": {
+      "changes": [],
+      "status": "available",
+      "commit": "9684e544ba7519cb632bf847ab7270c35a0bbdac"
+    },
+    "runtime": {
+      "changes": [],
+      "status": "available",
+      "commit": "ace6fae75337d8cd192f846fe5ece548ea7836e8"
+    }
+  },
+  "hardware": {
+    "ramBytes": 34253664256,
+    "cpu": [
+      {
+        "Name": "AMD Ryzen 7 5800X3D 8-Core Processor           ",
+        "NumberOfCores": 8,
+        "NumberOfLogicalProcessors": 8
+      }
+    ],
+    "os": {
+      "Caption": "Microsoft Windows 11 Pro",
+      "Version": "10.0.26300",
+      "BuildNumber": "26300"
+    },
+    "gpu": [
+      {
+        "Name": "NVIDIA GeForce RTX 2070 SUPER",
+        "DriverVersion": "32.0.16.1742"
+      }
+    ],
+    "status": "available"
+  },
+  "build": {
+    "mainCommit": "e3602cb66a6cf3766ac0b4412cf3de5af22c1f37",
+    "runtimeCommit": "f88d3b6f331272ce854bda5875c11386b180f94f",
+    "mainChanges": [
+      " M AGENTS.md",
+      " M dist/Keys.ps1",
+      " M dist/README.txt",
+      " M docs/DECISIONS.md",
+      " M docs/HANDOFF.md",
+      " M docs/PERFORMANCE_ROADMAP.md",
+      " M docs/ROADMAP.md",
+      " M docs/W1_WINDOWS.md",
+      " M docs/W2_NVIDIA_VULKAN.md",
+      " M docs/W4_CPU_DRAWS.md",
+      " M docs/W_DELIVERY_20261016.md",
+      " M docs/patches/README.md",
+      " D docs/patches/priority1-push-descriptor-cache.patch",
+      " M tools/package-windows.ps1",
+      " M tools/start-windows-build.ps1",
+      "?? dist/XboxPrompts.ps1",
+      "?? docs/ROADMAP1_CORRECTNESS_20261016.md",
+      "?? docs/ROADMAP2_INDEX_BUFFERS_20261016.md",
+      "?? docs/ROADMAP3_IMAGE_COPIES_20261016.md",
+      "?? docs/ROADMAP4_STENCIL_20261016.md",
+      "?? docs/ROADMAP5_BC_LAYOUT_20261016.md",
+      "?? docs/ROADMAP6_SHADERS_20261016.md",
+      "?? docs/ROADMAP7_VFS_20261017.md",
+      "?? docs/ROADMAP8_PUSH_DESCRIPTORS_20261017.md",
+      "?? docs/XBOX_PROMPTS_20261017.md",
+      "?? tools/open-windows-build-console.ps1",
+      "?? tools/show-windows-build.ps1"
+    ],
+    "runtimeChanges": [
+      " M src/core/file_sys/directories/normal_directory.h",
+      " M src/core/file_sys/fs.cpp",
+      " M src/core/file_sys/fs.h",
+      " M src/core/i3/menu.cpp",
+      " M src/core/libraries/kernel/file_system.cpp",
+      " M src/core/libraries/kernel/sync/mutex.h",
+      " M src/core/libraries/kernel/time.cpp",
+      " M src/core/libraries/kernel/time.h",
+      " M src/core/libraries/network/http.cpp",
+      " M src/core/libraries/rtc/rtc.cpp",
+      " M src/core/libraries/system/systemservice.cpp",
+      " M src/core/memory.cpp",
+      " M src/core/memory.h",
+      " M src/input/input_handler.cpp",
+      " M src/input/input_handler.h",
+      " M src/sdl_window.cpp",
+      " M src/shader_recompiler/frontend/translate/translate.cpp",
+      " M src/shader_recompiler/frontend/translate/translate.h",
+      " M src/shader_recompiler/frontend/translate/vector_alu.cpp",
+      " M src/shader_recompiler/ir/passes/shader_info_collection_pass.cpp",
+      " M src/shader_recompiler/runtime_info.h",
+      " M src/video_core/amdgpu/liverpool.cpp",
+      " M src/video_core/amdgpu/liverpool.h",
+      " M src/video_core/buffer_cache/buffer_cache.cpp",
+      " M src/video_core/buffer_cache/buffer_cache.h",
+      " M src/video_core/renderer_vulkan/vk_command_stream.cpp",
+      " M src/video_core/renderer_vulkan/vk_command_stream.h",
+      " M src/video_core/renderer_vulkan/vk_instance.cpp",
+      " M src/video_core/renderer_vulkan/vk_instance.h",
+      " M src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",
+      " M src/video_core/renderer_vulkan/vk_pipeline_cache.h",
+      " M src/video_core/renderer_vulkan/vk_pipeline_serialization.cpp",
+      " M src/video_core/renderer_vulkan/vk_rasterizer.cpp",
+      " M src/video_core/renderer_vulkan/vk_rasterizer.h",
+      " M src/video_core/renderer_vulkan/vk_runtime.cpp",
+      " M src/video_core/renderer_vulkan/vk_runtime.h",
+      " M src/video_core/renderer_vulkan/vk_scheduler.cpp",
+      " M src/video_core/renderer_vulkan/vk_scheduler.h",
+      " M src/video_core/texture_cache/image_info.cpp",
+      " M src/video_core/texture_cache/texture_cache.cpp",
+      " M src/video_core/texture_cache/texture_cache.h",
+      " M src/video_core/texture_cache/tile.h"
+    ],
+    "configuration": "Release",
+    "lto": true,
+    "compiler": [
+      "clang version 19.1.5",
+      "Target: x86_64-pc-windows-msvc",
+      "Thread model: posix",
+      "InstalledDir: C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin"
+    ],
+    "builtAtUtc": "2026-10-16T23:10:04.8433249Z",
+    "executableSha256": "5454EF744091890C7DCB59ED3166369ADF3D27A4D8711C4AC96F8E2C7966EC2C"
+  },
+  "executable_sha256": "5454EF744091890C7DCB59ED3166369ADF3D27A4D8711C4AC96F8E2C7966EC2C",
+  "raw_suite": "runtime/Build/roadmap9-20261017/profile-baseline",
+  "scene": {
+    "requested": "title-control",
+    "observed": "opening cinematic and sideways-controller gesture prompt",
+    "label_valid": false,
+    "performance_comparison_eligible": false
+  },
+  "exit_code": 0,
+  "capture_issues": [],
+  "profile_enabled": true,
+  "warmup_seconds": 35,
+  "capture_seconds": 30,
+  "cache": "empty emulator cache at launch; driver cache uncontrolled",
+  "legacy_wait_ms_per_approximately_3s": {
+    "columns": [
+      "stream",
+      "fault",
+      "Scheduler::Wait"
+    ],
+    "windows": [
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "legacy_frame_counts_per_approximately_3s": [
+    80,
+    204,
+    218,
+    213,
+    166,
+    90,
+    90,
+    90,
+    90
+  ],
+  "queue_submit_count": null,
+  "queue_submit_ns": null,
+  "timeline_read_count": null,
+  "timeline_read_ns": null,
+  "symbolization": "rejected: Release/LTO binary has no matching PDB; export-only names are not usable function attribution",
+  "visual_review": "Two 1920x1080 captures inspected; opening/gesture scene, no cross-build comparison",
+  "screenshots": [
+    {
+      "path": "title-control-cold-baseline-1/user/screenshots/CUSA00004_20261017_015149_345_game_000000.png",
+      "sha256": "ED4A465429AEA7096135CD41D85CA47BEE2B56B8132D10B342249FAB039655B3"
+    },
+    {
+      "path": "title-control-cold-baseline-1/user/screenshots/CUSA00004_20261017_015223_768_game_000001.png",
+      "sha256": "7D78D1BF22A47CEC1A64ABDA0F621AE60967E9EE1D29240ADFD69A6C9AF90807"
+    }
+  ],
+  "performance_claim": null,
+  "pending": "Exact sync counters and same-binary legacy/optimized comparisons in each worker mode; gameplay/Vulkan/readback validation and second target PC"
+}

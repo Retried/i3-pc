@@ -103,6 +103,50 @@ Renderer priority 2 is already implemented: the matching baseline, validation
 and measurements listed under release acceptance remain, without requesting
 implementation again. Do not remove existing optimizations without evidence.
 
+Item 9 is implemented locally with redundant timeline-read removal, monotonic
+single-read refresh publication, submission-relative periodic grouping and
+optional exact synchronization counters. The initial diagnostic profile has
+scene/symbol limits; full counter profiling and correctness/performance
+acceptance remain pending. Scope, controls and evidence are in
+[ROADMAP9_GPU_SUBMISSIONS_20261017.md](ROADMAP9_GPU_SUBMISSIONS_20261017.md).
+Do not schedule these source changes again or infer an FPS gain from them.
+
+Item 10 is implemented locally: producer-side filtering of repeated pipeline,
+index/legacy-vertex bindings and push constants, with independent diagnostics,
+invalidation and cache off/on controls. Existing dynamic-state, render-scope and
+descriptor filters remain intact. Exact candidate producer/worker cost,
+Vulkan/gameplay correctness and performance acceptance remain pending; see
+[ROADMAP10_COMMAND_FILTERING_20261017.md](ROADMAP10_COMMAND_FILTERING_20261017.md).
+Do not reimplement these filters or count item-8 descriptor savings again.
+
+Item 11 is implemented locally as a readback dependency/lifetime package and a
+separate CMask #5046 port. Mapping generations, conditional expected-byte commits
+and mirror reservations protect replacement mappings, observed CPU changes and
+copy-to-CPU lifetimes. Existing waits remain; unknown asynchronous dependencies
+fall back synchronously. Model, limits and pending reference/runtime acceptance:
+[ROADMAP11_READBACK_20261017.md](ROADMAP11_READBACK_20261017.md) and
+[ROADMAP11_CMASK_20261017.md](ROADMAP11_CMASK_20261017.md).
+Do not repeat these source changes or treat them as completion of item 12.
+
+Item 12 is implemented locally as a focused GC/readback redesign derived from
+#3396: synchronous producer-side image commits, complete mip/layer tiling with
+padding preservation, conservative buffer/alias ownership, actual live allocation
+accounting and bounded collection with the local slot-pressure trigger intact.
+Deferred destruction, local mirrors and item-11 CMask ownership remain. Full
+build and long memory-pressure/runtime acceptance are separate; scope, deliberate
+upstream differences and pending OpenOrbis workloads are in
+[ROADMAP12_GC_READBACK_20261017.md](ROADMAP12_GC_READBACK_20261017.md).
+Do not infer stability, pressure recovery or an FPS improvement from compilation.
+
+Item 13 has a local bounded, opt-in PSO prewarmer and pipeline diagnostics;
+existing compatible-cache restoration is retained. Cold/warm baseline profiling
+found no missing graphics pipelines in the opening control after restoration,
+so speculative TriangleList/TriangleStrip counterparts remain disabled by default
+(`SHAD_PREWARM_PIPELINE_VARIANTS=1` enables evaluation). Candidate hit coverage,
+exact startup timing and representative gameplay/performance acceptance remain
+pending. Scope and measurements:
+[ROADMAP13_PIPELINE_PREWARM_20261017.md](ROADMAP13_PIPELINE_PREWARM_20261017.md).
+
 #5316 has a local equivalent. #5317 needs at most a separate comparison of
 page-protection and error-handling details, rather than another complete port.
 POSIX/macOS/Rosetta host changes, release markers and upstream AGENTS.md do not

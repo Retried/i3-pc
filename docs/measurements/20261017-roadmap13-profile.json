@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-17",
+  "kind": "diagnostic-only; no FPS comparison",
+  "executable_sha256": "5B153E66AAEFC816FC1E8BE60960DF26551D26F860D2A219BE39C3C3E6322D06",
+  "profile": true,
+  "worker": 0,
+  "rows": [
+    {
+      "label": "seed-control-cold-pipeline-baseline-worker-0-0-primer",
+      "cache": "cold",
+      "primer": true,
+      "status": "captured",
+      "issues": [],
+      "exit_code": 0,
+      "telemetry_exit_code": 0,
+      "first_flip_ms": 3245,
+      "pipeline": {
+        "startup": null,
+        "legacy_preloaded": null,
+        "compile_log_events_lower_bound": {
+          "graphics": 295,
+          "compute": 87,
+          "shader": 486
+        },
+        "measurement_compile_events_lower_bound": {
+          "graphics": 0,
+          "compute": 0,
+          "shader": 0
+        },
+        "measurement_snapshots": 0,
+        "measurement_delta": null,
+        "note": "Compile log counts can be reduced by duplicate suppression. Exact startup timing requires Pipeline startup diagnostics. Counter deltas exclude partial edge intervals; nested times must not be summed."
+      },
+      "screenshots": {
+        "CUSA00004_20261017_025428_635_game_000000.png": "079E3CEBDDAEFE881D1A2D3592E65B8B8B2EB31BE52D5637F98C0F239CAB6B76",
+        "CUSA00004_20261017_025503_638_game_000001.png": "0BFC34A934BA6F9C9D51870BC91F6A778723B21E5D3D119B30A6C2859A1338B2"
+      }
+    },
+    {
+      "label": "seed-control-cold-pipeline-baseline-worker-0-1",
+      "cache": "cold",
+      "primer": false,
+      "status": "captured",
+      "issues": [],
+      "exit_code": 0,
+      "telemetry_exit_code": 0,
+      "first_flip_ms": 3134,
+      "pipeline": {
+        "startup": null,
+        "legacy_preloaded": null,
+        "compile_log_events_lower_bound": {
+          "graphics": 295,
+          "compute": 89,
+          "shader": 488
+        },
+        "measurement_compile_events_lower_bound": {
+          "graphics": 0,
+          "compute": 0,
+          "shader": 0
+        },
+        "measurement_snapshots": 0,
+        "measurement_delta": null,
+        "note": "Compile log counts can be reduced by duplicate suppression. Exact startup timing requires Pipeline startup diagnostics. Counter deltas exclude partial edge intervals; nested times must not be summed."
+      },
+      "screenshots": {
+        "CUSA00004_20261017_025555_239_game_000000.png": "F68D5412A6EDA4DA04BCDFD337B51ED0C7AD4D2E97B8EF8CDA0D24DA88F2EF6D",
+        "CUSA00004_20261017_025630_212_game_000001.png": "674244FAC9E74863DE37B8CFFA9A11867A5C7F936C7C9A89B71FE37790D102FB"
+      }
+    },
+    {
+      "label": "seed-control-warm-pipeline-baseline-worker-0-1",
+      "cache": "warm",
+      "primer": false,
+      "status": "captured",
+      "issues": [],
+      "exit_code": 0,
+      "telemetry_exit_code": 0,
+      "first_flip_ms": 7290,
+      "pipeline": {
+        "startup": null,
+        "legacy_preloaded": [
+          382
+        ],
+        "compile_log_events_lower_bound": {
+          "graphics": 0,
+          "compute": 5,
+          "shader": 5
+        },
+        "measurement_compile_events_lower_bound": {
+          "graphics": 0,
+          "compute": 0,
+          "shader": 0
+        },
+        "measurement_snapshots": 0,
+        "measurement_delta": null,
+        "note": "Compile log counts can be reduced by duplicate suppression. Exact startup timing requires Pipeline startup diagnostics. Counter deltas exclude partial edge intervals; nested times must not be summed."
+      },
+      "screenshots": {
+        "CUSA00004_20261017_025719_550_game_000000.png": "B871A3DC99A60565F9F8EEB01E4E85C2827AF96877900BB1AFABA0ECC85C2DBA",
+        "CUSA00004_20261017_025754_541_game_000001.png": "6D07545B24FFE8CCC2754956AC7F6281985D5D28151B0AC6C0A4004D6F0599AF"
+      }
+    }
+  ],
+  "warm_compute_program_coverage": [
+    {
+      "shader": "0x93c70d6e",
+      "prior_variant_binaries": 0
+    },
+    {
+      "shader": "0x14534b",
+      "prior_variant_binaries": 0
+    },
+    {
+      "shader": "0xb276f23a",
+      "prior_variant_binaries": 0
+    },
+    {
+      "shader": "0xc7e357d0",
+      "prior_variant_binaries": 0
+    },
+    {
+      "shader": "0xf6f99d67",
+      "prior_variant_binaries": 0
+    }
+  ],
+  "exact_warmup_duration_us": null,
+  "note": "First flip is whole startup, not WarmUp. Empty-cache runs omit the legacy preload message. Compile event counts are lower bounds because duplicate suppression is enabled. Opening gesture control; representative gameplay, symbols, candidate and second-PC acceptance remain pending."
+}

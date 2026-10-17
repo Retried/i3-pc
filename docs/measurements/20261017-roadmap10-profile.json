@@ -1,0 +1,593 @@
+{
+  "date": "2026-10-17",
+  "kind": "Pre-item-10 diagnostic only; both worker modes use the same old command stream",
+  "hardware": {
+    "ramBytes": 34253664256,
+    "cpu": [
+      {
+        "Name": "AMD Ryzen 7 5800X3D 8-Core Processor           ",
+        "NumberOfCores": 8,
+        "NumberOfLogicalProcessors": 8
+      }
+    ],
+    "os": {
+      "Caption": "Microsoft Windows 11 Pro",
+      "Version": "10.0.26300",
+      "BuildNumber": "26300"
+    },
+    "gpu": [
+      {
+        "Name": "NVIDIA GeForce RTX 2070 SUPER",
+        "DriverVersion": "32.0.16.1742"
+      }
+    ],
+    "status": "available"
+  },
+  "source_at_capture": {
+    "wrapper": {
+      "changes": [
+        " M docs/DECISIONS.md",
+        " M docs/HANDOFF.md",
+        " M docs/PERFORMANCE_LOG.md",
+        " M docs/ROADMAP.md",
+        " M tools/benchmark.py",
+        "?? docs/ROADMAP9_GPU_SUBMISSIONS_20261017.md",
+        "?? docs/benchmark-gpu-scheduler-control.json",
+        "?? docs/benchmark-gpu-scheduler-profile.json",
+        "?? docs/measurements/20261017-roadmap9-profile.json"
+      ],
+      "status": "available",
+      "commit": "9684e544ba7519cb632bf847ab7270c35a0bbdac"
+    },
+    "runtime": {
+      "changes": [
+        " M src/video_core/renderer_vulkan/vk_command_stream.cpp",
+        " M src/video_core/renderer_vulkan/vk_command_stream.h",
+        " M src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",
+        " M src/video_core/renderer_vulkan/vk_rasterizer.cpp",
+        " M src/video_core/renderer_vulkan/vk_scheduler.cpp",
+        " M src/video_core/renderer_vulkan/vk_scheduler.h",
+        " M src/video_core/renderer_vulkan/vk_semaphore.cpp",
+        " M src/video_core/renderer_vulkan/vk_semaphore.h"
+      ],
+      "status": "available",
+      "commit": "ace6fae75337d8cd192f846fe5ece548ea7836e8"
+    }
+  },
+  "binary_build_metadata": {
+    "mainCommit": "9684e544ba7519cb632bf847ab7270c35a0bbdac",
+    "runtimeCommit": "ace6fae75337d8cd192f846fe5ece548ea7836e8",
+    "mainChanges": [
+      " M docs/DECISIONS.md",
+      " M docs/HANDOFF.md",
+      " M docs/PERFORMANCE_LOG.md",
+      " M docs/ROADMAP.md",
+      " M tools/benchmark.py",
+      "?? docs/ROADMAP9_GPU_SUBMISSIONS_20261017.md",
+      "?? docs/benchmark-gpu-scheduler-control.json",
+      "?? docs/benchmark-gpu-scheduler-profile.json",
+      "?? docs/measurements/20261017-roadmap9-profile.json"
+    ],
+    "runtimeChanges": [
+      " M src/video_core/renderer_vulkan/vk_rasterizer.cpp",
+      " M src/video_core/renderer_vulkan/vk_scheduler.cpp",
+      " M src/video_core/renderer_vulkan/vk_scheduler.h",
+      " M src/video_core/renderer_vulkan/vk_semaphore.cpp",
+      " M src/video_core/renderer_vulkan/vk_semaphore.h"
+    ],
+    "configuration": "Release",
+    "lto": true,
+    "compiler": [
+      "clang version 19.1.5",
+      "Target: x86_64-pc-windows-msvc",
+      "Thread model: posix",
+      "InstalledDir: C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin"
+    ],
+    "builtAtUtc": "2026-10-17T00:04:09.8261986Z",
+    "executableSha256": "CB2F8823595A86D823A311DC4FB46B0B97DC32DCEFE5B35D055AAE64DC46E296"
+  },
+  "provenance_note": "Binary is the successful item-9 build; capture-time source already includes item-10 edits. Use the binary hash/build metadata, not dirty checkout state, to identify executed code.",
+  "raw_suite": "runtime/Build/roadmap10-20261017/profile-baseline",
+  "sampler": "Enabled; no matching PDB, so no function attribution accepted",
+  "performance_claim": null,
+  "runs": [
+    {
+      "variant": {
+        "name": "worker-off",
+        "environment": {
+          "SOTC_WORKER_RECORD": "0"
+        }
+      },
+      "exit_code": 0,
+      "issues": [],
+      "executable_sha256": "CB2F8823595A86D823A311DC4FB46B0B97DC32DCEFE5B35D055AAE64DC46E296",
+      "seed_manifest_sha256": "DDC03F0FD61AA65E6D9D5348DADFC21C4D982101B9BEA2240BC5736087749B49",
+      "environment": {
+        "SOTC_HEADLESS": "1",
+        "I3_SKIP_FIRST_RUN": "1",
+        "SOTC_SCRIPT_BOOT_MS": "0",
+        "SDL_AUDIODRIVER": "dummy",
+        "SOTC_WORKER_RECORD": "0",
+        "SOTC_PROFILE": "1",
+        "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+      },
+      "gpu_settings": {
+        "copy_gpu_buffers": false,
+        "direct_memory_access_enabled": false,
+        "dump_shaders": false,
+        "fsr_enabled": false,
+        "full_screen": false,
+        "full_screen_mode": "Fullscreen (Borderless)",
+        "hdr_allowed": false,
+        "inline_fetch_shader": false,
+        "internal_screen_height": 1080,
+        "internal_screen_width": 1920,
+        "null_gpu": false,
+        "patch_shaders": false,
+        "present_mode": "Immediate",
+        "rcas_attenuation": 250,
+        "rcas_enabled": true,
+        "readback_linear_images_enabled": false,
+        "readbacks_mode": 0,
+        "userfaultfd": false,
+        "vblank_frequency": 144,
+        "window_height": 1080,
+        "window_width": 1920
+      },
+      "requested_warmup_seconds": 35,
+      "requested_capture_seconds": 30,
+      "cache": "empty emulator cache; uncontrolled driver cache",
+      "cpu_ms_per_approximately_3s": {
+        "columns": [
+          "render_thread",
+          "process_all_threads"
+        ],
+        "windows": [
+          [
+            391,
+            3750
+          ],
+          [
+            1328,
+            5485
+          ],
+          [
+            1297,
+            5406
+          ],
+          [
+            1265,
+            5047
+          ],
+          [
+            1297,
+            5156
+          ],
+          [
+            1422,
+            5344
+          ],
+          [
+            1328,
+            5422
+          ],
+          [
+            1375,
+            5359
+          ],
+          [
+            1282,
+            5688
+          ],
+          [
+            1343,
+            5562
+          ]
+        ]
+      },
+      "direct_stage_ms_per_approximately_3s": [
+        {
+          "filters": 0,
+          "pipeline": 24,
+          "state": 2,
+          "resources": 45,
+          "begin": 3,
+          "vertex": 11,
+          "index": 10,
+          "descriptors": 13,
+          "dynstate": 3,
+          "sched-begin": 7,
+          "draw": 9,
+          "reset": 2
+        },
+        {
+          "filters": 1,
+          "pipeline": 72,
+          "state": 7,
+          "resources": 139,
+          "begin": 9,
+          "vertex": 35,
+          "index": 32,
+          "descriptors": 41,
+          "dynstate": 11,
+          "sched-begin": 21,
+          "draw": 29,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 72,
+          "state": 7,
+          "resources": 138,
+          "begin": 10,
+          "vertex": 34,
+          "index": 31,
+          "descriptors": 41,
+          "dynstate": 11,
+          "sched-begin": 21,
+          "draw": 29,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 68,
+          "state": 7,
+          "resources": 135,
+          "begin": 9,
+          "vertex": 33,
+          "index": 31,
+          "descriptors": 39,
+          "dynstate": 12,
+          "sched-begin": 21,
+          "draw": 28,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 62,
+          "state": 7,
+          "resources": 126,
+          "begin": 9,
+          "vertex": 31,
+          "index": 30,
+          "descriptors": 37,
+          "dynstate": 11,
+          "sched-begin": 20,
+          "draw": 27,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 65,
+          "state": 7,
+          "resources": 126,
+          "begin": 9,
+          "vertex": 31,
+          "index": 31,
+          "descriptors": 38,
+          "dynstate": 11,
+          "sched-begin": 21,
+          "draw": 27,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 62,
+          "state": 6,
+          "resources": 123,
+          "begin": 9,
+          "vertex": 31,
+          "index": 31,
+          "descriptors": 37,
+          "dynstate": 11,
+          "sched-begin": 20,
+          "draw": 26,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 72,
+          "state": 7,
+          "resources": 139,
+          "begin": 9,
+          "vertex": 34,
+          "index": 31,
+          "descriptors": 41,
+          "dynstate": 11,
+          "sched-begin": 22,
+          "draw": 29,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 74,
+          "state": 7,
+          "resources": 139,
+          "begin": 9,
+          "vertex": 34,
+          "index": 31,
+          "descriptors": 41,
+          "dynstate": 12,
+          "sched-begin": 21,
+          "draw": 29,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 71,
+          "state": 7,
+          "resources": 136,
+          "begin": 9,
+          "vertex": 32,
+          "index": 31,
+          "descriptors": 40,
+          "dynstate": 11,
+          "sched-begin": 21,
+          "draw": 29,
+          "reset": 9
+        }
+      ],
+      "worker_replay_ns": null,
+      "filtered_family_producer_ns": null,
+      "visual_review": "Two 1920x1080 captures inspected; same opening sideways-controller gesture scene, no evident difference; baseline binary only",
+      "screenshots": [
+        {
+          "path": "opening-diagnostic-cold-worker-off-1/user/screenshots/CUSA00004_20261017_020851_068_game_000000.png",
+          "sha256": "2239BC167074A7F09A67B118061141C39283E156E89FDBA2E3A6C5AD03D556B5"
+        },
+        {
+          "path": "opening-diagnostic-cold-worker-off-1/user/screenshots/CUSA00004_20261017_020926_086_game_000001.png",
+          "sha256": "4AA2D15521E408FD880923B6202C11D2E58CEA98E7FBA6025A5DAA5BF663BCAA"
+        }
+      ]
+    },
+    {
+      "variant": {
+        "name": "worker-on",
+        "environment": {
+          "SOTC_WORKER_RECORD": "1"
+        }
+      },
+      "exit_code": 0,
+      "issues": [],
+      "executable_sha256": "CB2F8823595A86D823A311DC4FB46B0B97DC32DCEFE5B35D055AAE64DC46E296",
+      "seed_manifest_sha256": "DDC03F0FD61AA65E6D9D5348DADFC21C4D982101B9BEA2240BC5736087749B49",
+      "environment": {
+        "SOTC_HEADLESS": "1",
+        "I3_SKIP_FIRST_RUN": "1",
+        "SOTC_SCRIPT_BOOT_MS": "0",
+        "SDL_AUDIODRIVER": "dummy",
+        "SOTC_WORKER_RECORD": "1",
+        "SOTC_PROFILE": "1",
+        "SOTC_SCRIPT": "32:shot,35:bench=on,65:bench=off,67:shot,69:quit"
+      },
+      "gpu_settings": {
+        "copy_gpu_buffers": false,
+        "direct_memory_access_enabled": false,
+        "dump_shaders": false,
+        "fsr_enabled": false,
+        "full_screen": false,
+        "full_screen_mode": "Fullscreen (Borderless)",
+        "hdr_allowed": false,
+        "inline_fetch_shader": false,
+        "internal_screen_height": 1080,
+        "internal_screen_width": 1920,
+        "null_gpu": false,
+        "patch_shaders": false,
+        "present_mode": "Immediate",
+        "rcas_attenuation": 250,
+        "rcas_enabled": true,
+        "readback_linear_images_enabled": false,
+        "readbacks_mode": 0,
+        "userfaultfd": false,
+        "vblank_frequency": 144,
+        "window_height": 1080,
+        "window_width": 1920
+      },
+      "requested_warmup_seconds": 35,
+      "requested_capture_seconds": 30,
+      "cache": "empty emulator cache; uncontrolled driver cache",
+      "cpu_ms_per_approximately_3s": {
+        "columns": [
+          "render_thread",
+          "process_all_threads"
+        ],
+        "windows": [
+          [
+            500,
+            4203
+          ],
+          [
+            1422,
+            6610
+          ],
+          [
+            1390,
+            6125
+          ],
+          [
+            1407,
+            6265
+          ],
+          [
+            1328,
+            6281
+          ],
+          [
+            1297,
+            6125
+          ],
+          [
+            1234,
+            6000
+          ],
+          [
+            1344,
+            5797
+          ],
+          [
+            1265,
+            6110
+          ],
+          [
+            1266,
+            5812
+          ]
+        ]
+      },
+      "direct_stage_ms_per_approximately_3s": [
+        {
+          "filters": 0,
+          "pipeline": 23,
+          "state": 2,
+          "resources": 50,
+          "begin": 2,
+          "vertex": 10,
+          "index": 10,
+          "descriptors": 7,
+          "dynstate": 2,
+          "sched-begin": 1,
+          "draw": 0,
+          "reset": 2
+        },
+        {
+          "filters": 0,
+          "pipeline": 66,
+          "state": 6,
+          "resources": 146,
+          "begin": 7,
+          "vertex": 30,
+          "index": 29,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 2,
+          "draw": 1,
+          "reset": 8
+        },
+        {
+          "filters": 0,
+          "pipeline": 67,
+          "state": 6,
+          "resources": 147,
+          "begin": 7,
+          "vertex": 29,
+          "index": 29,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 2,
+          "draw": 1,
+          "reset": 8
+        },
+        {
+          "filters": 1,
+          "pipeline": 68,
+          "state": 6,
+          "resources": 151,
+          "begin": 7,
+          "vertex": 30,
+          "index": 29,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 2,
+          "draw": 1,
+          "reset": 8
+        },
+        {
+          "filters": 0,
+          "pipeline": 70,
+          "state": 6,
+          "resources": 153,
+          "begin": 7,
+          "vertex": 31,
+          "index": 30,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 3,
+          "draw": 1,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 67,
+          "state": 6,
+          "resources": 148,
+          "begin": 7,
+          "vertex": 29,
+          "index": 29,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 3,
+          "draw": 1,
+          "reset": 8
+        },
+        {
+          "filters": 0,
+          "pipeline": 65,
+          "state": 6,
+          "resources": 147,
+          "begin": 7,
+          "vertex": 30,
+          "index": 29,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 2,
+          "draw": 1,
+          "reset": 8
+        },
+        {
+          "filters": 0,
+          "pipeline": 70,
+          "state": 6,
+          "resources": 150,
+          "begin": 7,
+          "vertex": 30,
+          "index": 30,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 3,
+          "draw": 1,
+          "reset": 9
+        },
+        {
+          "filters": 1,
+          "pipeline": 67,
+          "state": 6,
+          "resources": 149,
+          "begin": 7,
+          "vertex": 29,
+          "index": 29,
+          "descriptors": 21,
+          "dynstate": 7,
+          "sched-begin": 2,
+          "draw": 1,
+          "reset": 8
+        },
+        {
+          "filters": 0,
+          "pipeline": 66,
+          "state": 6
+        }
+      ],
+      "worker_replay_ns": null,
+      "filtered_family_producer_ns": null,
+      "visual_review": "Two 1920x1080 captures inspected; same opening sideways-controller gesture scene, no evident difference; baseline binary only",
+      "screenshots": [
+        {
+          "path": "opening-diagnostic-cold-worker-on-1/user/screenshots/CUSA00004_20261017_021010_543_game_000000.png",
+          "sha256": "C3D1F2FABFA6CF2EE34754C0A2632D2BACE5E95BFD48983EFAB74779564D02D4"
+        },
+        {
+          "path": "opening-diagnostic-cold-worker-on-1/user/screenshots/CUSA00004_20261017_021045_578_game_000001.png",
+          "sha256": "04A3231F19C9446FB04C4F677B64D4A95BB805CF3067B43242E1B226231B8D55"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "one profiled diagnostic per worker mode, no candidate executed",
+    "renderer stage times overlap/nest",
+    "process minus render-thread CPU is not worker CPU",
+    "exact producer/filter and worker replay costs unavailable in this binary",
+    "no representative gameplay, second-PC or Vulkan validation acceptance"
+  ]
+}

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -373,6 +375,9 @@ public:
     /// Attempts to execute operations whose tick the GPU has caught up with.
     void PopPendingOperations();
 
+    /// Counts periodic work relative to the most recent submission of this scheduler.
+    void SubmitPeriodically(u32 interval);
+
     /// Starts a new rendering scope with provided state.
     void BeginRendering(const RenderState& new_state);
 
@@ -416,6 +421,7 @@ public:
     vk::CommandBuffer CommandBuffer() const {
         stream.Drain();
         stream.InvalidateDescriptorCache(CommandStream::DescriptorInvalidation::DirectAccess);
+        stream.InvalidateCommandCache(CommandStream::CommandInvalidation::DirectAccess);
         return sessions.back().primary;
     }
 
@@ -476,6 +482,8 @@ private:
 
     void PriorityPendingOpsThread(std::stop_token stoken);
 
+    void ReportSyncStats();
+
 private:
     const Instance& instance;
     Semaphore work_semaphore;
@@ -507,6 +515,20 @@ private:
     RenderState render_state;
     bool is_rendering = false;
     tracy::VkCtxScope* profiler_scope{};
+    bool optimize_submissions{};
+    bool sync_stats_enabled{};
+    u32 periodic_work{};
+    struct SyncStats {
+        std::atomic<u64> polls{};
+        std::atomic<u64> empty_polls{};
+        std::atomic<u64> unsubmitted_polls{};
+        std::atomic<u64> callbacks{};
+        std::atomic<u64> submits{};
+        std::atomic<u64> periodic_submits{};
+        std::atomic<u64> command_buffers{};
+        std::atomic<u64> queue_submit_ns{};
+    } sync_stats;
+    std::chrono::steady_clock::time_point last_sync_report{};
 };
 
 } // namespace Vulkan

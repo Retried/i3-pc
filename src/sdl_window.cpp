@@ -226,6 +226,15 @@ static Uint32 SDLCALL ScriptTick(void* userdata, SDL_TimerID timer_id, Uint32 in
             VideoCore::RequestScreenshot(VideoCore::ScreenshotRequest::WithOverlays);
         } else if (action == "shot") {
             VideoCore::RequestScreenshot(VideoCore::ScreenshotRequest::GameOnly);
+        } else if (action == "inputstate") {
+            const auto state = controller->ReadState();
+            LOG_INFO(Input,
+                     "Input snapshot: buttons={:#x} left={},{} right={},{} triggers={},{} "
+                     "accel={},{},{} orientation={},{},{},{}",
+                     u32(state.buttonsState), state.axes[0], state.axes[1], state.axes[2],
+                     state.axes[3], state.axes[4], state.axes[5], state.acceleration.x,
+                     state.acceleration.y, state.acceleration.z, state.orientation.x,
+                     state.orientation.y, state.orientation.z, state.orientation.w);
         } else if (action == "quit") {
             SDL_Event e{};
             e.type = SDL_EVENT_QUIT;
@@ -530,15 +539,13 @@ void WindowSDL::WaitEvent() {
         }
     }
 
-    if (Libraries::Mouse::PushSDLEvent(event) || Libraries::Keyboard::PushSDLEvent(event)) {
-        return;
-    }
-
-    if (ImGui::Core::ProcessEvent(&event)) {
-        return;
-    }
+    const bool overlay_captured = ImGui::Core::ProcessEvent(&event);
     // The PC options overlay takes input ahead of the game while it is open.
     if (I3::Menu::OnEvent(event)) {
+        return;
+    }
+    if (overlay_captured || Libraries::Mouse::PushSDLEvent(event) ||
+        Libraries::Keyboard::PushSDLEvent(event)) {
         return;
     }
 

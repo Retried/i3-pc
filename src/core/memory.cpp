@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include <mutex>
 #include <unordered_set>
 #include "common/alignment.h"
@@ -226,6 +227,120 @@ bool MemoryManager::TryWriteBacking(void* address, const void* data, u64 size) {
         }
     }
     return written;
+}
+
+ReadbackMapping MemoryManager::CaptureReadbackMapping(VAddr address, u64 size, u8* snapshot) {
+    constexpr u64 AddressLimit = u64{1} << AddressSpace::Traits::ADDRESS_SPACE_BITS;
+    if (!size || address >= AddressLimit || size > AddressLimit - address) {
+        return {};
+    }
+    std::shared_lock lk{mutex};
+    ReadbackMapping result{.address = address, .size = size};
+    result.pages.reserve(((address % 16_KB) + size + 16_KB - 1) / 16_KB);
+    u64 done = 0;
+    while (done < size) {
+        const u64 cursor = address + done;
+        const u64 page = cursor >> AddressSpace::Traits::PAGE_BITS;
+        const auto* entry = impl.BackingPages().find(page);
+        const auto* generation = impl.BackingGenerations().find(page);
+        u8* backing = entry ? *entry : nullptr;
+        result.pages.push_back({backing, generation ? *generation : 0});
+        const u64 bytes = std::min<u64>(size - done, 16_KB - cursor % 16_KB);
+        if (snapshot) {
+            if (backing) {
+                std::memcpy(snapshot + done, backing + cursor % 16_KB, bytes);
+            } else {
+                std::memset(snapshot + done, 0, bytes);
+            }
+        }
+        done += bytes;
+    }
+    return result;
+}
+
+bool MemoryManager::IsReadbackMappingCurrent(const ReadbackMapping& mapping) {
+    if (!mapping.size || mapping.pages.empty()) {
+        return false;
+    }
+    std::shared_lock lk{mutex};
+    const u64 first_page = mapping.address >> AddressSpace::Traits::PAGE_BITS;
+    for (u64 i = 0; i < mapping.pages.size(); ++i) {
+        const auto* entry = impl.BackingPages().find(first_page + i);
+        const auto* generation = impl.BackingGenerations().find(first_page + i);
+        if ((entry ? *entry : nullptr) != mapping.pages[i].backing ||
+            (generation ? *generation : 0) != mapping.pages[i].generation) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void MemoryManager::CopyReadbackMemory(VAddr address, u8* dest, u64 size) {
+    std::shared_lock lk{mutex};
+    CopySparseMemory(address, dest, size);
+}
+
+ReadbackWriteResult MemoryManager::WriteReadback(const ReadbackMapping& mapping, u64 offset,
+                                                 const u8* data, u64 size, const u8* expected) {
+    ReadbackWriteResult result{};
+    if (offset > mapping.size || size > mapping.size - offset) {
+        result.stale_bytes = size;
+        return result;
+    }
+    // Excludes map/unmap during validation and commit. Native guest stores are checked with CAS.
+    std::shared_lock lk{mutex};
+    u64 done = 0;
+    while (done < size) {
+        const VAddr cursor = mapping.address + offset + done;
+        const u64 page = cursor >> AddressSpace::Traits::PAGE_BITS;
+        const u64 index = page - (mapping.address >> AddressSpace::Traits::PAGE_BITS);
+        const u64 bytes = std::min<u64>(size - done, 16_KB - cursor % 16_KB);
+        const auto* entry = impl.BackingPages().find(page);
+        const auto* generation = impl.BackingGenerations().find(page);
+        if (index >= mapping.pages.size() || !entry || !*entry || !generation ||
+            *entry != mapping.pages[index].backing ||
+            *generation != mapping.pages[index].generation) {
+            result.stale_bytes += bytes;
+            done += bytes;
+            continue;
+        }
+        u8* backing = *entry + cursor % 16_KB;
+        if (!expected) {
+            std::memcpy(backing, data + done, bytes);
+            result.written_bytes += bytes;
+            done += bytes;
+            continue;
+        }
+        for (u64 at = 0; at < bytes;) {
+            if ((reinterpret_cast<uintptr_t>(backing + at) %
+                 std::atomic_ref<u32>::required_alignment) == 0 &&
+                bytes - at >= sizeof(u32)) {
+                u32 before;
+                u32 after;
+                std::memcpy(&before, expected + done + at, sizeof(u32));
+                std::memcpy(&after, data + done + at, sizeof(u32));
+                auto word = std::atomic_ref<u32>(*reinterpret_cast<u32*>(backing + at));
+                if (word.compare_exchange_strong(before, after, std::memory_order_relaxed)) {
+                    result.written_bytes += sizeof(u32);
+                } else {
+                    result.conflict_bytes += sizeof(u32);
+                }
+                at += sizeof(u32);
+            } else {
+                u8 before = expected[done + at];
+                auto byte = std::atomic_ref<u8>(backing[at]);
+                if (byte.compare_exchange_strong(before, data[done + at],
+                                                 std::memory_order_relaxed)) {
+                    ++result.written_bytes;
+                } else {
+                    ++result.conflict_bytes;
+                }
+                ++at;
+            }
+        }
+        done += bytes;
+    }
+    return result;
 }
 
 PAddr MemoryManager::PoolExpand(PAddr search_start, PAddr search_end, u64 size, u64 alignment) {

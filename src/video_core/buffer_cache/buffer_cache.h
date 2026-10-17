@@ -12,6 +12,7 @@
 #include "common/interval_set.h"
 #include "common/types.h"
 #include "common/unique_function.h"
+#include "core/memory.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/buffer_cache/fault_manager.h"
 #include "video_core/buffer_cache/range_set.h"
@@ -86,6 +87,9 @@ public:
     /// Invalidates any buffer in the logical page range.
     void InvalidateMemory(VAddr device_addr, u64 size, bool assume_locks = false);
 
+    /// Make committed image bytes visible to subsequent buffer uploads without dropping GPU ranges.
+    void NotifyImageReadback(VAddr device_addr, u64 size);
+
     /// Flushes any GPU modified buffer in the logical page range back to CPU memory.
     void ReadMemory(VAddr device_addr, u64 size, bool is_write = false, bool assume_locks = false);
 
@@ -157,6 +161,12 @@ private:
 
     void DownloadMemory(const Buffer* arena, VAddr device_addr, u64 size);
 
+    std::vector<Core::ReadbackMapping> CaptureMirrorMappings(
+        std::span<const std::pair<VAddr, u32>> ranges);
+    u64 ReserveMirrorRange(u64 size);
+    u64 TrackMirrorRange(u64 offset, u64 size);
+    void ReleaseMirrorRange(u64 id);
+
     bool SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 size, bool is_written,
                            bool is_texel_buffer);
 
@@ -185,6 +195,14 @@ private:
     static constexpr u64 MIRROR_BUFFER_SIZE = 32ULL << 20;
     std::unique_ptr<Buffer> mirror_buffer;
     u64 mirror_offset = 0;
+    struct MirrorReservation {
+        u64 id;
+        u64 offset;
+        u64 size;
+        u64 copy_tick;
+    };
+    u64 next_mirror_reservation{};
+    std::vector<MirrorReservation> mirror_reservations;
     /// Counts full copy backs; a deferred partial one from before the last full one has
     /// nothing left to write.
     u64 mirror_generation = 0;
@@ -204,6 +222,7 @@ private:
         return (addr << 20) | size;
     }
     std::unordered_map<u64, u32> mirror_snapshots;
+    std::map<std::pair<VAddr, u32>, Core::ReadbackMapping> mirror_mappings;
     std::vector<u8> mirror_snapshot_data;
     /// Parts of pending outputs an upload left out: their pages lost their written-by-the-game
     /// mark with that upload and get it back once the outputs are copied back.

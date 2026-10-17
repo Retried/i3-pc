@@ -38,12 +38,19 @@ public:
         static constexpr bool NULL_CHECK = true;
     };
     using BackingPageTable = Common::MultiLevelPageTable<Traits>;
+    struct GenerationTraits : Traits {
+        using Entry = u64;
+    };
+    using BackingGenerationTable = Common::MultiLevelPageTable<GenerationTraits>;
 
     [[nodiscard]] u8* BackingBase() const noexcept {
         return backing_base;
     }
     [[nodiscard]] const BackingPageTable& BackingPages() const noexcept {
         return backing_pages;
+    }
+    [[nodiscard]] const BackingGenerationTable& BackingGenerations() const noexcept {
+        return backing_generations;
     }
 
     [[nodiscard]] VAddr SystemManagedVirtualBase() noexcept {
@@ -114,6 +121,8 @@ private:
     u8* user_base{};
     u64 user_size{};
     BackingPageTable backing_pages;
+    BackingGenerationTable backing_generations;
+    u64 next_backing_generation{};
 };
 
 } // namespace Core

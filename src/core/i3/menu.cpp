@@ -168,7 +168,7 @@ bool IsMouseName(const std::string& name) {
 }
 
 std::filesystem::path BindingFile() {
-    return Input::GetInputConfigFile(std::string(Common::ElfInfo::Instance().GameSerial()));
+    return Input::GetActiveInputConfigFile(std::string(Common::ElfInfo::Instance().GameSerial()));
 }
 
 /// Splits "name = value" (comments and blank lines give an empty name).
@@ -531,10 +531,9 @@ std::vector<Row> BuildRows() {
             rows.push_back({"NEW GAME", "", Tr("Start the game")});
         }
         // The game's own Options screen, which holds the PC settings at its end.
-        rows.push_back({"OPTIONS", "",
-                        has_saves ? Tr("Your last save loads first; the game's Options screen "
-                                       "then opens there")
-                                  : Tr("Available from the pause menu once a game has started")});
+        rows.push_back(
+            {"OPTIONS", "",
+             Tr("Display, controls and language. Game options remain in the pause menu")});
         rows.push_back(
             {"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
         rows.push_back({"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
@@ -618,10 +617,15 @@ std::vector<Row> BuildRows() {
                         Tr("Applies the next time the game starts"), true});
         rows.push_back(
             {"ACHIEVEMENTS", trophies, Tr("Trophies of the game unlocked in this build")});
-        rows.push_back({"RETURN TO MAIN MENU", quit_armed ? Tr("Press again to confirm") : "",
-                        quit_armed ? Tr("Progress since the last checkpoint is lost, and the game "
-                                        "loads again (about 40 seconds)")
-                                   : Tr("Back to the start screen. Quit is there")});
+        if (home == Page::Start) {
+            rows.push_back({"BACK", "", Tr("Return to the previous menu")});
+        } else {
+            rows.push_back({"RETURN TO MAIN MENU", quit_armed ? Tr("Press again to confirm") : "",
+                            quit_armed
+                                ? Tr("Progress since the last checkpoint is lost, and the game "
+                                     "loads again (about 40 seconds)")
+                                : Tr("Back to the start screen. Quit is there")});
+        }
         rows.push_back({"QUIT", quit_armed ? Tr("Press again to quit") : "", Tr("Close the game")});
     }
     return rows;
@@ -879,10 +883,12 @@ void ActivateTop(const std::string& label, int row) {
     } else if (label == "LOAD GAME") {
         LeaveStartScreen(2);
     } else if (label == "OPTIONS") {
-        // The game's own Options screen once the last save has loaded.
-        if (has_saves) {
-            LeaveStartScreen(0);
-        }
+        page = Page::Pc;
+        home = Page::Start;
+        selected = 0;
+    } else if (label == "BACK") {
+        page = home;
+        selected = home == Page::Start ? (has_saves ? 3 : 1) : 0;
     } else if (label == "ACHIEVEMENTS") {
         page = Page::Achievements;
         selected = 0;
@@ -1173,6 +1179,40 @@ bool OnEvent(const SDL_Event& event) {
                 action < static_cast<int>(Actions.size())) {
                 Bind(Actions[action].pad, name);
             }
+        } else if (event.type == SDL_EVENT_KEY_DOWN) {
+            switch (event.key.key) {
+            case SDLK_DOWN:
+            case SDLK_S:
+                pad_nav |= NavDown;
+                break;
+            case SDLK_UP:
+            case SDLK_W:
+                pad_nav |= NavUp;
+                break;
+            case SDLK_LEFT:
+            case SDLK_A:
+                pad_nav |= NavLeft;
+                break;
+            case SDLK_RIGHT:
+            case SDLK_D:
+                pad_nav |= NavRight;
+                break;
+            case SDLK_RETURN:
+            case SDLK_KP_ENTER:
+            case SDLK_SPACE:
+                if (!event.key.repeat) {
+                    pad_nav |= NavConfirm;
+                }
+                break;
+            case SDLK_ESCAPE:
+            case SDLK_BACKSPACE:
+                if (!event.key.repeat) {
+                    pad_nav |= NavBack;
+                }
+                break;
+            default:
+                break;
+            }
         }
         return true;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
@@ -1211,7 +1251,7 @@ bool OnEvent(const SDL_Event& event) {
             }
             stick_direction = direction;
         }
-        return true;
+        return event.gaxis.value != 0;
     case SDL_EVENT_MOUSE_MOTION:
         return true;
     default:
@@ -1283,36 +1323,33 @@ void Draw() {
     was_capturing = capturing;
     const int nav = pad_nav.exchange(0);
     if (!skip_input) {
-        if (IsKeyPressed(ImGuiKey_DownArrow) || IsKeyPressed(ImGuiKey_GamepadDpadDown) ||
-            IsKeyPressed(ImGuiKey_S) || (nav & NavDown)) {
-            // The PC sections continue the game's list, which does not wrap around either.
+        if (nav & NavDown) {
             if (page != Page::Pc || selected < count - 1) {
                 selected = (selected + 1) % count;
             }
         }
-        if (IsKeyPressed(ImGuiKey_UpArrow) || IsKeyPressed(ImGuiKey_GamepadDpadUp) ||
-            IsKeyPressed(ImGuiKey_W) || (nav & NavUp)) {
+        if (nav & NavUp) {
             if (page == Page::Pc && selected == 0) {
                 leave_up = true;
             } else {
                 selected = (selected + count - 1) % count;
             }
         }
-        if (IsKeyPressed(ImGuiKey_Enter, false) || IsKeyPressed(ImGuiKey_Space, false) ||
-            IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || (nav & NavConfirm)) {
+        if (nav & NavConfirm) {
             activate_row = selected;
-        } else if (IsKeyPressed(ImGuiKey_LeftArrow) || IsKeyPressed(ImGuiKey_GamepadDpadLeft) ||
-                   IsKeyPressed(ImGuiKey_A) || (nav & NavLeft)) {
+        } else if (nav & NavLeft) {
             activate_row = selected;
             activate_direction = -1;
-        } else if (IsKeyPressed(ImGuiKey_RightArrow) || IsKeyPressed(ImGuiKey_GamepadDpadRight) ||
-                   IsKeyPressed(ImGuiKey_D) || (nav & NavRight)) {
+        } else if (nav & NavRight) {
             activate_row = selected;
             activate_direction = 1;
         }
-        back = IsKeyPressed(ImGuiKey_Escape, false) || IsKeyPressed(ImGuiKey_Backspace, false) ||
-               IsKeyPressed(ImGuiKey_GamepadFaceRight, false) ||
-               IsKeyPressed(ImGuiKey_GamepadStart, false) || (nav & NavBack);
+        back = (nav & NavBack) != 0;
+        static const bool trace = std::getenv("SHAD_INPUT_TRACE") != nullptr;
+        if (trace && nav) {
+            LOG_INFO(Input, "PC menu input: page={} selected={} label={} navigation={}", int(page),
+                     selected, rows[selected].label, nav);
+        }
     }
 
     // Laid out like the game's Options screen: a narrow framed panel on the left with a tall
@@ -1503,7 +1540,12 @@ void Draw() {
     Hint(draw, hint_x, hint_y, scale, act_keys, act_pad, act_label);
 
     if (leave_up) {
-        open = false;
+        if (home == Page::Start) {
+            page = Page::Start;
+            selected = has_saves ? 3 : 1;
+        } else {
+            open = false;
+        }
     } else if (activate_row >= 0) {
         if (page == Page::Start) {
             if (activate_direction == 0) {
@@ -1513,7 +1555,10 @@ void Draw() {
             Activate(activate_row, activate_direction, count, rows[activate_row].label);
         }
     } else if (back) {
-        if (page == Page::Pc) {
+        if (page == Page::Pc && home == Page::Start) {
+            page = Page::Start;
+            selected = has_saves ? 3 : 1;
+        } else if (page == Page::Pc) {
             // Back leaves the Options screen, as it does on the game's own lines.
             open = false;
             Press(80, Libraries::Pad::OrbisPadButtonDataOffset::Circle);

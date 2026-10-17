@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <optional>
 
@@ -31,8 +32,9 @@ enum ImageFlagBits : u32 {
     CpuDirty = 1 << 1,      ///< Contents have been modified from the CPU
     GpuDirty = 1 << 2, ///< Contents have been modified from the GPU (valid data in buffer cache)
     Dirty = MaybeCpuDirty | CpuDirty | GpuDirty,
-    GpuModified = 1 << 3, ///< Contents have been modified from the GPU
-    Registered = 1 << 6,  ///< True when the image is registered
+    GpuModified = 1 << 3,   ///< Contents have been modified from the GPU
+    MaybeGpuDirty = 1 << 4, ///< A buffer producer may own newer overlapping bytes
+    Registered = 1 << 6,    ///< True when the image is registered
 };
 DECLARE_ENUM_FLAG_OPERATORS(ImageFlagBits)
 
@@ -46,20 +48,31 @@ struct UniqueImage {
     UniqueImage& operator=(const UniqueImage&) = delete;
 
     UniqueImage(UniqueImage&& other)
-        : allocator{std::exchange(other.allocator, VK_NULL_HANDLE)},
+        : device{other.device}, allocator{std::exchange(other.allocator, VK_NULL_HANDLE)},
           allocation{std::exchange(other.allocation, VK_NULL_HANDLE)},
-          image{std::exchange(other.image, VK_NULL_HANDLE)}, image_ci{std::move(other.image_ci)} {}
+          image{std::exchange(other.image, VK_NULL_HANDLE)}, image_ci{std::move(other.image_ci)},
+          size_bytes{std::exchange(other.size_bytes, 0)} {}
     UniqueImage& operator=(UniqueImage&& other) {
+        if (this == &other) {
+            return *this;
+        }
+        Destroy();
+        device = other.device;
         image = std::exchange(other.image, VK_NULL_HANDLE);
         allocator = std::exchange(other.allocator, VK_NULL_HANDLE);
         allocation = std::exchange(other.allocation, VK_NULL_HANDLE);
         image_ci = std::move(other.image_ci);
+        size_bytes = std::exchange(other.size_bytes, 0);
         return *this;
     }
 
     void Create(const vk::ImageCreateInfo& image_ci);
 
     void Destroy();
+
+    static u64 AllocatedBytes() {
+        return allocated_bytes.load(std::memory_order_relaxed);
+    }
 
     operator vk::Image() const {
         return image;
@@ -76,6 +89,7 @@ public:
     vk::Image image{};
     vk::ImageCreateInfo image_ci{};
     vk::DeviceSize size_bytes{};
+    inline static std::atomic<u64> allocated_bytes{};
 };
 
 struct Image : public Common::LRUNode<> {
@@ -103,6 +117,13 @@ struct Image : public Common::LRUNode<> {
 
     bool SafeToDownload() const {
         return True(flags & ImageFlagBits::GpuModified) && False(flags & ImageFlagBits::Dirty);
+    }
+
+    bool CanBeDownloaded() const {
+        return SafeToDownload() && False(flags & ImageFlagBits::MaybeGpuDirty) && backing &&
+               info.num_samples == 1 && !info.props.has_stencil && info.num_bits != 0 &&
+               (!info.IsTiled() || u64(info.guest_size) <= u64(65535) * 64 * (info.num_bits / 8)) &&
+               info.pixel_format == backing->image.image_ci.format;
     }
 
     void AssociateDepth(ImageId depth_image_id, u64 depth_image_uid) {

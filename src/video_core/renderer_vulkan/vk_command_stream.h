@@ -38,6 +38,16 @@ public:
         Count,
     };
 
+    enum class CommandInvalidation {
+        Target,
+        Session,
+        Generic,
+        DirectAccess,
+        ResourceLifetime,
+        Unsupported,
+        Count,
+    };
+
     CommandStream();
     ~CommandStream();
 
@@ -45,6 +55,7 @@ public:
     void SetTarget(vk::CommandBuffer cmdbuf) {
         if (target != cmdbuf) {
             InvalidateDescriptorCache(DescriptorInvalidation::Target);
+            InvalidateCommandCache(CommandInvalidation::Target);
         }
         target = cmdbuf;
     }
@@ -55,6 +66,8 @@ public:
         descriptor_resources_changed.store(true, std::memory_order_release);
     }
     void ReportDescriptorCacheStats();
+    void InvalidateCommandCache(CommandInvalidation reason);
+    void ReportCommandStats();
 
     /// Returns once every queued command has been recorded into its command buffer.
     void Drain();
@@ -68,9 +81,7 @@ public:
 
     // ---- Queued commands. Signatures follow vk::CommandBuffer where the renderer uses them. ----
 
-    void bindPipeline(vk::PipelineBindPoint point, vk::Pipeline pipeline) {
-        Push(0, [=](vk::CommandBuffer c) { c.bindPipeline(point, pipeline); });
-    }
+    void bindPipeline(vk::PipelineBindPoint point, vk::Pipeline pipeline);
     void draw(u32 vertices, u32 instances, u32 first_vertex, u32 first_instance) {
         Push(0, [=](vk::CommandBuffer c) {
             c.draw(vertices, instances, first_vertex, first_instance);
@@ -107,23 +118,16 @@ public:
     void dispatchIndirect(vk::Buffer buffer, vk::DeviceSize offset) {
         Push(0, [=](vk::CommandBuffer c) { c.dispatchIndirect(buffer, offset); });
     }
-    void bindIndexBuffer(vk::Buffer buffer, vk::DeviceSize offset, vk::IndexType type) {
-        Push(0, [=](vk::CommandBuffer c) { c.bindIndexBuffer(buffer, offset, type); });
-    }
+    void bindIndexBuffer(vk::Buffer buffer, vk::DeviceSize offset, vk::IndexType type);
     void bindIndexBuffer2KHR(vk::Buffer buffer, vk::DeviceSize offset, vk::DeviceSize size,
-                             vk::IndexType type) {
-        Push(0, [=](vk::CommandBuffer c) { c.bindIndexBuffer2KHR(buffer, offset, size, type); });
-    }
+                             vk::IndexType type);
     void bindVertexBuffers(u32 first, u32 count, const vk::Buffer* buffers,
-                           const vk::DeviceSize* offsets) {
-        Reserve(count * (sizeof(vk::Buffer) + sizeof(vk::DeviceSize)));
-        const auto* b = Copy(buffers, count);
-        const auto* o = Copy(offsets, count);
-        Push(0, [=](vk::CommandBuffer c) { c.bindVertexBuffers(first, count, b, o); });
-    }
+                           const vk::DeviceSize* offsets);
     void bindVertexBuffers2(u32 first, u32 count, const vk::Buffer* buffers,
                             const vk::DeviceSize* offsets, const vk::DeviceSize* sizes,
                             const vk::DeviceSize* strides) {
+        InvalidateGraphicsPipeline();
+        vertex_binding.valid = false;
         Reserve(count * (sizeof(vk::Buffer) + 3 * sizeof(vk::DeviceSize)));
         const auto* b = Copy(buffers, count);
         const auto* o = Copy(offsets, count);
@@ -133,6 +137,7 @@ public:
     }
     void setVertexInputEXT(std::span<const vk::VertexInputBindingDescription2EXT> bindings,
                            std::span<const vk::VertexInputAttributeDescription2EXT> attributes) {
+        InvalidateGraphicsPipeline();
         Reserve(bindings.size_bytes() + attributes.size_bytes());
         const auto* b = Copy(bindings.data(), bindings.size());
         const auto* a = Copy(attributes.data(), attributes.size());
@@ -140,11 +145,7 @@ public:
         Push(0, [=](vk::CommandBuffer c) { c.setVertexInputEXT(nb, b, na, a); });
     }
     void pushConstants(vk::PipelineLayout layout, vk::ShaderStageFlags stages, u32 offset, u32 size,
-                       const void* values) {
-        Reserve(size);
-        const auto* data = Copy(static_cast<const u8*>(values), size);
-        Push(0, [=](vk::CommandBuffer c) { c.pushConstants(layout, stages, offset, size, data); });
-    }
+                       const void* values);
     void pushDescriptorSetKHR(vk::PipelineBindPoint point, vk::PipelineLayout layout, u32 set,
                               std::span<const vk::WriteDescriptorSet> writes);
     void bindDescriptorSets(vk::PipelineBindPoint point, vk::PipelineLayout layout, u32 first,
@@ -160,108 +161,209 @@ public:
 
     // Dynamic state.
     void setViewportWithCount(std::span<const vk::Viewport> viewports) {
+        InvalidateGraphicsPipeline();
         Reserve(viewports.size_bytes());
         const auto* v = Copy(viewports.data(), viewports.size());
         const u32 n = static_cast<u32>(viewports.size());
         Push(0, [=](vk::CommandBuffer c) { c.setViewportWithCount(n, v); });
     }
     void setScissorWithCount(std::span<const vk::Rect2D> scissors) {
+        InvalidateGraphicsPipeline();
         Reserve(scissors.size_bytes());
         const auto* s = Copy(scissors.data(), scissors.size());
         const u32 n = static_cast<u32>(scissors.size());
         Push(0, [=](vk::CommandBuffer c) { c.setScissorWithCount(n, s); });
     }
     void setColorWriteMaskEXT(u32 first, std::span<const vk::ColorComponentFlags> masks) {
+        InvalidateGraphicsPipeline();
         Reserve(masks.size_bytes());
         const auto* m = Copy(masks.data(), masks.size());
         const u32 n = static_cast<u32>(masks.size());
         Push(0, [=](vk::CommandBuffer c) { c.setColorWriteMaskEXT(first, n, m); });
     }
     void setBlendConstants(const float* constants) {
+        InvalidateGraphicsPipeline();
         const std::array<float, 4> k{constants[0], constants[1], constants[2], constants[3]};
         Push(0, [=](vk::CommandBuffer c) { c.setBlendConstants(k.data()); });
     }
     // State setters that take plain values are forwarded as they are.
     template <typename... Args>
     void setDepthTestEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthTestEnable(args...); });
     }
     template <typename... Args>
     void setDepthWriteEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthWriteEnable(args...); });
     }
     template <typename... Args>
     void setDepthCompareOp(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthCompareOp(args...); });
     }
     template <typename... Args>
     void setDepthBoundsTestEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthBoundsTestEnable(args...); });
     }
     template <typename... Args>
     void setDepthBounds(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthBounds(args...); });
     }
     template <typename... Args>
     void setDepthBiasEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthBiasEnable(args...); });
     }
     template <typename... Args>
     void setDepthBias(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setDepthBias(args...); });
     }
     template <typename... Args>
     void setStencilTestEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setStencilTestEnable(args...); });
     }
     template <typename... Args>
     void setStencilOp(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setStencilOp(args...); });
     }
     template <typename... Args>
     void setStencilWriteMask(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setStencilWriteMask(args...); });
     }
     template <typename... Args>
     void setStencilReference(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setStencilReference(args...); });
     }
     template <typename... Args>
     void setStencilCompareMask(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setStencilCompareMask(args...); });
     }
     template <typename... Args>
     void setPrimitiveRestartEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setPrimitiveRestartEnable(args...); });
     }
     template <typename... Args>
     void setRasterizerDiscardEnable(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setRasterizerDiscardEnable(args...); });
     }
     template <typename... Args>
     void setCullMode(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setCullMode(args...); });
     }
     template <typename... Args>
     void setFrontFace(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setFrontFace(args...); });
     }
     template <typename... Args>
     void setLineWidth(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setLineWidth(args...); });
     }
     template <typename... Args>
     void setAttachmentFeedbackLoopEnableEXT(Args... args) {
+        InvalidateGraphicsPipeline();
         Push(0, [=](vk::CommandBuffer c) { c.setAttachmentFeedbackLoopEnableEXT(args...); });
     }
     /// Any other state setter that takes plain values: stream.Set([=](auto c) { c.setX(v); }).
     template <typename F>
     void Set(F&& func) {
         InvalidateDescriptorCache(DescriptorInvalidation::Generic);
+        InvalidateCommandCache(CommandInvalidation::Generic);
         Push(0, std::forward<F>(func));
     }
 
 private:
+    static constexpr size_t MaxCachedVertexBuffers = 32;
+    static constexpr size_t MaxCachedPushBytes = 128;
+    enum class FilteredCommand { Pipeline, Index, Vertex, Constants, Count };
+    struct CommandStats {
+        std::array<u64, static_cast<size_t>(FilteredCommand::Count)> calls{};
+        std::array<u64, static_cast<size_t>(FilteredCommand::Count)> skipped{};
+        std::array<u64, static_cast<size_t>(FilteredCommand::Count)> producer_ns{};
+        std::array<u64, static_cast<size_t>(CommandInvalidation::Count)> invalidations{};
+        u64 dynamic_invalidations{};
+        u64 emitted{};
+        u64 command_bytes{};
+        u64 copied_bytes{};
+        u64 enqueue_ns{};
+        u64 inline_ns{};
+        u64 drains{};
+        u64 drain_ns{};
+        std::atomic<u64> worker_commands{};
+        std::atomic<u64> worker_chunks{};
+        std::atomic<u64> worker_ns{};
+    } command_stats;
+    class CommandTimer {
+    public:
+        CommandTimer(bool enabled, u64& elapsed) : enabled{enabled}, elapsed{elapsed} {
+            if (enabled) {
+                start = std::chrono::steady_clock::now();
+            }
+        }
+        ~CommandTimer() {
+            if (enabled) {
+                elapsed += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+            }
+        }
+
+    private:
+        bool enabled;
+        u64& elapsed;
+        std::chrono::steady_clock::time_point start{};
+    };
+    void CheckResourceChanges();
+    void InvalidateGraphicsPipeline() {
+        // Rebinding may restore static state after a dynamic setter, even for the same handle.
+        cached_pipelines[0] = nullptr;
+        if (command_stats_enabled) {
+            ++command_stats.dynamic_invalidations;
+        }
+    }
+    bool UpdateIndexBinding(vk::Buffer buffer, vk::DeviceSize offset, vk::DeviceSize size,
+                            vk::IndexType type, bool sized);
+    std::array<vk::Pipeline, 2> cached_pipelines{};
+    struct IndexBinding {
+        vk::Buffer buffer{};
+        vk::DeviceSize offset{};
+        vk::DeviceSize size{};
+        vk::IndexType type{};
+        bool sized{};
+        bool valid{};
+    } index_binding;
+    struct VertexBinding {
+        std::array<vk::Buffer, MaxCachedVertexBuffers> buffers{};
+        std::array<vk::DeviceSize, MaxCachedVertexBuffers> offsets{};
+        u32 first{};
+        u32 count{};
+        bool valid{};
+    } vertex_binding;
+    struct PushConstants {
+        std::array<u8, MaxCachedPushBytes> bytes{};
+        vk::PipelineLayout layout{};
+        vk::ShaderStageFlags stages{};
+        u32 offset{};
+        u32 size{};
+        bool valid{};
+    } push_constants;
+    bool command_cache_enabled{};
+    bool command_stats_enabled{};
+    std::chrono::steady_clock::time_point last_command_report{};
+
     static constexpr size_t MaxCachedDescriptorBindings = 64;
     struct CachedDescriptor {
         vk::DescriptorType type{};
@@ -330,6 +432,9 @@ private:
         const u32 offset = (chunk.aux_used + alignof(T) - 1) & ~static_cast<u32>(alignof(T) - 1);
         T* dest = reinterpret_cast<T*>(chunk.aux.get() + offset);
         std::memcpy(dest, source, count * sizeof(T));
+        if (command_stats_enabled) {
+            command_stats.copied_bytes += count * sizeof(T);
+        }
         chunk.aux_used = offset + static_cast<u32>(count * sizeof(T));
         return dest;
     }
@@ -338,6 +443,11 @@ private:
     void Push(size_t, F&& func) {
         using Closure = std::decay_t<F>;
         static_assert(std::is_trivially_copyable_v<Closure>);
+        const CommandTimer timer{command_stats_enabled,
+                                 async ? command_stats.enqueue_ns : command_stats.inline_ns};
+        if (command_stats_enabled) {
+            ++command_stats.emitted;
+        }
         if (!async) {
             func(target);
             return;
@@ -352,6 +462,9 @@ private:
         record->size = size;
         std::memcpy(record + 1, &func, sizeof(Closure));
         chunk.command_used += size;
+        if (command_stats_enabled) {
+            command_stats.command_bytes += size;
+        }
         ++queued_commands;
         if (chunk.command_used >= PublishAfter) {
             Publish();

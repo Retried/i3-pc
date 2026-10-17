@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <optional>
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
 
@@ -123,6 +124,9 @@ public:
     /// Marks an image as dirty if it exists at the provided address.
     void InvalidateMemoryFromGPU(VAddr address, size_t max_size);
 
+    /// Retain images whose guest bytes may have a newer buffer producer.
+    void MarkAsMaybeGpuDirty(VAddr address, size_t size);
+
     /// Evicts any images that overlap the unmapped range.
     void UnmapMemory(VAddr cpu_addr, size_t size);
 
@@ -214,20 +218,43 @@ public:
         HTile,
     };
 
+    struct MetaDataInfo {
+        MetaType type;
+        ImageId owner_id{};
+        u64 owner_uid{};
+        u32 num_samples = 1;
+        s32 clear_mask = -1;
+    };
+
+    /// Reject metadata left behind by an unregistered or recycled image slot.
+    std::optional<MetaDataInfo> GetMetaInfo(VAddr address) const {
+        const auto it = surface_metas.find(address);
+        if (it == surface_metas.end()) {
+            return std::nullopt;
+        }
+        const auto& meta = it->second;
+        if (!meta.owner_id || !slot_images.IsAllocated(meta.owner_id)) {
+            return std::nullopt;
+        }
+        const auto& image = slot_images[meta.owner_id];
+        if (image.image_uid != meta.owner_uid || False(image.flags & ImageFlagBits::Registered)) {
+            return std::nullopt;
+        }
+        return meta;
+    }
+
     /// Returns meta type if the specified address is a metadata surface.
     std::optional<MetaType> IsMeta(VAddr address) const {
-        auto it = surface_metas.find(address);
-        if (it != surface_metas.end()) {
-            return it->second.type;
+        if (const auto meta = GetMetaInfo(address)) {
+            return meta->type;
         }
         return std::nullopt;
     }
 
     /// Returns true if a slice of the specified metadata surface has been cleared.
     bool IsMetaCleared(VAddr address, u32 slice) const {
-        const auto& it = surface_metas.find(address);
-        if (it != surface_metas.end()) {
-            return it->second.clear_mask & (1u << slice);
+        if (const auto meta = GetMetaInfo(address); meta && slice < 32) {
+            return u32(meta->clear_mask) & (1u << slice);
         }
         return false;
     }
@@ -235,7 +262,7 @@ public:
     /// Clears all slices of the specified metadata surface.
     bool ClearMeta(VAddr address) {
         auto it = surface_metas.find(address);
-        if (it != surface_metas.end()) {
+        if (it != surface_metas.end() && GetMetaInfo(address)) {
             it->second.clear_mask = u32(-1);
             return true;
         }
@@ -245,7 +272,7 @@ public:
     /// Updates the state of a slice of the specified metadata surface.
     bool TouchMeta(VAddr address, u32 slice, bool is_clear) {
         auto it = surface_metas.find(address);
-        if (it != surface_metas.end()) {
+        if (it != surface_metas.end() && slice < 32 && GetMetaInfo(address)) {
             if (is_clear) {
                 it->second.clear_mask |= 1u << slice;
             } else {
@@ -328,7 +355,7 @@ private:
     }
 
     /// Copies image memory back to CPU.
-    void DownloadImageMemory(ImageId image_id, bool sync = false);
+    bool DownloadImageMemory(ImageId image_id);
 
     /// Replaces a freshly uploaded image with one from user/sotc_textures, matched by the hash
     /// of its guest data. SOTC_TEXDUMP=1 writes candidates there instead.
@@ -369,6 +396,9 @@ private:
     void UntrackImageTail(ImageId image_id);
 
     void MarkAsMaybeDirty(ImageId image_id, Image& image);
+
+    void RegisterMeta(VAddr address, MetaDataInfo info);
+    void UnregisterMeta(VAddr address, u64 owner_uid);
 
     /// Removes the image and any views/surface metas that reference it.
     void DeleteImage(ImageId image_id);
@@ -423,10 +453,6 @@ private:
     Common::LRUCache<Sampler> sampler_lru_cache;
     const bool readback_linear_images;
     std::mutex download_images_mutex;
-    struct MetaDataInfo {
-        MetaType type;
-        s32 clear_mask = -1;
-    };
     absl::flat_hash_map<VAddr, MetaDataInfo> surface_metas;
 };
 

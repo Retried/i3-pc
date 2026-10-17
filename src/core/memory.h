@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 #include "common/enum.h"
 #include "common/shared_first_mutex.h"
 #include "common/singleton.h"
@@ -29,6 +30,22 @@ class MemoryMapViewer;
 namespace Core {
 
 constexpr u64 DEFAULT_MAPPING_BASE = 0x200000000;
+
+struct ReadbackMapping {
+    struct Page {
+        u8* backing{};
+        u64 generation{};
+    };
+    VAddr address{};
+    u64 size{};
+    std::vector<Page> pages;
+};
+
+struct ReadbackWriteResult {
+    u64 written_bytes{};
+    u64 stale_bytes{};
+    u64 conflict_bytes{};
+};
 
 enum class MemoryProt : u32 {
     NoAccess = 0,
@@ -258,6 +275,15 @@ public:
     void CopySparseMemory(VAddr source, u8* dest, u64 size);
 
     bool TryWriteBacking(void* address, const void* data, u64 size);
+
+    /// Captures backing identity under the mapping lock, optionally copying the current bytes.
+    ReadbackMapping CaptureReadbackMapping(VAddr address, u64 size, u8* snapshot = nullptr);
+    bool IsReadbackMappingCurrent(const ReadbackMapping& mapping);
+    void CopyReadbackMemory(VAddr address, u8* dest, u64 size);
+
+    /// Commits only to the captured mapping; expected bytes also protect concurrent CPU writes.
+    ReadbackWriteResult WriteReadback(const ReadbackMapping& mapping, u64 offset, const u8* data,
+                                      u64 size, const u8* expected = nullptr);
 
     void SetupMemoryRegions(u64 flexible_size, bool use_extended_mem1, bool use_extended_mem2);
 

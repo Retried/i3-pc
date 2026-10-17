@@ -212,7 +212,8 @@ bool ProcessEvent(SDL_Event* event) {
         }
         const auto& io = GetIO();
         return io.WantCaptureKeyboard && io.Ctx->NavWindow != nullptr &&
-               io.Ctx->NavWindow->ID != dock_id;
+               io.Ctx->NavWindow->ID != dock_id &&
+               (io.Ctx->NavWindow->Flags & ImGuiWindowFlags_NoNavInputs) == 0;
     }
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
@@ -227,7 +228,14 @@ bool ProcessEvent(SDL_Event* event) {
             return false;
         }
         const auto& io = GetIO();
-        return io.NavActive && io.Ctx->NavWindow != nullptr && io.Ctx->NavWindow->ID != dock_id;
+        // Releases must clear the virtual controller even if an overlay gained focus.
+        const bool release =
+            event->type == SDL_EVENT_GAMEPAD_BUTTON_UP ||
+            event->type == SDL_EVENT_GAMEPAD_TOUCHPAD_UP ||
+            (event->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && event->gaxis.value == 0);
+        return !release && io.NavActive && io.Ctx->NavWindow != nullptr &&
+               io.Ctx->NavWindow->ID != dock_id &&
+               (io.Ctx->NavWindow->Flags & ImGuiWindowFlags_NoNavInputs) == 0;
     }
     default:
         return false;

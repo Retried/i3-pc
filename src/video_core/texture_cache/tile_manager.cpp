@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/div_ceil.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -33,6 +34,12 @@ struct TilingInfo {
     u32 micro_tiled_mips;
     u32 num_mips;
     std::array<MipInfo, MAX_MIPS> mips;
+    u32 width;
+    u32 height;
+    u32 depth;
+    u32 layers;
+    u32 preserve_padding;
+    u32 is_block;
 };
 
 TileManager::TileManager(const Vulkan::Instance& instance_, Vulkan::Scheduler& scheduler_,
@@ -278,7 +285,8 @@ std::pair<const Buffer*, u64> TileManager::DetileImage(const VideoCore::Buffer* 
 }
 
 void TileManager::TileImage(Image& in_image, std::span<vk::BufferImageCopy> buffer_copies,
-                            const VideoCore::Buffer* out_buffer, u64 out_offset) {
+                            const VideoCore::Buffer* out_buffer, u64 out_offset,
+                            bool preserve_padding) {
     const auto& info = in_image.info;
     if (!info.props.is_tiled) {
         for (auto& copy : buffer_copies) {
@@ -292,6 +300,12 @@ void TileManager::TileImage(Image& in_image, std::span<vk::BufferImageCopy> buff
     params.bank_swizzle = info.bank_swizzle;
     params.micro_tiled_mips = info.micro_tiled_mips;
     params.num_mips = static_cast<u32>(buffer_copies.size());
+    params.width = info.size.width;
+    params.height = info.size.height;
+    params.depth = info.props.is_volume ? info.size.depth : 1;
+    params.layers = info.resources.layers;
+    params.preserve_padding = preserve_padding;
+    params.is_block = info.props.is_block;
     for (u32 mip = 0; mip < params.num_mips; ++mip) {
         auto& mip_info = params.mips[mip];
         mip_info = info.mips_layout[mip];
@@ -307,13 +321,15 @@ void TileManager::TileImage(Image& in_image, std::span<vk::BufferImageCopy> buff
         .range = sizeof(params),
     };
 
-    const auto staging = runtime.GetStagingPool().Request(info.guest_size, MemoryType::DeviceLocal,
-                                                          256, false, true);
+    const auto staging =
+        runtime.GetStagingPool().Request(info.guest_size, MemoryType::DeviceLocal, 256);
     for (auto& copy : buffer_copies) {
         copy.bufferOffset += staging.offset;
     }
 
     runtime.DownloadImage(&in_image, staging.buffer, buffer_copies);
+    runtime.IsBufferAccessed(staging.buffer, staging.offset, info.guest_size);
+    runtime.IsBufferAccessed(out_buffer, out_offset, info.guest_size, true);
     runtime.FlushBarriers();
 
     const auto cmdbuf = scheduler.CommandBuffer();
@@ -359,8 +375,12 @@ void TileManager::TileImage(Image& in_image, std::span<vk::BufferImageCopy> buff
     }};
     cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *pl_layout, 0, set_writes);
 
-    const auto dim_x = (info.guest_size / (info.num_bits / 8)) / 64;
+    const auto dim_x = Common::DivCeil(info.guest_size / (info.num_bits / 8), 64u);
     cmdbuf.dispatch(dim_x, 1, 1);
+
+    runtime.AccessBuffer(staging.buffer, staging.offset, info.guest_size,
+                         vk::PipelineStageFlagBits2::eComputeShader,
+                         vk::AccessFlagBits2::eShaderRead);
 
     runtime.AccessBuffer(out_buffer, out_offset, info.guest_size,
                          vk::PipelineStageFlagBits2::eComputeShader,

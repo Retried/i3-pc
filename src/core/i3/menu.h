@@ -10,6 +10,7 @@ struct ImFont;
 // The screens of the inFAMOUS Second Son build:
 // - a start screen at launch (the game itself has none: it loads the last save at once):
 //   Continue, New Game, Load Game, Options, Achievements, Quit;
+//   Options opens PC settings directly without loading a save;
 // - the PC settings as sections at the end of the game's own Options screen. The game draws
 //   that screen itself, so the runtime watches its picture (OnProbe): when its last line is
 //   selected, Down moves on into the sections added here (Graphics, Controls, Language,

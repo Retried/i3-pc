@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <chrono>
+#include <cstdlib>
 #include "common/assert.h"
 #include "common/debug.h"
+#include "common/logging/log.h"
 #include "common/recording.h"
 #include "common/thread.h"
 #include "imgui/renderer/texture_manager.h"
@@ -18,6 +20,9 @@ std::mutex Scheduler::submit_mutex;
 Scheduler::Scheduler(const Instance& instance)
     : instance{instance}, work_semaphore{instance}, command_pool{instance, &work_semaphore},
       upload_pool{instance, &work_semaphore} {
+    optimize_submissions = std::getenv("SHAD_DISABLE_GPU_SCHEDULER_OPT") == nullptr;
+    sync_stats_enabled = std::getenv("SHAD_GPU_SYNC_STATS") != nullptr;
+    last_sync_report = std::chrono::steady_clock::now();
 #if TRACY_GPU_ENABLED
     profiler_scope = reinterpret_cast<tracy::VkCtxScope*>(std::malloc(sizeof(tracy::VkCtxScope)));
 #endif
@@ -143,12 +148,64 @@ void Scheduler::Wait(u64 tick) {
 
 void Scheduler::PopPendingOperations() {
     std::unique_lock lk(pending_ops_mutex);
-    work_semaphore.Refresh();
+    if (sync_stats_enabled) {
+        ++sync_stats.polls;
+    }
+    if (optimize_submissions && pending_ops.empty()) {
+        if (sync_stats_enabled) {
+            ++sync_stats.empty_polls;
+        }
+        return;
+    }
+    if (optimize_submissions && !work_semaphore.IsFree(pending_ops.front().gpu_tick) &&
+        pending_ops.front().gpu_tick >= CurrentTick()) {
+        // This tick has not been submitted; polling cannot make its callbacks runnable.
+        if (sync_stats_enabled) {
+            ++sync_stats.unsubmitted_polls;
+        }
+        return;
+    }
+    if (!optimize_submissions || !work_semaphore.IsFree(pending_ops.front().gpu_tick)) {
+        work_semaphore.Refresh();
+    }
     while (!pending_ops.empty() && work_semaphore.IsFree(pending_ops.front().gpu_tick)) {
         pending_ops.front().callback();
         stream.NotifyDescriptorResourcesChanged();
         pending_ops.pop();
+        if (sync_stats_enabled) {
+            ++sync_stats.callbacks;
+        }
     }
+}
+
+void Scheduler::SubmitPeriodically(u32 interval) {
+    if (interval && ++periodic_work >= interval) {
+        periodic_work = 0;
+        if (sync_stats_enabled) {
+            ++sync_stats.periodic_submits;
+        }
+        Flush();
+    }
+}
+
+void Scheduler::ReportSyncStats() {
+    if (!sync_stats_enabled) {
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_sync_report < std::chrono::seconds(3)) {
+        return;
+    }
+    last_sync_report = now;
+    const auto& s = sync_stats;
+    LOG_INFO(Render_Vulkan,
+             "GPU scheduler total: timeline {:#x} optimized {} polls {} empty {} unsubmitted {} "
+             "callbacks {} "
+             "submits {} periodic {} command_buffers {} queue_submit_ns {}",
+             std::bit_cast<u64>(work_semaphore.Handle()), optimize_submissions, s.polls.load(),
+             s.empty_polls.load(), s.unsubmitted_polls.load(), s.callbacks.load(), s.submits.load(),
+             s.periodic_submits.load(), s.command_buffers.load(), s.queue_submit_ns.load());
+    work_semaphore.ReportSyncStats();
 }
 
 void Scheduler::BeginSession() {
@@ -165,6 +222,7 @@ void Scheduler::BeginSession() {
     // Invalidate dynamic state so it gets applied to the new command buffer.
     dynamic_state.Invalidate();
     stream.InvalidateDescriptorCache(CommandStream::DescriptorInvalidation::Session);
+    stream.InvalidateCommandCache(CommandStream::CommandInvalidation::Session);
 
 #if TRACY_GPU_ENABLED
     auto* profiler_ctx = instance.GetProfilerContext();
@@ -195,6 +253,7 @@ void Scheduler::EndSession() {
     stream.Drain();
     Check(session.primary.end());
     stream.ReportDescriptorCacheStats();
+    stream.ReportCommandStats();
 }
 
 void Scheduler::SubmitExecution(SubmitInfo& info) {
@@ -252,17 +311,32 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     };
 
     ImGui::Core::TextureManager::Submit();
+    const auto submit_start = sync_stats_enabled ? std::chrono::steady_clock::now()
+                                                 : std::chrono::steady_clock::time_point{};
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
+    if (sync_stats_enabled) {
+        ++sync_stats.submits;
+        sync_stats.command_buffers += cmd_buffers.size();
+        sync_stats.queue_submit_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                          std::chrono::steady_clock::now() - submit_start)
+                                          .count();
+    }
     if (submit_result == vk::Result::eErrorDeviceLost) {
         VideoCore::OpTrace::Dump();
     }
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
-    work_semaphore.Refresh();
+    if (optimize_submissions) {
+        // Forced submissions already hand off this work; start a fresh periodic budget.
+        periodic_work = 0;
+    } else {
+        work_semaphore.Refresh();
+    }
     BeginSession();
 
-    // Apply pending operations
+    // Resource pools refresh on pressure. Submitted callbacks refresh here when needed.
     PopPendingOperations();
+    ReportSyncStats();
 }
 
 void Scheduler::PriorityPendingOpsThread(std::stop_token stoken) {

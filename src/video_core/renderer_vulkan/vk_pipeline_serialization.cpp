@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
 #include <xxhash.h>
 #include "common/serdes.h"
 #include "core/emulator_settings.h"
@@ -262,6 +263,8 @@ bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
         instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
         runtime_infos, fetch_shader, modules, sdata, true);
 
+    RecordPrewarmRecipe(sdata);
+
     infos.fill(nullptr);
     modules.fill(nullptr);
     fetch_shader = nullptr;
@@ -322,7 +325,22 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
 }
 
 void PipelineCache::WarmUp() {
+    const auto started = std::chrono::steady_clock::now();
+    const auto report = [&](std::string_view state, u32 restored = 0, u32 stale = 0) {
+        if (pipeline_stats_enabled) {
+            const auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                      std::chrono::steady_clock::now() - started)
+                                      .count();
+            LOG_INFO(Render_Vulkan,
+                     "Pipeline startup: state={} restored={} stale={} restore_us={} "
+                     "prewarm_enabled={} prewarm_created={} prewarm_us={}",
+                     state, restored, stale, total_us - pipeline_stats.prewarm_us,
+                     prewarm_variants_enabled, pipeline_stats.prewarm_created,
+                     pipeline_stats.prewarm_us);
+        }
+    };
     if (!EmulatorSettings.IsPipelineCacheEnabled()) {
+        report("disabled");
         return;
     }
 
@@ -338,6 +356,7 @@ void PipelineCache::WarmUp() {
         std::memcpy(profile_data.data(), &profile, sizeof(profile));
         Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
                                            std::move(profile_data));
+        report("empty");
         return;
     }
     if (profile_data.size() != sizeof(Shader::Profile)) {
@@ -345,6 +364,7 @@ void PipelineCache::WarmUp() {
                     "Pipeline cache profile has unexpected size ({} != {}). Ignoring the cache",
                     profile_data.size(), sizeof(Shader::Profile));
         Storage::DataBase::Instance().Close();
+        report("incompatible-size");
         return;
     }
 
@@ -354,6 +374,7 @@ void PipelineCache::WarmUp() {
         LOG_WARNING(Render,
                     "Pipeline cache isn't compatible with current system. Ignoring the cache");
         Storage::DataBase::Instance().Close();
+        report("incompatible-profile");
         return;
     }
 
@@ -362,6 +383,11 @@ void PipelineCache::WarmUp() {
 
     Storage::DataBase::Instance().ForEachBlob(
         Storage::BlobType::PipelineKey, [&](std::vector<u8>&& data) {
+            // A failed record may have populated only part of the shader stages.
+            infos.fill(nullptr);
+            modules.fill(nullptr);
+            runtime_infos.fill({});
+            fetch_shader = nullptr;
             ++num_total_pipelines;
 
             Serialization::Archive ar{std::move(data)};
@@ -395,9 +421,82 @@ void PipelineCache::WarmUp() {
     }
 
     Storage::DataBase::Instance().FinishPreload();
+    PrewarmGraphicsVariants();
+    infos.fill(nullptr);
+    modules.fill(nullptr);
+    runtime_infos.fill({});
+    fetch_shader = nullptr;
+    report("compatible", num_pipelines, num_total_pipelines - num_pipelines);
+}
+
+void PipelineCache::RecordPrewarmRecipe(const GraphicsPipeline::SerializationSupport& data) {
+    if (!prewarm_variants_enabled || prewarm_recipes.size() >= 128) {
+        return;
+    }
+    const auto vertex = u32(Shader::SwStage::Vertex);
+    const auto fragment = u32(Shader::SwStage::Fragment);
+    if ((graphics_key.prim_type != AmdGpu::PrimitiveType::TriangleList &&
+         graphics_key.prim_type != AmdGpu::PrimitiveType::TriangleStrip) ||
+        !infos[vertex] || !infos[fragment] || infos[vertex]->hw_stage != Shader::HwStage::Vertex ||
+        graphics_key.patch_control_points != 0 || data.multisampling.pNext ||
+        data.multisampling.pSampleMask) {
+        return;
+    }
+    for (const auto stage : {Shader::SwStage::Geometry, Shader::SwStage::TessellationControl,
+                             Shader::SwStage::TessellationEval}) {
+        if (infos[u32(stage)]) {
+            return;
+        }
+    }
+    PrewarmRecipe recipe{graphics_key, data, infos, modules, {}};
+    if (fetch_shader) {
+        // Later restored permutations can relocate their fetch data.
+        recipe.fetch = *fetch_shader;
+    }
+    prewarm_recipes.push_back(std::move(recipe));
+}
+
+void PipelineCache::PrewarmGraphicsVariants() {
+    if (!prewarm_variants_enabled || prewarm_recipes.empty()) {
+        return;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    std::ranges::sort(prewarm_recipes, {}, [](const PrewarmRecipe& recipe) {
+        return std::hash<GraphicsPipelineKey>{}(recipe.key);
+    });
+    for (auto& recipe : prewarm_recipes) {
+        // The deadline applies between jobs; a Vulkan driver compile cannot be interrupted.
+        if (pipeline_stats.prewarm_created >= 32 ||
+            std::chrono::steady_clock::now() - started >= std::chrono::milliseconds{100}) {
+            break;
+        }
+        auto key = recipe.key;
+        key.prim_type = key.prim_type == AmdGpu::PrimitiveType::TriangleList
+                            ? AmdGpu::PrimitiveType::TriangleStrip
+                            : AmdGpu::PrimitiveType::TriangleList;
+        if (graphics_pipelines.contains(key)) {
+            continue;
+        }
+        const auto* fetch = recipe.fetch.Empty() ? nullptr : &recipe.fetch;
+        auto prepared = std::make_unique<GraphicsPipeline>(
+            instance, scheduler, desc_heap, profile, key, *pipeline_cache, recipe.infos,
+            runtime_infos, fetch, recipe.modules, recipe.data, true, true);
+        if (!prepared->Handle()) {
+            continue;
+        }
+        graphics_pipelines.emplace(key, std::move(prepared));
+        prewarmed_data.emplace(key, std::move(recipe.data));
+        ++pipeline_stats.prewarm_created;
+    }
+    prewarm_recipes.clear();
+    prewarm_recipes.shrink_to_fit();
+    pipeline_stats.prewarm_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::steady_clock::now() - started)
+                                    .count();
 }
 
 void PipelineCache::Sync() {
+    ReportPipelineStats();
     Storage::DataBase::Instance().Close();
 }
 

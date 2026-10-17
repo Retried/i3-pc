@@ -861,9 +861,11 @@ void* AddressSpace::Map(VAddr virtual_addr, u64 size, PAddr phys_addr, bool is_e
     const VAddr end_addr = virtual_addr + size - 1;
     if (phys_addr != -1 && std::bit_width(end_addr) <= Traits::ADDRESS_SPACE_BITS) {
         const u64 base_page = virtual_addr >> Traits::PAGE_BITS;
+        const u64 generation = ++next_backing_generation;
         for (u64 offset = 0; offset < size; offset += 16_KB) {
             backing_pages[base_page + (offset >> Traits::PAGE_BITS)] =
                 backing_base + phys_addr + offset;
+            backing_generations[base_page + (offset >> Traits::PAGE_BITS)] = generation;
         }
     }
 #if ARCH_X86_64
@@ -890,8 +892,10 @@ VAddr AddressSpace::Unmap(VAddr virtual_addr, u64* size) {
     const VAddr end_addr = virtual_addr + *size - 1;
     if (std::bit_width(end_addr) <= Traits::ADDRESS_SPACE_BITS) {
         const u64 base_page = virtual_addr >> Traits::PAGE_BITS;
+        const u64 generation = ++next_backing_generation;
         for (u64 offset = 0; offset < *size; offset += 16_KB) {
             backing_pages[base_page + (offset >> Traits::PAGE_BITS)] = nullptr;
+            backing_generations[base_page + (offset >> Traits::PAGE_BITS)] = generation;
         }
     }
     return impl->Unmap(virtual_addr, size);

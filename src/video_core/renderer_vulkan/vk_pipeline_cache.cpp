@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <ranges>
 #include "common/recording.h"
@@ -396,17 +398,53 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
              "clip_distance_emulation={}, buffer_offsets={}",
              profile.needs_manual_interpolation, profile.needs_lds_barriers,
              profile.needs_clip_distance_emulation, profile.needs_buffer_offsets);
-    WarmUp();
-
     auto [cache_result, cache] = instance.GetDevice().createPipelineCacheUnique({});
     ASSERT_MSG(cache_result == vk::Result::eSuccess, "Failed to create pipeline cache: {}",
                vk::to_string(cache_result));
     pipeline_cache = std::move(cache);
+    pipeline_stats_enabled = std::getenv("SHAD_PIPELINE_STATS") != nullptr;
+    const char* prewarm = std::getenv("SHAD_PREWARM_PIPELINE_VARIANTS");
+    prewarm_variants_enabled = prewarm && std::string_view{prewarm} == "1" &&
+                               !EmulatorSettings.IsShaderCollect() &&
+                               !EmulatorSettings.IsPatchShaders();
+    WarmUp();
 }
 
-PipelineCache::~PipelineCache() = default;
+PipelineCache::~PipelineCache() {
+    ReportPipelineStats();
+}
+
+void PipelineCache::CountPipelineRequest(bool compute) {
+    if (!pipeline_stats_enabled) {
+        return;
+    }
+    if (compute) {
+        ++pipeline_stats.compute_requests;
+    } else {
+        ++pipeline_stats.graphics_requests;
+    }
+    if (((pipeline_stats.graphics_requests + pipeline_stats.compute_requests) % 4096) == 0) {
+        ReportPipelineStats();
+    }
+}
+
+void PipelineCache::ReportPipelineStats() const {
+    if (pipeline_stats_enabled) {
+        LOG_INFO(Render_Vulkan,
+                 "Pipeline stats: gfx_requests={} compute_requests={} gfx_compiles={} "
+                 "compute_compiles={} shader_compiles={} gfx_compile_us={} compute_compile_us={} "
+                 "shader_compile_us={} prewarm_created={} prewarm_hits={} prewarm_us={}",
+                 pipeline_stats.graphics_requests, pipeline_stats.compute_requests,
+                 pipeline_stats.graphics_compiles, pipeline_stats.compute_compiles,
+                 pipeline_stats.shader_compiles, pipeline_stats.graphics_compile_us,
+                 pipeline_stats.compute_compile_us, pipeline_stats.shader_compile_us,
+                 pipeline_stats.prewarm_created, pipeline_stats.prewarm_hits,
+                 pipeline_stats.prewarm_us);
+    }
+}
 
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params) {
+    CountPipelineRequest(false);
     draw_indirect_params = params;
     if (!RefreshGraphicsKey()) {
         return nullptr;
@@ -423,9 +461,17 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
         Common::FreezeTimer freeze_timer{2};
 
         GraphicsPipeline::SerializationSupport sdata{};
+        const auto started = std::chrono::steady_clock::now();
         it.value() = std::make_unique<GraphicsPipeline>(
             instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
             runtime_infos, fetch_shader, modules, sdata, false);
+        if (pipeline_stats_enabled) {
+            ++pipeline_stats.graphics_compiles;
+            pipeline_stats.graphics_compile_us +=
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - started)
+                    .count();
+        }
 
         RegisterPipelineData(graphics_key, pipeline_hash, sdata);
         ++num_new_pipelines;
@@ -438,6 +484,15 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
                 }
             }
         }
+    } else if (prewarm_variants_enabled && !prewarmed_data.empty()) {
+        if (auto prepared = prewarmed_data.find(graphics_key); prepared != prewarmed_data.end()) {
+            // Persist only variants actually requested by the guest, never speculative recipes.
+            RegisterPipelineData(graphics_key, std::hash<GraphicsPipelineKey>{}(graphics_key),
+                                 prepared.value());
+            prewarmed_data.erase(prepared);
+            ++num_new_pipelines;
+            ++pipeline_stats.prewarm_hits;
+        }
     }
     last_key = graphics_key;
     last_pipeline = it->second.get();
@@ -445,6 +500,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
 }
 
 const ComputePipeline* PipelineCache::GetComputePipeline() {
+    CountPipelineRequest(true);
     if (!RefreshComputeKey()) {
         return nullptr;
     }
@@ -454,9 +510,17 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         LOG_INFO(Render_Vulkan, "Compiling compute pipeline {:#x}", pipeline_hash);
 
         ComputePipeline::SerializationSupport sdata{};
+        const auto started = std::chrono::steady_clock::now();
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,
                                                        *pipeline_cache, compute_key, *infos[0],
                                                        modules[0], sdata, false);
+        if (pipeline_stats_enabled) {
+            ++pipeline_stats.compute_compiles;
+            pipeline_stats.compute_compile_us +=
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - started)
+                    .count();
+        }
         RegisterPipelineData(compute_key, sdata);
         ++num_new_pipelines;
 
@@ -719,6 +783,7 @@ vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::Runtim
                                               Shader::Backend::Bindings& binding,
                                               std::vector<u32>* keep_spv) {
     Common::FreezeTimer freeze_timer{6};
+    const auto started = std::chrono::steady_clock::now();
     LOG_INFO(Render_Vulkan, "Compiling {} shader {:#x} {}", info.hw_stage, info.pgm_hash,
              perm_idx != 0 ? "(permutation)" : "");
     DumpShader(code, info.pgm_hash, info.hw_stage, perm_idx, "bin");
@@ -748,6 +813,12 @@ vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::Runtim
         *keep_spv = std::move(spv);
     } else {
         RegisterShaderBinary(std::move(spv), info.pgm_hash, perm_idx);
+    }
+    if (pipeline_stats_enabled) {
+        ++pipeline_stats.shader_compiles;
+        pipeline_stats.shader_compile_us += std::chrono::duration_cast<std::chrono::microseconds>(
+                                                std::chrono::steady_clock::now() - started)
+                                                .count();
     }
     return module;
 }
@@ -817,6 +888,7 @@ std::optional<vk::ShaderModule> PipelineCache::ReplaceShader(vk::ShaderModule mo
                                                              std::span<const u32> spv_code) {
     scheduler.Stream().InvalidateDescriptorCache(
         CommandStream::DescriptorInvalidation::ResourceLifetime);
+    scheduler.Stream().InvalidateCommandCache(CommandStream::CommandInvalidation::ResourceLifetime);
     std::optional<vk::ShaderModule> new_module{};
     for (const auto& [_, program] : program_cache) {
         for (auto& m : program->modules) {

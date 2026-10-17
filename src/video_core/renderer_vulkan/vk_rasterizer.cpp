@@ -602,11 +602,7 @@ static void SubmitPeriodically(Scheduler& scheduler) {
         const char* value = std::getenv("SOTC_SUBMIT_EVERY");
         return value ? u32(std::atoi(value)) : 512u;
     }();
-    static u32 pending = 0;
-    if (interval && ++pending >= interval) {
-        pending = 0;
-        scheduler.Flush();
-    }
+    scheduler.SubmitPeriodically(interval);
 }
 
 // The last direct draw, for draws that follow it with nothing but new constants, index data

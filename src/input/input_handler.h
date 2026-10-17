@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <filesystem>
 #include <map>
 #include <string>
 #include <unordered_set>
@@ -367,6 +368,8 @@ const std::map<std::string, u32> string_to_keyboard_key_map = {
 };
 
 void ParseInputConfig(const std::string game_id);
+std::filesystem::path GetInputConfigFile(const std::string& game_id);
+std::filesystem::path GetActiveInputConfigFile(const std::string& game_id);
 
 class InputBinding {
 public:

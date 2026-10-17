@@ -46,11 +46,26 @@ public:
     /// Waits for a tick to be hit on the GPU
     void Wait(u64 tick);
 
+    /// Cumulative optional diagnostics; counters may be updated by the priority thread.
+    void ReportSyncStats() const;
+
 protected:
     const Instance& instance;
     vk::UniqueSemaphore semaphore;    ///< Timeline semaphore.
     std::atomic<u64> gpu_tick{0};     ///< Current known GPU tick.
     std::atomic<u64> current_tick{1}; ///< Current logical tick.
+    bool optimize_refresh{};
+    bool sync_stats_enabled{};
+    struct SyncStats {
+        std::atomic<u64> refresh_calls{};
+        std::atomic<u64> counter_reads{};
+        std::atomic<u64> refresh_ns{};
+        std::atomic<u64> wait_calls{};
+        std::atomic<u64> wait_ns{};
+        std::atomic<u64> spin_reads{};
+        std::atomic<u64> blocking_calls{};
+        std::atomic<u64> blocking_ns{};
+    } sync_stats;
 };
 
 } // namespace Vulkan

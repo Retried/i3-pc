@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "SDL3/SDL_events.h"
+#include "SDL3/SDL_filesystem.h"
 #include "SDL3/SDL_timer.h"
 
 #include "common/elf_info.h"
@@ -127,6 +128,30 @@ analog_deadzone = rightjoystick, 5, 127
 override_controller_color = false, 0, 0, 255
 )";
 }
+static std::filesystem::path BundledInputConfig(const std::string& game_id) {
+    const char* base = SDL_GetBasePath();
+    if (!base || game_id.empty() || game_id == "default" || game_id == "global") {
+        return {};
+    }
+    const std::filesystem::path directory{base};
+    const auto profile = directory / "input_config" / (game_id + ".ini");
+    return std::filesystem::exists(directory / "game_path.txt") && std::filesystem::exists(profile)
+               ? profile
+               : std::filesystem::path{};
+}
+
+static std::string ReadInputText(const std::filesystem::path& path) {
+    std::ifstream file{path};
+    std::string text;
+    for (std::string line; std::getline(file, line);) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        text += line + '\n';
+    }
+    return text;
+}
+
 std::filesystem::path GetInputConfigFile(const std::string& game_id) {
     // Read configuration file of the game, and if it doesn't exist, generate it from default
     // If that doesn't exist either, generate that from getDefaultConfig() and try again
@@ -219,9 +244,25 @@ std::filesystem::path GetInputConfigFile(const std::string& game_id) {
 
     // If game-specific config doesn't exist, create it from the default config
     if (!std::filesystem::exists(config_file)) {
-        std::filesystem::copy(default_config_file, config_file);
+        const auto bundled = BundledInputConfig(game_id);
+        std::filesystem::copy(bundled.empty() ? default_config_file : bundled, config_file);
     }
     return config_file;
+}
+
+std::filesystem::path GetActiveInputConfigFile(const std::string& game_id) {
+    const auto generic = GetInputConfigFile("");
+    const auto specific = generic.parent_path() / (game_id + ".ini");
+    if (EmulatorSettings.IsUseUnifiedInputConfig() && !std::filesystem::exists(specific) &&
+        !BundledInputConfig(game_id).empty() && ReadInputText(generic) == GetDefaultInputConfig()) {
+        // Upgrade only an untouched generic setup once. Existing profiles and explicit later
+        // switches back to unified bindings remain the user's choice.
+        GetInputConfigFile(game_id);
+        EmulatorSettings.SetUseUnifiedInputConfig(false);
+        EmulatorSettings.Save();
+        LOG_INFO(Input, "Activated bundled input profile for {}", game_id);
+    }
+    return GetInputConfigFile(EmulatorSettings.IsUseUnifiedInputConfig() ? "default" : game_id);
 }
 
 bool leftjoystick_halfmode = false, rightjoystick_halfmode = false;
@@ -358,9 +399,8 @@ std::optional<int> parseInt(const std::string& s) {
 };
 
 void ParseInputConfig(const std::string game_id = "") {
-    std::string game_id_or_default =
-        EmulatorSettings.IsUseUnifiedInputConfig() ? "default" : game_id;
-    const auto config_file = GetInputConfigFile(game_id_or_default);
+    const auto config_file = GetActiveInputConfigFile(game_id);
+    LOG_INFO(Input, "Loading input bindings from {}", config_file.string());
     const auto global_config_file = GetInputConfigFile("global");
 
     // we reset these here so in case the user fucks up or doesn't include some of these,

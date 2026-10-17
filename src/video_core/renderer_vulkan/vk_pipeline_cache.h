@@ -134,6 +134,37 @@ private:
     bool RefreshGraphicsStages();
     bool RefreshComputeKey();
 
+    void PrewarmGraphicsVariants();
+    void RecordPrewarmRecipe(const GraphicsPipeline::SerializationSupport& data);
+    void ReportPipelineStats() const;
+    void CountPipelineRequest(bool compute);
+
+    struct PrewarmRecipe {
+        GraphicsPipelineKey key;
+        GraphicsPipeline::SerializationSupport data;
+        std::array<const Shader::Info*, MaxShaderStages> infos;
+        std::array<vk::ShaderModule, MaxShaderStages> modules;
+        Shader::Gcn::FetchShaderData fetch;
+    };
+
+    struct PipelineStats {
+        u64 graphics_requests{};
+        u64 compute_requests{};
+        u64 graphics_compiles{};
+        u64 compute_compiles{};
+        u64 shader_compiles{};
+        u64 graphics_compile_us{};
+        u64 compute_compile_us{};
+        u64 shader_compile_us{};
+        u64 prewarm_created{};
+        u64 prewarm_hits{};
+        u64 prewarm_us{};
+    } pipeline_stats;
+    bool pipeline_stats_enabled{};
+    bool prewarm_variants_enabled{};
+    std::vector<PrewarmRecipe> prewarm_recipes;
+    tsl::robin_map<GraphicsPipelineKey, GraphicsPipeline::SerializationSupport> prewarmed_data;
+
     void DumpShader(std::span<const u32> code, u64 hash, Shader::HwStage stage, size_t perm_idx,
                     std::string_view ext);
     std::optional<std::vector<u32>> GetShaderPatch(u64 hash, Shader::HwStage stage, size_t perm_idx,
